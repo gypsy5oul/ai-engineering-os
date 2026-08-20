@@ -4,7 +4,7 @@
   "env": {
     "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
-  "_permissions_comment": "Pre-approving the project's ordinary read-only commands keeps the guards' escalations meaningful. If everything prompts, nothing is noticed. Replace these with your project's real commands.",
+  "_permissions_comment": "Pre-approving the project's ordinary read-only commands keeps the guards' escalations meaningful. If everything prompts, nothing is noticed. Replace these with your project's real commands. Deny rules for file writes must be written as Edit(...), not Write(...): Claude Code matches file permissions on Edit rules only, and an Edit rule covers every file-editing tool. A Write(...) deny rule reads as protection and blocks nothing.",
   "permissions": {
     "allow": [
       "Bash(git status)",
@@ -27,11 +27,9 @@
       "Read(//**/.kube/config)",
       "Read(//**/.netrc)",
       "Read(//**/.docker/config.json)",
-      "Write(//**/.ssh/**)",
-      "Write(//**/*.pem)",
-      "Write(//**/.aws/credentials)",
       "Edit(//**/.ssh/**)",
-      "Edit(//**/*.pem)"
+      "Edit(//**/*.pem)",
+      "Edit(//**/.aws/credentials)"
     ],
     "_deny_comment": "Structural, and therefore stronger than the command guards. A deny rule stops the Read and Write tools directly, where a command regex only sees shell invocations. See structural_enforcement in the plugin's policies/hook-policy.json for which boundaries belong here rather than in a rule."
   },

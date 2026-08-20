@@ -1,0 +1,114 @@
+{
+  "id": "EVAL-ORG-009",
+  "suite": "organization-evaluation",
+  "subject": "separation of authorship from approval",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "The cheapest way to make an organization look governed is to let the thing that produced the artifact also record the approval of it. Every variant of that is here: a stage reviewing its own output, an agent standing in a human gate, an approval with no identity attached, and a gate whose stated purpose is 'approve' rather than a dimension it checked.",
+  "input": null,
+  "expected_behaviors": [
+    "No stage's agent_gate reviewer is the stage owner.",
+    "No human_gate approver is an agent name, and every human gate carrying a policy reference names an approver_role that is not an agent.",
+    "Every agent gate states the dimension it checks; a gate whose purpose reads as approval is rejected.",
+    "approval-authority.json states that an agent gate never satisfies a human gate and that no agent approves its own output.",
+    "An agent gate is non-durable and cannot approve on the organization's behalf; a human gate is durable and can.",
+    "Release approval, deployment authorization, execution and verification are four distinct acts, and the merge approver is explicitly a human other than the author."
+  ],
+  "failure_conditions": [
+    "A stage is allowed to review its own output.",
+    "An agent name appears as the approver of a human gate.",
+    "An agent gate is marked as able to approve on the organization's behalf, or as durable.",
+    "Approval and authorization collapse into one act, so approving the content also authorizes the deployment."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "agent_gate_reviewer_is_not_the_owner"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "no_human_gate_is_an_agent"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "human_gates_name_a_role"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "every_agent_gate_states_its_purpose"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "artifact_contracts_complete"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "release_authority_is_split"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/approval-authority.json",
+      "path": "kinds.agent_gate.can_approve_on_behalf_of_the_organization",
+      "value": false
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/approval-authority.json",
+      "path": "kinds.agent_gate.durable",
+      "value": false
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/approval-authority.json",
+      "path": "kinds.human_gate.can_approve_on_behalf_of_the_organization",
+      "value": true
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/approval-authority.json",
+      "path": "kinds.human_gate.durable",
+      "value": true
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/approval-authority.json",
+      "path": "team_lead_plan_approval.classification",
+      "value": "agent_gate",
+      "description": "A lead approving a teammate's plan is an agent verdict, however much it looks like sign-off."
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/approval-authority.json",
+      "path": "team_lead_plan_approval.may_never_satisfy",
+      "value": "any human_gate"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/approval-authority.json",
+      "pattern": "An agent gate NEVER satisfies a human gate"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/approval-authority.json",
+      "pattern": "No agent approves its own output"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/approval-authority.json",
+      "pattern": "It is not a durable approval and does not carry to the next call or the next session",
+      "description": "An in-session permission prompt is not an AP-nn approval."
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/feature-delivery.yaml",
+      "pattern": "^      approver: a human other than the author$"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/artifact-model.json",
+      "pattern": "reviewers and approvals are separate fields and never merge"
+    }
+  ],
+  "notes": "The identity question has two halves. The registry invariants cover the structural half in this repository's own files; the recorded half lives in GitLab, which is why human_approval_recorded is declared checkable only against GitLab rather than against the working tree."
+}

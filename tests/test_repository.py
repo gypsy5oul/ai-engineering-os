@@ -554,7 +554,9 @@ class TestDocumentation(unittest.TestCase):
                     "docs/release.md", "docs/troubleshooting.md", "docs/knowledge-structure.md",
                     "docs/mcp.md", "docs/gitlab.md", "docs/limitations.md",
                     "docs/approvals.md", "docs/execution.md", "docs/organization-freeze.md", "docs/department-cycles.md",
-                    "docs/getting-started.md", "docs/communications.md", "docs/production-readiness.md", "docs/enterprise-deployment.md"]
+                    "docs/getting-started.md", "docs/communications.md", "docs/production-readiness.md",
+                    "docs/enterprise-deployment.md", "docs/lsp.md",
+                    "docs/liveness-and-limits.md"]
         missing = [p for p in required if not os.path.exists(os.path.join(ROOT, p))]
         self.assertEqual(missing, [], "missing documentation: %s" % missing)
 

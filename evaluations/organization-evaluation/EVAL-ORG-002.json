@@ -1,0 +1,104 @@
+{
+  "id": "EVAL-ORG-002",
+  "suite": "organization-evaluation",
+  "subject": "QA self-approval of its own test evidence",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "QA writes the test, runs the test and writes the report that says the test passed. If QA can also approve any of those, the quality gate is a role marking its own homework and the release evidence is self-certified.",
+  "input": null,
+  "expected_behaviors": [
+    "TEST carries may_approve.kind 'none': there is no approval act on a test case at all.",
+    "TESTREPORT is approved by a human role, not by qa-lead or qa-engineer.",
+    "Neither qa-engineer nor qa-lead appears in the may_review list of the TEST it authored.",
+    "CYCLE-QA's peer reviewer is test-reviewer, which is not one of its workers.",
+    "Accepting residual quality risk is its own human approval category, AP-13, rather than being folded into a merge approval."
+  ],
+  "failure_conditions": [
+    "qa-engineer or qa-lead is named as an approver or reviewer of the artifact it owns.",
+    "TESTREPORT's approver becomes an agent name.",
+    "The QA cycle's peer reviewer becomes a QA worker.",
+    "Releasing with knowingly unmet test criteria stops needing a named human."
+  ],
+  "checks": [
+    {
+      "type": "json_path_equals",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=TEST].may_approve.kind",
+      "value": "none",
+      "description": "A test case is not an approvable object; pretending otherwise creates a signature with no meaning."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=TEST].owner_role",
+      "value": "qa-engineer"
+    },
+    {
+      "type": "json_path_not_contains",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=TEST].may_review",
+      "value": "qa-engineer",
+      "description": "The author does not review it."
+    },
+    {
+      "type": "json_path_not_contains",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=TEST].may_review",
+      "value": "qa-lead"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=TESTREPORT].may_approve.kind",
+      "value": "human"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=TESTREPORT].may_approve.role",
+      "value": "QA owner",
+      "description": "A named human role, and check artifact_contracts_complete proves it is not an agent."
+    },
+    {
+      "type": "json_path_not_contains",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=TESTREPORT].may_review",
+      "value": "qa-lead",
+      "description": "qa-lead may modify the report; it may not also be its reviewer."
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "artifact_contracts_complete",
+      "description": "No artifact names an agent in a human may_approve slot."
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "peer_reviewer_is_independent"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/cycles/qa.yaml",
+      "pattern": "^  peer_reviewer: test-reviewer$"
+    },
+    {
+      "type": "file_not_contains",
+      "file": "sdlc/cycles/qa.yaml",
+      "pattern": "^  peer_reviewer: qa-(lead|engineer)$",
+      "description": "QA reviewing QA's own stream."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/approval-policy.json",
+      "path": "human_approval_required[id=AP-13].category",
+      "value": "acceptance of residual quality risk"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/cycles/qa.yaml",
+      "pattern": "agent_verdict\\(test-reviewer, pass\\)",
+      "description": "Acceptance of the QA cycle turns on an independent reviewer's verdict."
+    }
+  ],
+  "notes": "TESTREPORT.may_modify legitimately includes both qa-lead and qa-engineer. Authorship is shared; approval is not, and that is the line this case defends."
+}

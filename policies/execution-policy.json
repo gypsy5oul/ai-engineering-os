@@ -31,7 +31,7 @@
         "investigation benefits from competing hypotheses"
       ],
       "do_not_use_when": [
-        "the work touches the same files, because parallel edits overwrite",
+        "the work touches the same files AND the workers share one checkout, because parallel edits overwrite. This is now a fork, not a stop: see 'isolation'. Give the workers separate worktrees and a declared merge step, or run them sequentially.",
         "the pieces have dense dependencies",
         "the task is sequential",
         "the session is non-interactive"
@@ -40,12 +40,86 @@
       "size": "3 to 5 teammates. Beyond that, coordination cost grows faster than throughput."
     }
   },
+  "isolation": {
+    "description": "Which working copy a parallel worker edits. 'Do not edit the same file' used to be the whole rule, and it is not enough: sometimes one file genuinely must be edited twice, and a rule that can only say no turns into a smaller plan or a silent overwrite. Claude Code has first-class git worktree isolation, so the answer to a real collision is a separate working copy plus a merge step that someone owns.",
+    "default": "shared-checkout",
+    "modes": {
+      "shared-checkout": {
+        "meaning": "Every worker edits the session's working directory. This is what a worker gets when nothing is said.",
+        "use_when": [
+          "the workers own disjoint paths and none of them runs a build, a test suite or a formatter",
+          "the workers are read-only, which covers every reviewer and every investigation",
+          "the work is sequential"
+        ],
+        "how": "Nothing to do.",
+        "risk": "Two writers to one file: last write wins, and the loser's work disappears without an error."
+      },
+      "worktree": {
+        "meaning": "The worker runs in its own git worktree under .claude/worktrees/ of this repository, on its own branch. Its edits are invisible to the main checkout and to every other worker until they are merged.",
+        "use_when": [
+          "two workers must change the same file, or the same generated artifact",
+          "a worker runs a build, a test suite, a formatter or a code generator, all of which write shared output",
+          "a worker installs or upgrades dependencies, which rewrites a lockfile",
+          "a long worker must not leave the main checkout half-edited if it is abandoned",
+          "the work is exploratory and may be thrown away"
+        ],
+        "do_not_use_when": [
+          "the worker is read-only: a reviewer in a worktree reviews a copy, and the isolation buys nothing but a checkout",
+          "the worker must see uncommitted work in progress in the main checkout, which by default it will not"
+        ],
+        "how": {
+          "spawned_worker": "Agent(subagent_type=..., isolation: \"worktree\"). Mutually exclusive with cwd. The worker is told it is in a worktree and that its changes do not affect anyone else.",
+          "agent_definition": "isolation: worktree in the agent's frontmatter, for a role that should always be isolated. 'worktree' is the only value valid for a plugin-shipped agent.",
+          "current_session": "EnterWorktree to move this session into a new worktree (or into an existing one by path), ExitWorktree with action 'keep' or 'remove' to leave it. Use only when a human asked for a worktree, or project instructions require one."
+        },
+        "returns": "When the worker changed nothing, the worktree is removed automatically. When it changed something, the result carries worktreePath and worktreeBranch. Those two values are what makes the merge a step rather than an archaeology exercise.",
+        "cost": "A second working copy per worker on disk, and a checkout per spawn. In a large repository set worktree.sparsePaths and worktree.symlinkDirectories in .claude/settings.json before deciding it is too slow."
+      }
+    },
+    "integration": {
+      "rule": "An isolated worker's output is not in the repository until someone merges it. A stage that spawns isolated workers declares the integration step and its owner in the same place it declares the workers. An undeclared merge is how parallel work becomes a branch nobody owns.",
+      "owner": "The lead that spawned the workers. Never a worker: a worker cannot see the others' branches.",
+      "steps": [
+        "Collect worktreePath and worktreeBranch from every worker result. A worker that returned neither changed nothing, and has nothing to merge.",
+        "Merge the branches into the integration branch one at a time, in a stated order, so a conflict names one worker.",
+        "Resolve conflicts as the lead, in the integration branch. Do not send a conflict back to a worker whose worktree no longer reflects the merged state.",
+        "Run the build and the full test suite once, after the last merge. Every worker's green run was against its own copy and proves nothing about the union.",
+        "Only then is the stage's output produced. Review and approval apply to the merged result, not to the individual branches."
+      ],
+      "on_conflict": [
+        "A conflict between two workers is evidence the split was wrong, not just a merge to resolve. Record it: the same split will be proposed again next time.",
+        "A conflict on a coupled surface named in policies/coupling-policy.json is a policy failure, not a merge problem. The surface has one owner; the merge is not the place to decide it."
+      ]
+    },
+    "what_the_plugin_can_enforce": [
+      "No workflow stage declares an isolation mode yet, so nothing validates one. When a stage does, validation should require it to declare the integration step and its owner in the same place. Stated here so the gap is a known omission rather than an assumed guarantee.",
+      "A PreToolUse hook on Agent sees the spawn's tool_input, including isolation, so it can refuse a spawn. It cannot add isolation to one.",
+      "What is enforced today is coherence: tests/test_execution_isolation.py fails if this policy, docs/execution.md and skills/team-patterns/SKILL.md stop naming the same mechanisms, or if this policy stops declaring what it cannot enforce."
+    ],
+    "not_enforceable": [
+      "No hook can force a worktree. A hook observes and refuses; it cannot rewrite a tool call, and it cannot tell from a spawn whether the workers were going to collide.",
+      "No hook fires at all when the model decides not to spawn workers, which is the failure this policy is most likely to meet.",
+      "Nothing stops a worker inside a worktree from writing an absolute path back into the main checkout. Isolation is a default working directory, not a sandbox.",
+      "Nothing merges the branches. If the lead ends the stage without integrating, the work sits on branches under .claude/worktrees/ and the stage looks finished.",
+      "This policy is therefore a rule for agents to follow and for reviewers to check, in the same way the file-ownership rule always was. Writing it down is what makes the omission visible."
+    ],
+    "constraints_from_the_platform": [
+      "worktree.baseRef in .claude/settings.json decides what a new worktree branches from. The default 'fresh' branches from origin/<default-branch>, so an isolated worker does NOT see the feature branch you are standing on or any unpushed commit. Set it to 'head' for work that continues a branch, or the workers will build against the wrong base and the merge will be enormous.",
+      "isolation: \"worktree\" and cwd are mutually exclusive on a spawn.",
+      "EnterWorktree cannot create a worktree from a worker whose working directory was pinned at launch, because that would move the parent session's process-wide directory. Such a worker can only switch into an existing worktree of the same repository by path.",
+      "ExitWorktree only touches a worktree that EnterWorktree created in the same session, and refuses to remove one with uncommitted changes unless discard_changes is set.",
+      "A worktree that the worker left unchanged is deleted automatically, so an empty result is not evidence the isolation failed.",
+      "Background sessions are already isolated by default: worktree.bgIsolation defaults to 'worktree', which blocks Edit and Write in the main checkout until EnterWorktree is called. A background stage that edits without isolating does not corrupt the checkout, it stops.",
+      "isolation: \"remote\" also exists and runs the worker in a remote environment. It is always a background task and its availability is gated, so it is not a general answer to a parallel-edit collision."
+    ]
+  },
   "decision_rule": [
     "Can one role finish this without waiting on anyone? -> inline or subagent.",
     "Do I only need the answer? -> subagent.",
     "Do the workers need to talk to each other to reach the answer? -> team.",
-    "Would the workers edit the same files? -> not a team, regardless of anything else.",
-    "Is the session non-interactive? -> not a team; teammates do not spawn under -p."
+    "Would the workers edit the same files? -> only with isolation 'worktree' and a declared integration step. In a shared checkout, no.",
+    "Is the session non-interactive? -> not a team; teammates do not spawn under -p.",
+    "Do the workers need to run the build, the test suite or a formatter? -> isolation 'worktree', even if their source files are disjoint: those write shared build output, lockfiles and caches."
   ],
   "constraints_from_the_platform": [
     "Agent teams are experimental and disabled by default; they require CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1.",
@@ -59,7 +133,8 @@
   ],
   "cost_discipline": [
     "A stage declaring execution 'team' must say in its actions why parallelism is worth the multiplier.",
-    "Disjoint file ownership is stated in the spawn prompt, not assumed.",
-    "The lead coordinates and synthesises; it does not implement while teammates work."
+    "Disjoint file ownership is stated in the spawn prompt, not assumed. Where it cannot be disjoint, isolation 'worktree' is stated in the spawn instead, and the integration step with it.",
+    "The lead coordinates and synthesises; it does not implement while teammates work.",
+    "Isolation is not free: a checkout per worker, and a merge the lead must run and test. Count the merge before choosing parallelism, not after the branches exist."
   ]
 }

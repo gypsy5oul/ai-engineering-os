@@ -789,6 +789,7 @@
   },
   "standard_fields": {
     "required": [
+      "schema_version",
       "id",
       "type",
       "at",
@@ -797,18 +798,37 @@
       "level",
       "subject",
       "category",
+      "actor",
       "actor_type",
+      "severity",
+      "artifact",
       "correlation_id"
     ],
-    "recommended": [
-      "actor",
-      "severity",
-      "status",
-      "artifact",
+    "required_after_the_first_event_in_a_thread": [
+      "causation_id"
+    ],
+    "derived_from_emitted_by": [
+      "workflow",
       "stage",
       "cycle",
-      "payload"
+      "source.kind"
     ],
-    "correlation_id": "Ties every event about one change together across workflows. Usually the feature id; the incident id during an incident. Without it, a feature thread and an audit trail cannot be reconstructed from the log."
+    "recommended": [
+      "status",
+      "cycle",
+      "payload",
+      "correlates"
+    ],
+    "schema": "schemas/notification-event.schema.json",
+    "schema_version": "Event model version. '2' carries correlation and causation and every required field below. '1' is anything written before that: it is still valid, still routable, and simply not chainable.",
+    "correlation_id": "Ties every event about one change together across workflows. Usually the feature id; the incident id during an incident. Without it, a feature thread and an audit trail cannot be reconstructed from the log. It defaults to the subject, which is only correct for the event that opens the thread.",
+    "causation_id": "The id of the event that caused this one. correlation_id gives a set; causation_id gives that set an order, and lets the chain be walked backwards from any point. scripts/emit_event.py derives it as the last event already recorded under the same correlation_id unless --causation-id or --root says otherwise.",
+    "workflow": "Workflow id. Derived from this event's emitted_by; absent for guard- and schedule-sourced events, which belong to no workflow.",
+    "stage": "Macro stage id. Derived from this event's emitted_by.",
+    "cycle": "Department cycle id. Derived from this event's emitted_by when a cycle emits it.",
+    "artifact": "The artifact id the event concerns. Defaults to the subject, so an audit query filters on one field rather than guessing which event type puts the id where.",
+    "actor": "What caused it: an agent or human role, or the emitting stage or cycle when the emitter supplies nothing finer. Never a person's name.",
+    "severity": "The event's own severity, independent of the routing priority the policy assigns. Taken from a declared payload severity when the emitter does not set it, so the two can never disagree.",
+    "verify": "python3 scripts/route_event.py --verify-chains --project <project>"
   }
 }

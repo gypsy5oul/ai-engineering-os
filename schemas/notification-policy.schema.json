@@ -27,7 +27,7 @@
       "additionalProperties": false,
       "properties": {
         "channel": { "type": "string" },
-        "thread_strategy": { "type": "string", "enum": ["subject", "none", "daily"] },
+        "thread_strategy": { "type": "string", "enum": ["subject", "correlation", "none", "daily"] },
         "aggregate_window_minutes": { "type": "integer", "minimum": 0 }
       }
     },
@@ -45,7 +45,7 @@
           "recipients": { "type": "array", "items": { "type": "string" },
             "description": "Roles, never individuals. A person is resolved from the project's approval section at send time." },
           "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"] },
-          "thread": { "type": "string", "enum": ["subject", "none", "daily"] },
+          "thread": { "type": "string", "enum": ["subject", "correlation", "none", "daily"] },
           "template": { "type": "string" },
           "when": { "type": "object", "additionalProperties": true,
             "description": "Optional payload conditions, e.g. severity in [critical, high]." },

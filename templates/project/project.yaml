@@ -148,6 +148,28 @@ knowledge:
   root: docs
   id_prefix: SFTP
 
+language_intelligence:
+  # Go-to-definition, find-references, hover types and diagnostics come from a
+  # language server. Claude Code reads language-server configuration only from a
+  # PLUGIN's own .lsp.json; it never reads this file, so nothing here starts a
+  # server. This section is the human-approved record of what the project expects,
+  # and the companion plugin below is what actually delivers it. See docs/lsp.md.
+  #
+  # provider: none is a legitimate answer. An absent section is an undeclared one.
+  provider: companion-plugin
+  plugin: sftp-lsp@integration-platform
+  servers:
+    - name: go
+      command: gopls
+      extensions: [".go"]
+      language: go
+      install: go install golang.org/x/tools/gopls@latest
+      diagnostics: true
+  notes: >-
+    No frontend layer, so no frontend server. The terraform and docker files get
+    no server either: nothing on this team asked for one, and an unused server is
+    a process per session for nothing.
+
 sdlc:
   required_stages: [REQ, ARCH, STORY, QADESIGN, DEV, REVIEW, CI, QA, RELEASE, DEPLOY, VERIFY]
   skipped_stages:

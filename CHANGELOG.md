@@ -3,6 +3,103 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.18.0] — The remaining roadmap, built in parallel
+
+Three agents working simultaneously in disjoint file sets: organizational
+evaluations, LSP and worktree isolation, correlation IDs and managed settings.
+Each verified its platform claims against the installed CLI before building.
+
+### Added — evaluating the organization, not just the agents
+
+`evaluations/organization-evaluation/`, 10 deterministic cases, 149 checks. The
+suite asks whether the *structure* still holds: can a worker bypass its lead, can
+QA peer-review its own tests, can a head accept by assertion, can a CRITICAL role
+be downgraded, can an agent verdict approve on the organization's behalf.
+
+Twelve mutations, twelve caught — each case proven by breaking the policy it
+guards in a throwaway copy and confirming it flips.
+
+**It found a real defect on its first run.** `backend-developer` could write
+`k8s/production/api.yaml`, `helm/values-prod.yaml` and `terraform/main.tf`. That
+contradicted `policies/coupling-policy.json`, which gives the `deployment-manifest`
+surface to `devops-engineer`: *"Application changes request configuration; they do
+not write it."* The write scope never enforced it. Now closed for four roles, and
+verified in three directions — infrastructure paths deny, `src/`, `tests/` and
+`Dockerfile` still allow, and `devops-engineer` still writes them.
+
+### Added — language intelligence as an extension point, and no language server
+
+`.lsp.json` is real and works as documented. Two things the documentation does not
+say, both verified against the CLI:
+
+- **`claude plugin validate` does not read `.lsp.json`.** A broken one surfaces
+  only at load, as `lsp-config-invalid`. The same object inside `plugin.json`
+  `lspServers` *is* validated.
+- **`extensionToLanguage` is not variable-expanded** while `command`, `args` and
+  `env` are, and an unresolved `${VAR}` is executed verbatim rather than skipped.
+
+So this plugin ships **no `.lsp.json`**. Extension claims are global across plugins
+and first registration wins, so a placeholder would outrank a project's real
+server, and a variable-driven command would error every session in an unconfigured
+project. `docs/lsp.md` documents the companion-plugin route;
+`templates/project/lsp.json` is a copyable example, deliberately misnamed so it can
+never load.
+
+### Added — worktree isolation as a declared step
+
+`policies/execution-policy.json` said only "do not edit the same file". It now has
+an `isolation` block with the integration procedure, an owner, and — the part that
+matters — `not_enforceable`. A `PreToolUse` hook can refuse a spawn but cannot
+rewrite one, cannot tell whether workers would collide, and does not fire if the
+model simply does not spawn. The policy says so rather than implying a guarantee.
+
+### Added — correlation and causation that can actually be walked
+
+`causation_id` alongside `correlation_id`, derived rather than demanded: workflow,
+stage and cycle come from the catalogue's `emitted_by`, and causation defaults to
+the last event recorded under the same correlation. Nothing existing broke.
+
+`route_event.py --trace` walks one change in causal order; `--verify-chains`
+checks every thread and exits non-zero. `tests/test_event_correlation.py` emits a
+real 13-event change and reconstructs it **with its own walker**, then asserts a
+second interleaved change does not mix in and that timestamp sorting cannot
+recover the order — which is what makes the fields load-bearing rather than
+decorative.
+
+Documented honestly: the "one thread per feature" chat picture was **not** true
+under the default `thread_strategy: subject`, because a defect and its merge
+request have different subjects. `correlation` is now a supported strategy; the 53
+existing rules were left alone, because how the space should read is a decision to
+take rather than a default to flip.
+
+### Fixed — deny rules that matched nothing
+
+The CLI's own validator: *"`Write(...)` is not matched by file permission checks —
+only `Edit(path)` rules are."* Three rules in `templates/project/settings.json`
+protecting `.ssh/`, `*.pem` and `.aws/credentials` were decoration. Now `Edit(...)`,
+which covers every file-editing tool, and `check_permission_rules_are_effective`
+fails the build if an inert rule returns.
+
+### Verified — enabling this plugin in project settings can disarm every guard
+
+Under `allowManagedHooksOnly`, a plugin's hooks survive only if that plugin is
+enabled in the **managed** `enabledPlugins`. Enabling it at project scope leaves
+the guards silently inert. Documented prominently in
+`docs/enterprise-deployment.md`, which is rewritten around what each setting does
+and does not prevent. Settings deliberately **not** shipped, each with its failure
+mode recorded: `forceLoginOrgUUID`, `forceRemoteSettingsRefresh`,
+`allowManagedPermissionRulesOnly`, `availableModels`, `disableAllHooks`.
+
+### A claim I checked and rejected
+
+An agent reported that `{"source": "url", "url": "….git"}` in `marketplace.json`
+never resolves and needs `"source": "git"`. It flagged the claim as unverified, and
+it was wrong: `claude plugin validate` **rejects** `source: "git"` for a plugin
+entry and **accepts** `url` with a `.git` URL and a `ref`. The marketplace-source
+union and the plugin-source union are not the same. No change made.
+
+Tests: **256 → 300.** Evaluations: **35 → 45 deterministic.**
+
 ## [0.17.0] — Environment promotion
 
 A release used to say "tests pass". It now says where.

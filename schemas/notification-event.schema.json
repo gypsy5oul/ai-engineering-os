@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "SDLC event",
-  "description": "A structured event emitted by the SDLC. The notification subsystem consumes these; it never polls, and it is never the event source. Events are facts about the past, named in the past tense. correlation_id ties every event about one change together, which is what makes a feature thread and an audit trail reconstructable.",
+  "description": "A structured event emitted by the SDLC. The notification subsystem consumes these; it never polls, and it is never the event source. Events are facts about the past, named in the past tense. correlation_id ties every event about one change together and causation_id names the event that caused this one, so one change's whole timeline can be reconstructed forwards and walked backwards from any point in it.",
   "type": "object",
   "required": [
     "id",
@@ -12,8 +12,12 @@
     "level",
     "subject",
     "category",
+    "actor",
     "actor_type",
-    "correlation_id"
+    "severity",
+    "artifact",
+    "correlation_id",
+    "schema_version"
   ],
   "additionalProperties": false,
   "properties": {
@@ -82,7 +86,7 @@
     },
     "actor": {
       "type": "string",
-      "description": "The agent or human role that caused it. Never a person's name for a worker-level event."
+      "description": "What caused it: an agent role, a human role, or - when the emitter supplies nothing finer - the emitting stage or cycle id from the catalogue. Never a person's name."
     },
     "correlates": {
       "type": "array",
@@ -152,20 +156,37 @@
     },
     "correlation_id": {
       "type": "string",
-      "description": "Ties every event about one change together across workflows: the feature id usually, the incident id during an incident. This is what makes a feature thread and an audit trail reconstructable."
+      "description": "Ties every event about one change together across workflows: the feature id usually, the incident id during an incident. Required. Defaults to the subject, which is correct only for the event that opens a thread - pass it explicitly for everything downstream."
     },
     "artifact": {
       "type": "string",
-      "description": "The artifact id this event concerns, where it differs from subject."
+      "description": "The artifact id this event concerns. Defaults to the subject, so an audit query can filter on one field without knowing which event types put the id in which place."
     },
     "stage": {
       "type": "string",
-      "description": "Macro stage id, denormalised from source for querying."
+      "description": "Macro stage id, denormalised from source for querying. Derived from the catalogue's emitted_by when the emitter does not pass one."
     },
     "cycle": {
       "type": "string",
       "pattern": "^CYCLE-[A-Z0-9-]+$",
-      "description": "Department cycle id, denormalised from source for querying."
+      "description": "Department cycle id, denormalised from source for querying. Derived from the catalogue's emitted_by when the emitter does not pass one."
+    },
+    "workflow": {
+      "type": "string",
+      "description": "Workflow id, denormalised from source for querying. Derived from the catalogue's emitted_by when the emitter does not pass one. Absent for guard- and schedule-sourced events, which belong to no workflow."
+    },
+    "causation_id": {
+      "type": "string",
+      "pattern": "^EVT-[0-9]{8}-[0-9]{6}-[a-z0-9]{4}$",
+      "description": "The id of the event that caused this one. Absent only on the event that opens a correlation thread. Present everywhere else, which is what makes the chain walkable backwards from any point; correlation_id alone gives a set, not an order."
+    },
+    "schema_version": {
+      "type": "string",
+      "enum": [
+        "1",
+        "2"
+      ],
+      "description": "Event model version. '1' is an event written before correlation and causation were enforced: it may lack causation_id, actor, artifact and severity. '2' carries all of them. Readers must not assume a v1 event is broken."
     }
   }
 }

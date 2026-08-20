@@ -131,7 +131,16 @@
         ".gitlab-ci.yml",
         "agents/**",
         "policies/**",
-        "hooks/**"
+        "hooks/**",
+        "k8s/**",
+        "kubernetes/**",
+        "helm/**",
+        "charts/**",
+        "terraform/**",
+        "infra/**",
+        "infrastructure/**",
+        "deploy/**",
+        ".github/workflows/**"
       ]
     },
     "frontend-developer": {
@@ -145,7 +154,16 @@
         ".gitlab-ci.yml",
         "agents/**",
         "policies/**",
-        "hooks/**"
+        "hooks/**",
+        "k8s/**",
+        "kubernetes/**",
+        "helm/**",
+        "charts/**",
+        "terraform/**",
+        "infra/**",
+        "infrastructure/**",
+        "deploy/**",
+        ".github/workflows/**"
       ]
     },
     "data-engineer": {
@@ -158,7 +176,16 @@
         ".ai-engineering/**",
         "agents/**",
         "policies/**",
-        "hooks/**"
+        "hooks/**",
+        "k8s/**",
+        "kubernetes/**",
+        "helm/**",
+        "charts/**",
+        "terraform/**",
+        "infra/**",
+        "infrastructure/**",
+        "deploy/**",
+        ".github/workflows/**"
       ]
     },
     "agent-architect": {

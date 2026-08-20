@@ -447,6 +447,85 @@
         }
       }
     },
+    "language_intelligence": {
+      "type": "object",
+      "description": "How this project gives Claude Code language intelligence: go-to-definition, find-references, hover types and diagnostics from a language server. Claude Code reads language-server configuration ONLY from a plugin's own .lsp.json (or a plugin.json lspServers field); it never reads this file. So this section is the human-approved record of what the project expects, and the companion plugin named in 'plugin' is what actually delivers it. Declaring a server here does not start one. See docs/lsp.md.",
+      "additionalProperties": false,
+      "required": [
+        "provider"
+      ],
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": [
+            "companion-plugin",
+            "none"
+          ],
+          "description": "'companion-plugin': a separate plugin, owned by this project or the organization, carries the .lsp.json. 'none': the project has decided to work without a language server, and agents fall back to grep and reading files. 'none' is a legitimate answer; an absent section is an undeclared one."
+        },
+        "plugin": {
+          "type": "string",
+          "description": "The plugin@marketplace identifier of the companion plugin whose .lsp.json carries these servers. Required in practice when provider is companion-plugin: without it nobody can tell which plugin to install."
+        },
+        "servers": {
+          "type": "array",
+          "description": "The servers that companion plugin declares, mirrored here so the approved toolchain is reviewable in one place. Keep in step with the companion plugin's .lsp.json; nothing enforces the match at runtime.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "command",
+              "extensions"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]+$",
+                "description": "The key this server appears under in the companion plugin's .lsp.json."
+              },
+              "command": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The language-server executable. Claude Code rejects a command containing a space unless it is an absolute path; arguments belong in 'args'. The binary is NOT installed by the plugin: it must already be on PATH."
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Arguments passed to the executable."
+              },
+              "extensions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^\\.[^.]"
+                },
+                "description": "File extensions this server answers for, each leading with a dot. These become the .lsp.json extensionToLanguage keys. Two plugins claiming the same extension is a conflict Claude Code reports and resolves by first registration, so keep them disjoint from any other LSP plugin installed."
+              },
+              "language": {
+                "type": "string",
+                "description": "LSP language id these extensions map to, e.g. 'go', 'python'. Defaults to the server name."
+              },
+              "install": {
+                "type": "string",
+                "description": "How a developer or a CI image obtains the binary. Recorded because a missing binary shows up only as 'Executable not found in $PATH' in the /plugin Errors tab, which is easy to miss and easy to fix."
+              },
+              "diagnostics": {
+                "type": "boolean",
+                "description": "Whether the server's diagnostics are pushed into the agent's context after edits. Defaults to true in Claude Code. Set false to keep navigation but stop a noisy linter spending context."
+              }
+            }
+          }
+        },
+        "notes": {
+          "type": "string",
+          "description": "Anything a reviewer needs to know, e.g. why a layer has no server."
+        }
+      }
+    },
     "sdlc": {
       "type": "object",
       "additionalProperties": true,

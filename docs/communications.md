@@ -111,9 +111,93 @@ The thread key is the subject id, so a feature's whole timeline is one thread:
 One place to open and understand where a feature is, who is on it, what is
 blocked and what is next.
 
+That picture is what `thread_strategy: correlation` produces. Under the default
+`subject` strategy the defect and the merge request open their own threads,
+because their subjects differ. The event log ties them together either way —
+see [correlation and causation](#correlation-and-causation) — but the space only
+looks like the above if the policy says to thread the change.
+
+## Correlation, and causation
+
+`correlation_id` gathers one change's events. `causation_id` orders them. Both
+are required to answer an audit question, and either alone is decoration.
+
+```
+  correlation_id = SFTP-FEAT-103        one change, every workflow it touched
+       │
+       ├── EVT-…-a1b2  FEATURE_CREATED         causation: (start of thread)
+       ├── EVT-…-c3d4  REQUIREMENT_APPROVED    causation: EVT-…-a1b2
+       ├── EVT-…-e5f6  ARCHITECTURE_APPROVED   causation: EVT-…-c3d4
+       └── …                                   each one names its cause
+```
+
+Why not just sort by `at`? Because `at` has one-second resolution, and a stage
+that emits four events emits them in the same second. Timestamps give you a
+bag; causation gives you a chain.
+
+```bash
+python3 scripts/route_event.py --trace SFTP-FEAT-103 --project .
+python3 scripts/route_event.py --verify-chains --project .
+```
+
+```
+SFTP-FEAT-103  ·  13 events  ·  2026-08-20T10:46:01Z .. 2026-08-20T10:46:03Z
+#    CAUSE    EVENT                    SUBJECT           WHERE                ACTOR
+1    start    FEATURE_CREATED          SFTP-FEAT-103     WF-FEATURE/IDEA      WF-FEATURE/IDEA
+2    #1       REQUIREMENT_APPROVED     SFTP-REQ-001      WF-FEATURE/REQ       WF-FEATURE/REQ
+3    #2       ARCHITECTURE_APPROVED    SFTP-ADR-001      WF-FEATURE/ARCH      WF-FEATURE/ARCH
+4    #3       STORY_CREATED            SFTP-FEAT-103     WF-FEATURE/STORY     WF-FEATURE/STORY
+5    #4       CODE_REVIEW_COMPLETED    SFTP-MR-88        WF-FEATURE/REVIEW    WF-FEATURE/REVIEW
+6    #5       QA_COMPLETED             SFTP-QA-01        WF-FEATURE/QA        WF-FEATURE/QA
+7    #6       DEFECT_CREATED           SFTP-DEF-421      CYCLE-QA             CYCLE-QA
+…
+13   #12      RCA_COMPLETED            SFTP-INC-007      WF-INCIDENT/RCA      WF-INCIDENT/RCA
+```
+
+Requirement to RCA, across six workflows and two department cycles, out of one
+append-only file.
+
+### What an emitter has to pass, and what it gets for free
+
+| Field | Where it comes from |
+| --- | --- |
+| `correlation_id` | **Passed.** Defaults to the subject, which is right only for the event that opens the thread. |
+| `causation_id` | Derived: the last event already recorded under the same `correlation_id`. `--causation-id` overrides it; `--root` says this event starts a thread. |
+| `workflow`, `stage`, `cycle`, `source.kind` | Derived from the catalogue's `emitted_by` — `WF-FEATURE/REQ` becomes workflow `WF-FEATURE`, stage `REQ`. |
+| `actor` | `--actor`, else `--agent`, else the emitting stage or cycle. Attribution at stage granularity, never nothing. |
+| `severity` | `--severity`, else a declared `payload.severity`, else the catalogue default — so the two can never disagree. |
+| `artifact` | Defaults to the subject, so an audit query filters one field. |
+| `schema_version` | `"2"`. Events written before this model are `"1"`: still valid, still routable, simply not chainable. |
+
+Deriving rather than requiring is what made this safe to add: no existing
+emitter had to change, and no event lost its route.
+
+### The invariants, and what enforces them
+
+- Every event has a `correlation_id`, an `actor`, a `severity` and an `artifact`
+  — `schemas/notification-event.schema.json` requires them, and
+  `scripts/emit_event.py` validates before it appends.
+- Every thread has exactly **one** starting point. A second event with no
+  `causation_id` means something emitted without saying what caused it.
+- Every `causation_id` resolves to an earlier event in the same thread. Pointing
+  at nothing, at another change, or forwards in the log is a broken chain.
+- `--verify-chains` checks all of that over a whole log and exits non-zero.
+  `tests/test_event_correlation.py` emits a real change and reconstructs it from
+  the log using only these two fields — if the chain stops being walkable, that
+  test fails rather than the field quietly becoming ornamental.
+
+### Chat threads are a separate choice
+
+The thread key in a Chat space is the **subject** by default, so a defect and
+its feature are separate threads even though they share a `correlation_id`. Set
+`thread_strategy` (or a rule's `thread`) to `correlation` to thread one change
+instead of one artifact. That is a policy decision about how the space should
+read, not a consequence of the event model, and the routing decision now carries
+`correlation_id` and `causation_id` either way.
+
 ## The event catalogue
 
-41 types. Each declares its level, what emits it, and its payload fields.
+58 types. Each declares its level, what emits it, and its payload fields.
 Stages declare `emits:`, and validation checks **both directions** — a catalogue
 entry claiming a stage emits it, where the stage does not declare it, is an error.
 
@@ -183,13 +267,14 @@ the digest.
 
 | | |
 | --- | --- |
-| `notification/event-catalogue.json` | 41 event types |
-| `notification/notification-policy.json` | 41 routing rules, suppression, aggregation, digests |
+| `notification/event-catalogue.json` | 58 event types, and the standard fields |
+| `notification/notification-policy.json` | 58 routing rules, suppression, aggregation, digests |
 | `notification/channels.json` | Spaces and admission rules. **No URLs** |
 | `notification/templates/` | Message formats per subject kind |
-| `scripts/emit_event.py` | Append one event to the log |
-| `scripts/route_event.py` | The policy engine |
-| `scripts/notify_digest.py` | Daily and weekly counts |
+| `scripts/emit_event.py` | Append one event to the log, correlated and caused |
+| `scripts/route_event.py` | The policy engine, and `--trace` / `--verify-chains` |
+| `scripts/notify_digest.py` | Daily and weekly counts, and changes in flight |
+| `schemas/notification-event.schema.json` | The event contract, including what is required |
 | `bin/aieos-notify` | Dispatch |
 | `agents/notification-agent.md` | The formatter |
 | `skills/engineering-notifications/SKILL.md` | How to write the message |

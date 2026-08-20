@@ -39,6 +39,38 @@ def read_log(project, since):
     return out
 
 
+def threads(events):
+    """How many distinct changes the period covers, and which moved most.
+
+    A count of events answers "how busy was it". A count of correlation threads
+    answers "how many changes were in flight", which is the number a lead is
+    actually asking for. Events with no correlation_id are counted separately
+    rather than folded in: they are a defect in the emitter, not a change.
+    """
+    by_thread = defaultdict(list)
+    uncorrelated = 0
+    for e in events:
+        cid = e.get("correlation_id")
+        if not cid:
+            uncorrelated += 1
+            continue
+        by_thread[cid].append(e)
+
+    busiest = sorted(((cid, es) for cid, es in by_thread.items()),
+                     key=lambda pair: (-len(pair[1]), pair[0]))[:5]
+    return {
+        "count": len(by_thread),
+        "uncorrelated_events": uncorrelated,
+        "busiest": [{"correlation_id": cid,
+                     "events": len(es),
+                     "last": max(e["at"] for e in es),
+                     "starting_points": sum(1 for e in es
+                                            if e.get("schema_version")
+                                            and not e.get("causation_id"))}
+                    for cid, es in busiest],
+    }
+
+
 def digest(events, period):
     by_type = Counter(e["type"] for e in events)
     subjects = defaultdict(set)
@@ -106,6 +138,7 @@ def digest(events, period):
                       "resolved": n("INCIDENT_RESOLVED"), "rcas": n("RCA_COMPLETED"),
                       "active": n("INCIDENT_CREATED") - n("INCIDENT_RESOLVED")},
         "blockers": sorted(blockers, key=lambda b: -b["age_days"]),
+        "threads": threads(events),
     }
 
     if period == "weekly":
@@ -126,6 +159,16 @@ def digest(events, period):
                                % (len(stale), ", ".join(b["id"] for b in stale)))
         if d["incidents"]["created"] and not d["incidents"]["rcas"]:
             d["trends"].append("Incidents occurred with no RCA published.")
+        if d["threads"]["uncorrelated_events"]:
+            d["trends"].append("%d event(s) carry no correlation_id and belong to no change. "
+                               "Those are invisible to a trace and to an audit."
+                               % d["threads"]["uncorrelated_events"])
+        split = [t for t in d["threads"]["busiest"] if t["starting_points"] > 1]
+        if split:
+            d["trends"].append("%s has more than one starting point: something emitted an event "
+                               "without naming what caused it, so the chain cannot be walked "
+                               "end to end. Check with route_event.py --verify-chains."
+                               % ", ".join(t["correlation_id"] for t in split))
         if not d["trends"]:
             d["trends"].append("Nothing anomalous in the shape of the week.")
     return d
@@ -152,6 +195,14 @@ def render(d):
     lines.append("🚨 INCIDENTS    %s"
                  % ("No active incidents" if inc["active"] <= 0
                     else "%d active · %d resolved · %d RCAs" % (inc["active"], inc["resolved"], inc["rcas"])))
+    th = d["threads"]
+    lines.append("🧵 CHANGES      %d in flight%s%s"
+                 % (th["count"],
+                    "" if not th["busiest"] else "  ·  busiest: " +
+                    ", ".join("%s (%d)" % (t["correlation_id"], t["events"])
+                              for t in th["busiest"][:3]),
+                    "" if not th["uncorrelated_events"]
+                    else "  ·  %d event(s) with no correlation_id" % th["uncorrelated_events"]))
     lines.append("")
     lines.append("⛔ BLOCKERS")
     if not d["blockers"]:

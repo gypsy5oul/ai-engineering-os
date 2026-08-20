@@ -17,16 +17,23 @@ and each stage picks one.
 1. Can one role finish this without waiting on anyone? → **inline** or **subagent**.
 2. Do I only need the answer, not the working? → **subagent**.
 3. Do the workers need to talk to each other to reach the answer? → **team**.
-4. Would the workers edit the same files? → **not a team**, regardless of anything else.
-5. Is the session non-interactive? → **not a team**; teammates do not spawn under `-p`.
+4. Would the workers edit the same files? → only with **isolation `worktree`** and a
+   declared integration step. In a shared checkout, no.
+5. Would the workers run a build, a test suite or a formatter? → **isolation `worktree`**,
+   even if their source files are disjoint: those write shared output.
+6. Is the session non-interactive? → **not a team**; teammates do not spawn under `-p`.
 
-Rule 4 is not a preference. Two teammates editing one file overwrite each other
-and the loser's work vanishes silently.
+Rule 4 is not a preference. Two workers editing one file in one checkout
+overwrite each other and the loser's work vanishes silently. What has changed is
+the remedy: it used to be "then don't", which in practice produced a smaller
+plan or a silent overwrite. Now it is a separate working copy and a merge someone
+owns. See [Working copies](#working-copies-shared-checkout-or-worktree).
 
-**File disjointness is necessary and not sufficient.** A backend agent editing the
-API implementation and a frontend agent editing the client both change the API
-contract. Their files never collide; the contract does, and the result is a merge
-that compiles and a system that does not work.
+**Neither disjoint files nor separate worktrees are sufficient.** A backend agent
+editing the API implementation and a frontend agent editing the client both change
+the API contract. Their files never collide; the contract does, and the result is a
+merge that compiles and a system that does not work. Isolation makes the merge
+mechanical — it does not make the contract agree.
 
 `policies/coupling-policy.json` names five coupled surfaces — api-contract,
 database-schema, deployment-manifest, event-schema, shared-configuration — each
@@ -37,6 +44,76 @@ The pattern is always: the surface owner produces the contract → it is reviewe
 it reaches `approved` → only then do implementers work in parallel against it. An
 implementer that finds the contract wrong raises it with the owner rather than
 amending it.
+
+## Working copies: shared checkout or worktree
+
+Execution mode says *who* does the work. Isolation says *which copy of the
+repository they do it in*. `policies/execution-policy.json` defines both.
+
+| Mode | What the worker edits | When |
+| --- | --- | --- |
+| `shared-checkout` (default) | The session's working directory | Disjoint paths, or read-only work |
+| `worktree` | Its own git worktree under `.claude/worktrees/`, on its own branch | The paths cannot be disjoint, or the worker builds, tests, formats, generates code or installs dependencies |
+
+Three ways to get one, all verified against the installed Claude Code:
+
+- `Agent(..., isolation: "worktree")` on a spawn. Mutually exclusive with `cwd`.
+- `isolation: worktree` in an agent definition's frontmatter, for a role that
+  should always be isolated. `worktree` is the only value valid for a
+  plugin-shipped agent.
+- `EnterWorktree` / `ExitWorktree` for the current session — only when a human
+  asked for a worktree or project instructions require one.
+
+A worker that changed nothing has its worktree removed automatically. A worker
+that changed something returns `worktreePath` and `worktreeBranch`.
+
+### The merge is a step
+
+Isolated work is not in the repository until the lead merges it. The lead — never
+a worker, which cannot see the other branches — collects each `worktreeBranch`,
+merges them into the integration branch one at a time in a stated order, resolves
+conflicts itself, and runs the build and full test suite **once after the last
+merge**. Each worker's green run was against its own copy and proves nothing
+about the union. Only the merged result is reviewed and approved.
+
+A conflict between two workers is evidence the split was wrong, not just a merge
+to resolve. A conflict on a coupled surface is a policy failure: that surface has
+one owner, and a merge is not where it gets decided.
+
+### Traps
+
+- **`worktree.baseRef` defaults to `fresh`**, which branches from
+  `origin/<default-branch>`. An isolated worker does **not** see the feature
+  branch you are standing on, or any unpushed commit. Work that continues a
+  branch needs `"worktree": {"baseRef": "head"}` in `.claude/settings.json`.
+- A worker whose working directory was pinned at launch cannot *create* a
+  worktree with `EnterWorktree`; it can only switch into an existing one by path.
+- Background sessions are isolated already: `worktree.bgIsolation` defaults to
+  `worktree` and blocks `Edit`/`Write` in the main checkout until
+  `EnterWorktree` is called.
+
+### What this repository can and cannot enforce
+
+It can check its own files. No workflow stage declares an isolation mode yet, so
+that check does not exist today; when a stage does, validation should require it
+to declare the integration step and its owner in the same place. Until then the
+only enforced part is coherence: `tests/test_execution_isolation.py` fails if the
+policy, this document and `skills/team-patterns/SKILL.md` stop naming the same
+mechanisms, or if the policy stops admitting what it cannot enforce.
+
+It **cannot force a worktree.** A `PreToolUse` hook sees a spawn's `tool_input`,
+including `isolation`, so it can refuse a spawn — but it cannot rewrite one to
+add isolation, and it cannot tell from a spawn whether the workers were going to
+collide. No hook fires at all when the model simply decides not to spawn workers,
+which is the likelier failure. Isolation is also a default working directory, not
+a sandbox: a worker can still write an absolute path back into the main checkout.
+And nothing merges the branches — a stage that ends without integrating looks
+finished.
+
+So this is a rule for agents to follow and reviewers to check, exactly as the
+file-ownership rule always was. Writing it down is what makes the omission
+visible. `policies/execution-policy.json` says so in its own
+`not_enforceable` list rather than implying a guarantee it does not have.
 
 ## How badly a stage needs a team
 

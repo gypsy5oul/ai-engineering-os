@@ -35,6 +35,12 @@ The third platform capability, alongside SDLC and governance.
 **The notification subsystem is never the event source.** It cannot ask "did
 anything happen". If the SDLC did not emit an event, nothing is sent.
 
+**Every event names its change, and its cause.** `correlation_id` gathers one
+change's events; `causation_id` names the event that caused this one, so the
+chain can be walked backwards from any point. `scripts/route_event.py --trace
+<correlation-id>` prints one change end to end and `--verify-chains` proves the
+log is intact. See [docs/communications.md](../docs/communications.md).
+
 **Policy routes, the model writes.** Routing and recipients are deterministic.
 The agent receives a routing decision and turns it into a readable message. It
 cannot decide who is told, or whether anything is sent at all.
@@ -43,8 +49,8 @@ cannot decide who is told, or whether anything is sent at all.
 
 | | |
 | --- | --- |
-| `event-catalogue.json` | 41 event types, each with a level and what emits it |
-| `notification-policy.json` | 41 routing rules, suppression, aggregation, digests |
+| `event-catalogue.json` | 58 event types, each with a level and what emits it, plus the standard fields every event carries |
+| `notification-policy.json` | 58 routing rules, suppression, aggregation, digests |
 | `channels.json` | Chat spaces. **No webhook URLs** — environment variable names only |
 | `templates/` | Message formats, per subject kind |
 

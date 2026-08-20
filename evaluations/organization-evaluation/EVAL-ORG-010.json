@@ -1,0 +1,108 @@
+{
+  "id": "EVAL-ORG-010",
+  "suite": "organization-evaluation",
+  "subject": "macro stage advancing over an unclosed department cycle",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "The two levels are joined by three predicates in a stage's definition of done. Drop them, or claim the cycle at the wrong stage, and the macro workflow walks forward while a department still has work in rework, an open escalation and no rollup. The board says the stage is done; the department says otherwise, and nobody is reading both.",
+  "input": null,
+  "expected_behaviors": [
+    "Every stage that declares a department_cycle also declares a cycle_role, and only the completing stage carries cycle_accepted, cycle_rollup_reported and no_open_rework.",
+    "Each cycle is completed at exactly one stage per workflow, and no stage is claimed by two cycles.",
+    "Entering and continuing stages must not carry the completion predicates, so the cycle cannot be closed early.",
+    "Rework is bounded in every cycle and has a declared action at the limit.",
+    "Both peer and lead review can request changes, so a cycle can actually stay open.",
+    "Every stage declares its full contract, so a stage cannot advance on an unstated definition of done."
+  ],
+  "failure_conditions": [
+    "A completing stage drops cycle_accepted, cycle_rollup_reported or no_open_rework.",
+    "An entering stage carries a completion predicate and closes the cycle before the work is done.",
+    "A cycle is completed at two stages, or at none.",
+    "A rework loop becomes unbounded, so a work item can never reach the escalation that would surface it."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "macro_stages_wait_for_their_cycle",
+      "description": "The join between the macro workflow and the department cycle, checked in both directions."
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "rework_is_bounded"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "reviews_can_request_changes"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "every_stage_declares_its_contract"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "no_workflow_depends_on_agent_teams",
+      "description": "A stage whose cycle can only close with an experimental agent team would block whenever teams are off."
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/feature-delivery.yaml",
+      "pattern": "cycle_accepted\\(CYCLE-DEV\\)"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/feature-delivery.yaml",
+      "pattern": "no_open_rework\\(CYCLE-DEV\\)"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/feature-delivery.yaml",
+      "pattern": "cycle_rollup_reported\\(CYCLE-DEV\\)"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/feature-delivery.yaml",
+      "pattern": "cycle_accepted\\(CYCLE-QA\\)"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/feature-delivery.yaml",
+      "pattern": "^    cycle_role: enters$",
+      "description": "A cycle that is entered somewhere and completed somewhere else is the case the join exists for."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/artifact-model.json",
+      "path": "dod_predicates.no_open_rework.checkable",
+      "value": "project"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/artifact-model.json",
+      "path": "dod_predicates.cycle_rollup_reported.checkable",
+      "value": "project"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/department-cycle.json",
+      "pattern": "A macro stage cannot advance until its department cycle reaches ACCEPTED"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/department-cycle.json",
+      "pattern": "Its definition of done carries cycle_accepted"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/cycles/dev.yaml",
+      "pattern": "^  limit: [1-5]$"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/cycles/dev.yaml",
+      "pattern": "^    limit_reached: ESCALATED$",
+      "description": "Hitting the rework limit has somewhere to go other than round again."
+    }
+  ],
+  "notes": "scripts/inject_faults.py F-07 and F-08 exercise the runtime half of this: a cycle over its rework limit and a cycle at it. This case asserts the structural half, that the predicates are wired to the right stages in the first place."
+}

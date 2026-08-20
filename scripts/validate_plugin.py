@@ -515,6 +515,30 @@ def check_ci_config():
             "can ship a plugin Claude Code rejects. Allow it only on a branch.")
 
 
+def check_permission_rules_are_effective():
+    """A deny rule that matches nothing reads as protection and is none.
+
+    Claude Code matches file permissions on Edit rules only: "Write(...) is not
+    matched by file permission checks -- only Edit(path) rules are." An Edit rule
+    covers every file-editing tool. The shipped templates carried three Write(...)
+    deny rules for private keys and credentials that blocked nothing.
+    """
+    inert = {"Write": "Edit", "MultiEdit": "Edit", "NotebookEdit": "Edit", "Glob": "Read"}
+    for rel in ("templates/project/settings.json",
+                "templates/enterprise/managed-settings.json"):
+        cfg = load_json(rel)
+        if not cfg:
+            continue
+        perms = cfg.get("permissions") or {}
+        for bucket in ("deny", "ask", "allow"):
+            for rule in perms.get(bucket) or []:
+                tool = str(rule).split("(")[0]
+                if tool in inert and ":*" not in str(rule):
+                    err("%s: %s rule %r is not matched by file permission checks. Use %s(...) "
+                        "instead; it covers every file-editing tool."
+                        % (rel, bucket, rule, inert[tool]))
+
+
 def check_hooks():
     cfg = load_json("hooks/hooks.json")
     if cfg is None:
@@ -1062,6 +1086,7 @@ def main():
     check_spawn_edges_are_executable()
     check_hooks()
     check_ci_config()
+    check_permission_rules_are_effective()
     check_schemas()
     check_workflows(registry)
     check_workflows_can_be_abandoned()

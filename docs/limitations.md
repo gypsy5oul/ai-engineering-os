@@ -75,7 +75,7 @@ pipeline results, human approvals — report `REQUIRES-EVIDENCE` and name where 
 evidence lives. They are never counted as passing, but nothing in a session can
 confirm them either.
 
-**LLM-judged evaluations do not run in CI.** 23 of 58 cases require a model run
+**LLM-judged evaluations do not run in CI.** 23 of 68 cases require a model run
 and are reported as pending. That is honest, and it is still a coverage gap.
 
 **Secret detection is heuristic.** `policies/secret-patterns.json` catches common
