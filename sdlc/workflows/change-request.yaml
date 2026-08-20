@@ -1,0 +1,236 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-CHANGE
+name: Change request
+version: 1.0.0
+description: >-
+  Altering a commitment the organization has already made. "Increase retention from
+  30 days to 90" is one sentence and touches requirements, architecture, capacity,
+  cost, security, compliance, testing and release. The work is the impact
+  assessment; the implementation that follows is ordinary delivery.
+applies_when:
+  - A stated requirement, non-functional target, policy or operational parameter is to change.
+  - The system already does something and is being asked to do it differently.
+skip_when:
+  - The system does not do it at all. That is a new capability, so WF-FEATURE.
+  - The system does it and the behaviour is wrong. That is WF-DEFECT.
+  - Only a dependency version changes. That is WF-DEPENDENCY.
+team_pattern: single-agent
+entry_conditions:
+  - A named human has asked for the change in their own words.
+  - The commitment being changed can be pointed at, whether a requirement, an NFR or a written policy.
+exit_conditions:
+  - Every affected artifact is updated or explicitly recorded as unaffected.
+  - The change is delivered through the workflow its risk demands, or rejected with a reason.
+cancellation:
+  terminal_status: cancelled
+  who: the human who owns the change, recorded like any other decision
+  requires:
+    - Every department cycle this change entered reaches a terminal state, ACCEPTED
+      or WITHDRAWN. A cycle left open is work the organization still believes is
+      running.
+    - The reason is written on the artifact that opened the change.
+    - Anything already deployed is either reverted or explicitly kept, and which one
+      is recorded.
+  note: >-
+    Rejecting a change request is a normal outcome and is not cancellation. A rejected
+    CR reached ASSESS and DECIDE and got an answer; a cancelled one was abandoned
+    before anyone decided.
+definition_of_done:
+  - artifact_exists(CR)
+  - required_fields_present(CR)
+  - human_approval_recorded(AP-15)
+  - human_identity_recorded(AP-15)
+  - every_linked(CR, REQ)
+failure_paths:
+  - when: The impact cannot be assessed without building something
+    goto: ASSESS
+    note: >-
+      A spike is delivery work with its own workflow. Record what is unknown and what
+      would resolve it, rather than guessing an impact.
+  - when: The change turns out to require new capability rather than a different setting
+    goto: RAISE
+    note: Re-route to WF-FEATURE. A change request is not a way to skip requirements.
+  - when: An affected dimension has no owner who can answer for it
+    goto: ASSESS
+    note: >-
+      Open a DEC. An unanswered dimension is not the same as an unaffected one, and
+      recording it as unaffected is how a change request becomes an incident later.
+stages:
+  - id: RAISE
+    name: Raise the change
+    owner: product-manager
+    participants:
+      - requirements-analyst
+    skills:
+      - requirements-engineering
+      - traceability
+    risk: LOW
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - A human has asked for something to change
+    actions:
+      - Write what changes, and what it changes FROM. The baseline is the whole point.
+      - Point at the artifact that carries the current commitment.
+      - State why now, because a change with no forcing reason competes with work that has one.
+    inputs:
+      - The request as stated
+      - The requirement, NFR or policy being changed
+    outputs:
+      - Change request
+      - The current commitment it alters
+    produces:
+      - CR
+    exit_criteria:
+      - The current commitment is identified, not paraphrased
+      - What changes and why now are both written down
+    definition_of_done:
+      - artifact_exists(CR)
+      - artifact_status(CR, draft)
+      - required_fields_present(CR)
+    department_cycle: CYCLE-PROD
+    cycle_role: enters
+    emits:
+      - CHANGE_REQUESTED
+  - id: ASSESS
+    name: Impact assessment
+    owner: solution-architect
+    participants:
+      - security-architect
+      - qa-lead
+      - sre
+      - data-engineer
+    skills:
+      - architecture-design
+      - threat-modeling
+      - technology-selection
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - A change request exists with its current commitment identified
+    actions:
+      - Answer every dimension the project declares. "None, because..." is an answer;
+        silence is not.
+      - Name the artifacts that would have to change, by identifier.
+      - State reversibility. A change that cannot be undone is a different decision
+        from one that can.
+      - Where a dimension has no answer, open a DEC rather than assuming none.
+    inputs:
+      - Change request
+      - Current architecture
+      - Non-functional targets
+      - Operational limits
+    outputs:
+      - Impact per dimension
+      - Affected artifact list
+      - Reversibility
+      - Open decisions
+    exit_criteria:
+      - Every declared dimension has an answer or an open decision
+      - The affected artifacts are named individually
+    definition_of_done:
+      - artifact_status(CR, assessing)
+      - required_fields_present(CR)
+      - no_open_blocking_decisions_for(CR)
+      - agent_verdict(architecture-reviewer, pass)
+    agent_gate:
+      reviewer: architecture-reviewer
+      blocking: true
+      recorded_in: the change request
+      purpose: >-
+        completeness of the assessment, not whether the change is a good idea: is any
+        dimension answered by assertion rather than analysis, and is any affected
+        artifact missing.
+    department_cycle: CYCLE-ARCH
+    cycle_role: enters
+    emits:
+      - CHANGE_ASSESSED
+  - id: DECIDE
+    name: Accept or reject
+    owner: engineering-director
+    participants:
+      - product-manager
+    skills:
+      - sdlc-navigator
+    risk: HIGH
+    complexity: complex
+    execution: inline
+    entry_criteria:
+      - The impact assessment is complete
+    actions:
+      - Put the assessed cost against the stated reason and let a human decide.
+      - Record what was rejected and why, so the same request does not return as new.
+      - Choose the delivery route the risk demands, rather than the fastest one available.
+    inputs:
+      - Change request with impact
+      - Open decisions
+    outputs:
+      - Decision
+      - Delivery route
+      - Rejected options with reasons
+    exit_criteria:
+      - A named human accepted or rejected the change
+      - The delivery route is chosen and written down
+    definition_of_done:
+      - artifact_status(CR, approved)
+      - human_approval_recorded(AP-15)
+      - human_identity_recorded(AP-15)
+      - required_fields_present(CR)
+      - cycle_accepted(CYCLE-ARCH)
+      - cycle_rollup_reported(CYCLE-ARCH)
+      - no_open_rework(CYCLE-ARCH)
+    human_gate:
+      approver: project owner
+      approver_role: project-owner
+      policy_ref: AP-15
+      recorded_in: project-decision-log
+      decision:
+        - accept
+        - reject
+        - defer
+    department_cycle: CYCLE-ARCH
+    cycle_role: completes
+    emits:
+      - CHANGE_DECIDED
+  - id: PROPAGATE
+    name: Update what the change touched
+    owner: requirements-analyst
+    participants:
+      - solution-architect
+      - qa-lead
+    skills:
+      - traceability
+      - requirements-engineering
+    risk: MEDIUM
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - The change request is approved. A rejected one ends at DECIDE, where the
+        record of the rejection is itself the outcome.
+    actions:
+      - Update every artifact the assessment named, or record why it turned out not to need it.
+      - Link each updated artifact back to the change request.
+      - Hand the implementation to the delivery workflow the decision chose.
+    inputs:
+      - Approved change request
+      - Affected artifact list
+    outputs:
+      - Updated requirements
+      - Updated architecture where affected
+      - Traceability edges
+    exit_criteria:
+      - Every named artifact is updated or explicitly recorded as unaffected
+      - The delivery work is raised in its own workflow
+    definition_of_done:
+      - every_linked(CR, REQ)
+      - required_fields_present(CR)
+      - cycle_accepted(CYCLE-PROD)
+      - cycle_rollup_reported(CYCLE-PROD)
+      - no_open_rework(CYCLE-PROD)
+    department_cycle: CYCLE-PROD
+    cycle_role: completes
+    emits:
+      - CHANGE_PROPAGATED

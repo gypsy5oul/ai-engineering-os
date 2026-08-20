@@ -14,6 +14,8 @@ used_by_stages:
   - WF-INCIDENT/INVESTIGATE
   - WF-INCIDENT/RCA
   - WF-RELEASE/VERIFY
+  - WF-MIGRATION/SAFETY
+  - WF-MIGRATION/CLOSE
 work_item:
   kind: observability change, runbook or investigation thread
   artifact: INC

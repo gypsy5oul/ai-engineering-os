@@ -10,6 +10,8 @@ description: Intent to approved requirement set. The analyst writes, the product
 used_by_stages:
   - WF-FEATURE/REQ
   - WF-ONBOARDING/ASK
+  - WF-CHANGE/RAISE
+  - WF-CHANGE/PROPAGATE
 work_item:
   kind: requirement
   artifact: REQ

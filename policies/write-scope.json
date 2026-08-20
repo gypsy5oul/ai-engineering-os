@@ -22,13 +22,15 @@
         "docs/requirements/**",
         "docs/stories/**",
         "docs/product/**",
-        ".ai-engineering/**"
+        ".ai-engineering/**",
+        "docs/change-requests/**"
       ]
     },
     "requirements-analyst": {
       "mode": "allow",
       "allow": [
-        "docs/requirements/**"
+        "docs/requirements/**",
+        "docs/change-requests/**"
       ]
     },
     "solution-architect": {

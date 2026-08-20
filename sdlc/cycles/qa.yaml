@@ -12,6 +12,8 @@ used_by_stages:
   - WF-FEATURE/QA
   - WF-RELEASE/STAGING
   - WF-DEFECT/VERIFY
+  - WF-MIGRATION/REHEARSE
+  - WF-MIGRATION/VERIFY
 work_item:
   kind: test scenario
   artifact: TEST

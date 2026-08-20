@@ -11,6 +11,10 @@ used_by_stages:
   - WF-FEATURE/FEAS
   - WF-FEATURE/ARCH
   - WF-AGENT-CHANGE/DESIGN
+  - WF-CHANGE/ASSESS
+  - WF-CHANGE/DECIDE
+  - WF-MIGRATION/IMPACT
+  - WF-MIGRATION/DESIGN
 work_item:
   kind: design section or decision
   artifact: ARCH

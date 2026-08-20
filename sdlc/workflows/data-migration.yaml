@@ -1,0 +1,451 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-MIGRATION
+name: Data migration
+version: 1.0.0
+description: >-
+  Changing the shape of data that already exists. Code can be rolled back; data
+  written in a new format usually cannot. That asymmetry is why this is a workflow
+  of its own rather than a story inside a feature, and why more of it happens before
+  anything touches production than after.
+applies_when:
+  - A schema changes in a way that requires existing rows to be transformed, moved or backfilled.
+  - Data moves between stores, formats or encodings.
+  - A field's meaning changes, even where its type does not.
+skip_when:
+  - The change is additive, nullable and readable by the current code. That is an ordinary story.
+  - No data exists yet. Creating a schema is design work, not migration.
+team_pattern: single-agent
+entry_conditions:
+  - The schema change is described, and the data it affects can be counted.
+  - A backup exists whose restore has been tested, not merely scheduled.
+exit_conditions:
+  - The migration has run in production, been verified, and the rollback path is either still open or explicitly closed with a reason.
+  - Backward compatibility held for the whole window in which both versions ran.
+cancellation:
+  terminal_status: cancelled
+  who: the human who owns the change, recorded like any other decision
+  requires:
+    - Every department cycle this change entered reaches a terminal state, ACCEPTED
+      or WITHDRAWN. A cycle left open is work the organization still believes is
+      running.
+    - The reason is written on the artifact that opened the change.
+    - Any migration already executed is either reverted or explicitly kept, and which
+      one is recorded. A half-run migration is the worst state to abandon in.
+  note: >-
+    Cancelling before EXECUTE costs nothing. Cancelling after it is not cancellation
+    but rollback, and it runs through the ROLLBACK stage rather than this block.
+definition_of_done:
+  - artifact_exists(MIG)
+  - required_fields_present(MIG)
+  - artifact_status(MIG, executed)
+  - human_approval_recorded(AP-05)
+  - human_identity_recorded(AP-05)
+  - agent_verdict(architecture-reviewer, pass)
+  - no_unresolved_findings(high)
+failure_paths:
+  - when: The dry run transforms a different number of rows than expected
+    goto: DESIGN
+    note: >-
+      A count that does not match means the query does not describe the data. Do not
+      adjust the expectation to match the result.
+  - when: Restore from backup fails or is untested
+    goto: SAFETY
+    note: >-
+      A backup nobody has restored is a hope. Nothing proceeds until a restore has
+      actually been performed.
+  - when: The rollback rehearsal fails
+    goto: DESIGN
+    note: >-
+      The migration is not ready. A rollback that has never been run is not a rollback
+      plan, and discovering that in production is the failure this workflow exists to
+      prevent.
+  - when: The migration exceeds its lock or duration budget in staging
+    goto: DESIGN
+    note: Redesign for batching or online migration rather than hoping production is faster.
+  - when: Production verification finds data that did not transform
+    goto: ROLLBACK
+stages:
+  - id: IMPACT
+    name: Data impact
+    owner: data-engineer
+    participants:
+      - solution-architect
+    skills:
+      - database-design
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - A schema change is described
+    actions:
+      - Count what is affected. Rows, tables, size, and the oldest data still in scope.
+      - Find the readers and writers, including the ones outside this repository.
+      - State what becomes unrecoverable, and from what moment.
+    inputs:
+      - Proposed schema change
+      - Current schema
+      - Data volumes
+    outputs:
+      - Affected data, counted
+      - Readers and writers
+      - The point past which rollback stops being possible
+    produces:
+      - MIG
+    exit_criteria:
+      - The affected data is counted rather than estimated
+      - Every reader and writer is named
+    definition_of_done:
+      - artifact_exists(MIG)
+      - artifact_status(MIG, draft)
+      - required_fields_present(MIG)
+    department_cycle: CYCLE-ARCH
+    cycle_role: enters
+    emits:
+      - MIGRATION_PLANNED
+  - id: DESIGN
+    name: Migration and compatibility design
+    owner: data-engineer
+    participants:
+      - solution-architect
+      - backend-developer
+    skills:
+      - database-design
+      - api-design
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - The data impact is known and counted
+    actions:
+      - Design the transformation, its batching, and its behaviour on retry.
+      - Design the window in which old and new readers both work, because deploys are
+        not instantaneous and rollback needs the old readers to still function.
+      - Write the rollback procedure as a procedure, not as an intention.
+      - State the expected duration and what will be locked while it runs.
+    inputs:
+      - Data impact
+      - Current readers and writers
+      - Deployment mechanics
+    outputs:
+      - Migration procedure
+      - Backward compatibility window
+      - Rollback procedure
+      - Duration and lock budget
+    exit_criteria:
+      - The migration is idempotent, or its non-idempotence is stated with the recovery
+      - Old readers keep working for the whole compatibility window
+      - The rollback procedure names its own limits
+    definition_of_done:
+      - required_fields_present(MIG)
+      - artifact_status(MIG, in-review)
+      - agent_verdict(architecture-reviewer, pass)
+      - no_open_blocking_decisions_for(MIG)
+      - cycle_accepted(CYCLE-ARCH)
+      - cycle_rollup_reported(CYCLE-ARCH)
+      - no_open_rework(CYCLE-ARCH)
+    agent_gate:
+      reviewer: architecture-reviewer
+      blocking: true
+      recorded_in: the migration plan
+      purpose: >-
+        whether the compatibility window actually holds and the rollback procedure is
+        executable, not whether the schema is well designed.
+    department_cycle: CYCLE-ARCH
+    cycle_role: completes
+    emits:
+      - MIGRATION_DESIGNED
+  - id: SAFETY
+    name: Backup and restore verification
+    owner: sre
+    participants:
+      - data-engineer
+    skills:
+      - observability
+      - incident-management
+    risk: CRITICAL
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The migration is designed
+    actions:
+      - Take a backup and restore it somewhere. A backup nobody has restored is a hope.
+      - Record how long the restore took, because that is the real recovery time.
+      - Confirm the restore contains the data, rather than confirming the job exited zero.
+    inputs:
+      - Backup configuration
+      - Migration plan
+    outputs:
+      - Backup evidence
+      - Restore evidence with duration
+    exit_criteria:
+      - A restore has actually been performed and its contents checked
+      - The recovery time is measured rather than assumed
+    definition_of_done:
+      - required_fields_present(MIG)
+      - rollback_plan_or_acknowledged()
+    department_cycle: CYCLE-SRE
+    cycle_role: enters
+    emits:
+      - MIGRATION_SAFETY_VERIFIED
+  - id: REHEARSE
+    name: Dry run and rollback rehearsal
+    owner: data-engineer
+    participants:
+      - qa-lead
+      - sre
+      - performance-reviewer
+    skills:
+      - database-design
+      - performance-engineering
+      - test-automation
+    risk: CRITICAL
+    complexity: complex
+    execution: team
+    team_requirement: TEAM_PREFERRED
+    degraded_mode:
+      fallback: subagent
+      guarantees_lost:
+        - Duration, correctness and operational behaviour are judged one after another
+          rather than while the same run is happening, so a slow-but-correct migration
+          and a fast-but-locking one look alike in the evidence.
+        - Nobody is watching the restored system while the rollback runs, which is the
+          moment most likely to surprise.
+      requires_human_acknowledgement: false
+    entry_criteria:
+      - A restore has been verified
+      - A staging dataset of representative size exists
+    actions:
+      - Run the migration against restored production-shaped data, not a fixture.
+      - Compare the row counts against the prediction from IMPACT, and treat a mismatch
+        as a defect in the query rather than in the prediction.
+      - Run the rollback. A rollback that has never been executed is not a rollback plan.
+      - Measure duration and lock behaviour against the budget.
+      - Run as a team because the rollback rehearsal is the moment three disciplines
+        need to be watching the same run at once. QA judges whether the data is right,
+        performance judges whether the duration and locking would survive production,
+        and SRE judges whether the system stayed operable throughout. Sequentially,
+        each sees a different run and none sees the interaction.
+    inputs:
+      - Restored dataset
+      - Migration procedure
+      - Rollback procedure
+    outputs:
+      - Dry run evidence with counts
+      - Rollback rehearsal evidence
+      - Measured duration and lock behaviour
+    exit_criteria:
+      - Row counts match the prediction, or the difference is explained and the plan corrected
+      - The rollback has been executed and left the data usable
+      - Duration and locking are inside budget
+    definition_of_done:
+      - required_fields_present(MIG)
+      - tests_pass(migration)
+      - agent_verdict(performance-reviewer, pass)
+      - no_unresolved_findings(high)
+    agent_gate:
+      reviewer: performance-reviewer
+      blocking: true
+      recorded_in: the migration plan
+      purpose: >-
+        duration, locking and behaviour at production scale, not correctness of the
+        transformation.
+    coupled_artifacts:
+      - database-schema
+    department_cycle: CYCLE-QA
+    cycle_role: enters
+    emits:
+      - MIGRATION_REHEARSED
+  - id: AUTHORIZE
+    name: Authorize the migration
+    owner: release-manager
+    participants:
+      - engineering-director
+    skills:
+      - release-management
+    risk: CRITICAL
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The dry run and the rollback rehearsal both passed
+    actions:
+      - Put the measured evidence in front of the approver, not the plan's promises.
+      - State the irreversibility point plainly, because that is what is being authorized.
+    inputs:
+      - Migration plan with evidence
+      - Restore evidence
+    outputs:
+      - Authorization
+      - Execution window
+    exit_criteria:
+      - A named human authorized this migration against this evidence
+      - The execution window is agreed
+    definition_of_done:
+      - human_approval_recorded(AP-05)
+      - human_identity_recorded(AP-05)
+      - required_fields_present(MIG)
+      - artifact_status(MIG, approved)
+    human_gate:
+      approver: named engineering owner
+      approver_role: engineering-owner
+      policy_ref: AP-05
+      recorded_in: gitlab-release
+      decision:
+        - authorize
+        - hold
+    emits:
+      - MIGRATION_AUTHORIZED
+  - id: EXECUTE
+    name: Run it
+    owner: data-engineer
+    participants:
+      - sre
+    skills:
+      - database-design
+      - observability
+    risk: CRITICAL
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The migration is authorized and inside its window
+    actions:
+      - Run the migration as rehearsed, without in-flight edits to the procedure.
+      - Watch the measures the rehearsal established, and stop on the trigger conditions
+        rather than on a feeling.
+    inputs:
+      - Authorized migration plan
+      - Production access, human-approved
+    outputs:
+      - Execution record
+      - Counts transformed
+    exit_criteria:
+      - The migration completed, or stopped at a trigger and rolled back
+      - Counts are recorded against the prediction
+    definition_of_done:
+      - artifact_status(MIG, executed)
+      - human_approval_recorded(AP-05)
+      - required_fields_present(MIG)
+      - cycle_accepted(CYCLE-DEVOPS)
+      - cycle_rollup_reported(CYCLE-DEVOPS)
+      - no_open_rework(CYCLE-DEVOPS)
+    department_cycle: CYCLE-DEVOPS
+    cycle_role: completes
+    emits:
+      - MIGRATION_EXECUTED
+  - id: VERIFY
+    name: Verify the data
+    owner: qa-lead
+    participants:
+      - data-engineer
+      - sre
+    skills:
+      - test-automation
+      - observability
+    risk: CRITICAL
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - The migration has run
+    actions:
+      - Check the data, not the exit code of the job.
+      - Confirm the old readers still work for the whole compatibility window.
+      - Keep the rollback available until the window closes, and record when it closed.
+    inputs:
+      - Execution record
+      - Verification queries
+    outputs:
+      - Verification evidence
+      - Compatibility window status
+    exit_criteria:
+      - The transformed data is verified against the expectation
+      - Old readers behaved correctly throughout the window
+    definition_of_done:
+      - required_fields_present(MIG)
+      - agent_verdict(test-reviewer, pass)
+      - no_unresolved_findings(high)
+      - cycle_accepted(CYCLE-QA)
+      - cycle_rollup_reported(CYCLE-QA)
+      - no_open_rework(CYCLE-QA)
+    agent_gate:
+      reviewer: test-reviewer
+      blocking: true
+      recorded_in: the migration plan
+      purpose: >-
+        whether the verification actually looked at the data, and whether the evidence
+        would reveal a partial transformation.
+    department_cycle: CYCLE-QA
+    cycle_role: completes
+    emits:
+      - MIGRATION_VERIFIED
+  - id: ROLLBACK
+    name: Roll back
+    owner: data-engineer
+    participants:
+      - sre
+      - release-manager
+    skills:
+      - database-design
+      - incident-management
+    risk: CRITICAL
+    complexity: complex
+    execution: inline
+    entry_criteria:
+      - Verification failed, or a trigger condition fired during execution
+    actions:
+      - Run the rehearsed rollback. This is the one that was practised in REHEARSE.
+      - Where rollback is no longer possible, say so immediately and treat it as an incident
+        rather than continuing to try.
+      - Record what was lost, if anything, in the data rather than in a message.
+    inputs:
+      - Rollback procedure
+      - Execution record
+      - Backup
+    outputs:
+      - Rollback record
+      - Data state after rollback
+      - What could not be recovered
+    exit_criteria:
+      - The data is in a known state, and which state is recorded
+      - Anything unrecoverable is named
+    definition_of_done:
+      - artifact_status(MIG, rolled-back)
+      - required_fields_present(MIG)
+      - human_approval_recorded(AP-05)
+    emits:
+      - MIGRATION_ROLLED_BACK
+  - id: CLOSE
+    name: Close the window
+    owner: sre
+    participants:
+      - data-engineer
+    skills:
+      - observability
+    risk: HIGH
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The migration is verified and the compatibility window has elapsed
+    actions:
+      - Record that the rollback path is now closed, and from when.
+      - Retire the compatibility code, or raise the DEBT item that will.
+    inputs:
+      - Verification evidence
+      - Compatibility window
+    outputs:
+      - Window closure record
+      - DEBT for compatibility code still in place
+    produces:
+      - DEBT
+    exit_criteria:
+      - The rollback path is explicitly closed rather than quietly forgotten
+      - Compatibility code is removed or tracked
+    definition_of_done:
+      - required_fields_present(MIG)
+      - cycle_accepted(CYCLE-SRE)
+      - cycle_rollup_reported(CYCLE-SRE)
+      - no_open_rework(CYCLE-SRE)
+    department_cycle: CYCLE-SRE
+    cycle_role: completes
+    emits:
+      - MIGRATION_WINDOW_CLOSED

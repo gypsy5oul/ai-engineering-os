@@ -408,6 +408,53 @@ def f17(project):
         shutil.rmtree(data, ignore_errors=True)
 
 
+
+@fault("F-18", "A migration reaches authorization with an untested rollback",
+       "AUTHORIZE does not pass: a rollback that has never been run is not a plan")
+def f18(project):
+    S.write_artifact(project, "MIG", status="in-review",
+                     schema_change="Split payload into typed columns",
+                     data_impact="4.1M rows",
+                     backward_compatibility="dual-read for one release",
+                     forward_path="batched backfill",
+                     dry_run_evidence="4,118,204 rows transformed",
+                     backup_verified="2026-08-20",
+                     restore_tested="restored in 18 minutes",
+                     rollback_procedure="drop the new columns",
+                     rollback_tested="",
+                     irreversible_after="the payload column is dropped",
+                     expected_duration="~35 minutes", lock_behaviour="no table lock")
+    res = dod(project, "WF-MIGRATION", "AUTHORIZE")
+    ok, why = must_fail(res, "required_fields_present(MIG)")
+    if not ok:
+        return False, ("the plan reached authorization with rollback_tested empty: %s" % why)
+    ok2, why2 = must_fail(res, "human_approval_recorded(AP-05)")
+    if not ok2:
+        return False, "no rollback evidence but the approval predicate passed: " + why2
+    return True, why
+
+
+@fault("F-19", "A change request is decided with a dimension unanswered",
+       "DECIDE does not pass while a blocking decision is open against the CR")
+def f19(project):
+    # The decision declares what it blocks; the blocked artifact does not declare
+    # the decision. Getting this backwards is how a fault case can pass while
+    # testing nothing.
+    dec = S.write_artifact(project, "DEC", status="open", blocking=True,
+                           blocks=["CR"], title="Who owns the compliance answer")
+    S.write_artifact(project, "CR", status="assessing",
+                     what_changes="Retention 30 to 90 days", why_now="A customer commitment",
+                     current_commitment="SIM-REQ-001", impact={"storage": "3x"},
+                     affected_artifacts=[], reversibility="reversible", rejected_options=[],
+                     links={"decisions": [dec]},
+                     rollup=S.rollup("CYCLE-ARCH", status="IN_PROGRESS"))
+    res = dod(project, "WF-CHANGE", "ASSESS")
+    ok, why = must_fail(res, "no_open_blocking_decisions_for(CR)")
+    if not ok:
+        return False, why
+    return True, why
+
+
 # ------------------------------------------------------------------- runner
 
 def run(selected=None, verbose=False):

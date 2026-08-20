@@ -3,6 +3,91 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.14.0] — Change request and data migration
+
+Two workflows for changes the existing set handled badly: altering a commitment
+already made, and transforming data that already exists.
+
+### Added — `WF-CHANGE`
+
+"Increase retention from 30 days to 90" is one sentence that touches
+requirements, architecture, capacity, cost, security, compliance, testing and
+release. The work is the impact assessment; the implementation that follows is
+ordinary delivery.
+
+`RAISE → ASSESS → DECIDE → PROPAGATE`
+
+What separates it from `WF-FEATURE` is that the system already does the thing, so
+the `CR` artifact must point at the **current commitment** it alters. Without that
+baseline the assessment has nothing to measure against, and "increase retention to
+90 days" cannot be told apart from "we already do that".
+
+`ASSESS` must answer every dimension the project declares. `"none, because..."` is
+an answer; silence is not, and a dimension with no owner opens a `DEC` rather than
+being recorded as unaffected — recording it as unaffected is how a change request
+becomes an incident later.
+
+New approval `AP-15`. Distinct from `AP-03`: selecting a technology is a different
+decision from changing a target the current technology already meets.
+
+Rejecting a change request is a normal outcome and is **not** cancellation. A
+rejected `CR` reached `DECIDE` and got an answer; a cancelled one was abandoned
+before anyone decided.
+
+### Added — `WF-MIGRATION`
+
+Code can be rolled back. Data written in a new format usually cannot. That
+asymmetry is why more of this workflow happens before production than after.
+
+```
+IMPACT → DESIGN → SAFETY → REHEARSE → AUTHORIZE → EXECUTE → VERIFY → CLOSE
+                                                       ↓
+                                                   ROLLBACK
+```
+
+Three stages exist to make a claim testable rather than aspirational:
+
+- **`SAFETY`** restores a backup somewhere and checks its contents. A backup nobody
+  has restored is a hope, and the restore's duration is the real recovery time.
+- **`REHEARSE`** runs the migration against restored production-shaped data and
+  then runs the rollback. Row counts are compared against the `IMPACT` prediction,
+  and a mismatch is a defect in the query rather than in the prediction. It is the
+  one team stage: QA, performance and SRE need to watch the *same* run, because
+  sequentially each sees a different one and none sees the interaction.
+- **`CLOSE`** records that the rollback path is now shut, and from when. A
+  compatibility window nobody closes stays open in everyone's head while the code
+  supporting it rots.
+
+The `MIG` artifact keeps `rollback_procedure` and `rollback_tested` separate,
+because a written rollback that has never been run is a hope too.
+`irreversible_after` names the point past which rollback stops being possible; a
+migration whose answer is "immediately" needs a different design, not a braver
+deployment.
+
+### A bug the validators caught in the new workflow
+
+`EXECUTE` entered `CYCLE-DEVOPS` and `ROLLBACK` completed it, so the happy path
+opened the deployment cycle and never closed it — the cycle was only ever
+completed by the migration going wrong. `EXECUTE` now completes it, and `ROLLBACK`
+is an exceptional path taken by the same people rather than a second cycle.
+
+### Added — 13 events, 3 scenarios, 2 faults
+
+`CHANGE_*` and `MIGRATION_*` events with routing. `MIGRATION_ROLLED_BACK` is
+classified **incident** level rather than organization, because reverting data in
+production is an incident whatever the reason for it.
+
+Three new simulation scenarios: the change request, the migration, and the
+migration that has to be rolled back. The happy path proves the migration can run;
+the rollback scenario proves the organization can undo it, which is the property
+the whole workflow is arranged around.
+
+`F-18` reaches authorization with `rollback_tested` empty and must be refused.
+`F-19` decides a change request with a blocking decision still open. Both
+mutation-tested.
+
+Tests: 256. Faults: **17 → 19.** Scenarios: **7 → 10.** DoD predicates: **264 → 334.**
+
 ## [0.13.0] — Liveness and limits
 
 Two questions the state machines could not answer about themselves: what happens

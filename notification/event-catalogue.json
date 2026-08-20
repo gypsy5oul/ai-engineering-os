@@ -583,6 +583,170 @@
       "category": "governance",
       "default_severity": "high",
       "default_status": "blocked"
+    },
+    {
+      "type": "CHANGE_REQUESTED",
+      "level": "organization",
+      "emitted_by": "WF-CHANGE/RAISE",
+      "meaning": "Someone asked for an existing commitment to change.",
+      "payload_fields": [
+        "what_changes",
+        "requester"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "CHANGE_ASSESSED",
+      "level": "organization",
+      "emitted_by": "WF-CHANGE/ASSESS",
+      "meaning": "The cost of the change is known. This is the moment the request stops being a sentence.",
+      "payload_fields": [
+        "dimensions_affected",
+        "reversibility"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "in-progress"
+    },
+    {
+      "type": "CHANGE_DECIDED",
+      "level": "organization",
+      "emitted_by": "WF-CHANGE/DECIDE",
+      "meaning": "A named human accepted or rejected the change against its assessed cost.",
+      "payload_fields": [
+        "decision",
+        "approver"
+      ],
+      "category": "governance",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "CHANGE_PROPAGATED",
+      "level": "department",
+      "emitted_by": "WF-CHANGE/PROPAGATE",
+      "meaning": "Every artifact the change touched has been updated or recorded as unaffected.",
+      "payload_fields": [
+        "artifacts_updated"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "MIGRATION_PLANNED",
+      "level": "department",
+      "emitted_by": "WF-MIGRATION/IMPACT",
+      "meaning": "A data migration entered the lifecycle, with what it touches counted rather than estimated.",
+      "payload_fields": [
+        "rows_affected",
+        "irreversible_after"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "MIGRATION_DESIGNED",
+      "level": "department",
+      "emitted_by": "WF-MIGRATION/DESIGN",
+      "meaning": "The transformation, the compatibility window and the rollback procedure exist and have been reviewed.",
+      "payload_fields": [
+        "compatibility_window",
+        "expected_duration"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "in-progress"
+    },
+    {
+      "type": "MIGRATION_SAFETY_VERIFIED",
+      "level": "department",
+      "emitted_by": "WF-MIGRATION/SAFETY",
+      "meaning": "A backup was restored and its contents checked. A backup nobody has restored is a hope.",
+      "payload_fields": [
+        "restore_duration"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "in-progress"
+    },
+    {
+      "type": "MIGRATION_REHEARSED",
+      "level": "department",
+      "emitted_by": "WF-MIGRATION/REHEARSE",
+      "meaning": "The migration and its rollback both ran against production-shaped data.",
+      "payload_fields": [
+        "rows_transformed",
+        "measured_duration"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "in-progress"
+    },
+    {
+      "type": "MIGRATION_AUTHORIZED",
+      "level": "organization",
+      "emitted_by": "WF-MIGRATION/AUTHORIZE",
+      "meaning": "A named human authorized this migration against its measured evidence.",
+      "payload_fields": [
+        "approver",
+        "window"
+      ],
+      "category": "release",
+      "default_severity": "high",
+      "default_status": "in-progress"
+    },
+    {
+      "type": "MIGRATION_EXECUTED",
+      "level": "organization",
+      "emitted_by": "WF-MIGRATION/EXECUTE",
+      "meaning": "The migration ran in production. Past its irreversibility point this cannot be undone.",
+      "payload_fields": [
+        "rows_transformed"
+      ],
+      "category": "deployment",
+      "default_severity": "high",
+      "default_status": "in-progress"
+    },
+    {
+      "type": "MIGRATION_VERIFIED",
+      "level": "organization",
+      "emitted_by": "WF-MIGRATION/VERIFY",
+      "meaning": "The data was checked, rather than the job's exit code.",
+      "payload_fields": [
+        "verified_rows"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "MIGRATION_ROLLED_BACK",
+      "level": "incident",
+      "emitted_by": "WF-MIGRATION/ROLLBACK",
+      "meaning": "The migration was reversed. What could not be recovered is named. This is incident level rather than organization level because reverting data in production is an incident whatever the reason for it.",
+      "payload_fields": [
+        "reason",
+        "unrecoverable"
+      ],
+      "category": "incident",
+      "default_severity": "critical",
+      "default_status": "failed"
+    },
+    {
+      "type": "MIGRATION_WINDOW_CLOSED",
+      "level": "department",
+      "emitted_by": "WF-MIGRATION/CLOSE",
+      "meaning": "The rollback path is explicitly closed rather than quietly forgotten.",
+      "payload_fields": [
+        "closed_at"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "completed"
     }
   ],
   "categories": {

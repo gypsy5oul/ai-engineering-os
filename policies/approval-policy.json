@@ -123,6 +123,15 @@
         "process:release-management",
         "artifact:REL approvals block"
       ]
+    },
+    {
+      "id": "AP-15",
+      "category": "change to an existing commitment",
+      "why": "A change request alters something the organization already promised. The assessment says what it costs; only a human says whether that is worth paying. Distinct from AP-03: selecting a technology is a different decision from changing a target the current technology already meets.",
+      "enforced_by": [
+        "process:change-request",
+        "artifact:CR approvals block"
+      ]
     }
   ],
   "explicitly_autonomous": [

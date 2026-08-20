@@ -473,6 +473,156 @@
         "project-owner",
         "engineering-owner"
       ]
+    },
+    {
+      "event": "CHANGE_REQUESTED",
+      "notify": "immediate",
+      "channel": "engineering-announcements",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "project-owner"
+      ]
+    },
+    {
+      "event": "CHANGE_ASSESSED",
+      "notify": "immediate",
+      "channel": "engineering-announcements",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "project-owner",
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "CHANGE_DECIDED",
+      "notify": "immediate",
+      "channel": "engineering-announcements",
+      "priority": "high",
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "project-owner",
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "CHANGE_PROPAGATED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "MIGRATION_PLANNED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "MIGRATION_DESIGNED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "MIGRATION_SAFETY_VERIFIED",
+      "notify": "aggregate",
+      "channel": "devops",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "MIGRATION_REHEARSED",
+      "notify": "immediate",
+      "channel": "qa",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner",
+        "qa-owner"
+      ]
+    },
+    {
+      "event": "MIGRATION_AUTHORIZED",
+      "notify": "immediate",
+      "channel": "releases",
+      "priority": "high",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner",
+        "release-approver"
+      ]
+    },
+    {
+      "event": "MIGRATION_EXECUTED",
+      "notify": "immediate",
+      "channel": "releases",
+      "priority": "high",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner",
+        "on-call-owner"
+      ]
+    },
+    {
+      "event": "MIGRATION_VERIFIED",
+      "notify": "immediate",
+      "channel": "releases",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "MIGRATION_ROLLED_BACK",
+      "notify": "immediate",
+      "channel": "incidents",
+      "priority": "urgent",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner",
+        "on-call-owner",
+        "project-owner"
+      ]
+    },
+    {
+      "event": "MIGRATION_WINDOW_CLOSED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner"
+      ]
     }
   ],
   "suppression": {

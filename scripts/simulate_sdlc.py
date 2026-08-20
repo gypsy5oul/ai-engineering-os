@@ -593,6 +593,173 @@ def scenario_onboarding(project, log):
             ("WF-ONBOARDING", "DECIDE", decide), ("WF-ONBOARDING", "VERIFY", verify)]
 
 
+
+def scenario_change_request(project, log):
+    """Retention goes from 30 days to 90. One sentence, seven dimensions."""
+    st = {}
+
+    def raise_it():
+        log("the commitment being changed is pointed at, not paraphrased")
+        st["req"] = write_artifact(project, "REQ", status="approved",
+                                   reviewers=[verdict("qa-lead")],
+                                   approvals=[approval("AP-12", "requester")],
+                                   rollup=rollup("CYCLE-PROD", next_gate="ASSESS"))
+        st["cr"] = write_artifact(
+            project, "CR", status="draft", source="project-owner",
+            what_changes="Audit log retention from 30 days to 90",
+            why_now="A compliance commitment made to a customer",
+            current_commitment=st["req"],
+            impact={}, affected_artifacts=[], reversibility="reversible",
+            rejected_options=[], links={"requirements": [st["req"]]},
+            rollup=rollup("CYCLE-PROD", status="IN_PROGRESS", next_gate="ASSESS"))
+
+    def assess():
+        log("every declared dimension gets an answer; 'none, because' is an answer")
+        patch_status(project, st["cr"], "assessing")
+        _rewrite(project, st["cr"], lambda fm: fm.update({
+            "impact": {"storage": "3x volume, ~40GB/month",
+                       "cost": "within the current budget line",
+                       "security": "none, the classification is unchanged",
+                       "compliance": "satisfies the commitment; no new obligation",
+                       "performance": "index rebuild needed on the query path",
+                       "qa": "retention tests re-baselined",
+                       "operations": "backup window grows by roughly 20 minutes"},
+            "affected_artifacts": [st["req"]],
+            "reversibility": "reversible until data older than 30 days is retained"}) or fm)
+        write_artifact(project, "ARCH", status="approved", source=st["cr"],
+                       links={"requirements": [st["req"]]},
+                       reviewers=[verdict("architecture-reviewer")],
+                       rollup=rollup("CYCLE-ARCH", next_gate="DECIDE"))
+
+    def decide():
+        log("a human weighs the assessed cost against the stated reason (AP-15)")
+        patch_status(project, st["cr"], "approved")
+        _rewrite(project, st["cr"], lambda fm: fm.update({
+            "approvals": [approval("AP-15", "project-owner",
+                                   recorded_in="project-decision-log")],
+            "rejected_options": ["Tiered storage after 30 days: more moving parts than the "
+                                 "commitment requires"],
+            "rollup": rollup("CYCLE-ARCH", next_gate="PROPAGATE")}) or fm)
+        emit(project, "CHANGE_DECIDED", st["cr"], st["cr"], decision="accept",
+             approver="gitlab:sim-human")
+
+    def propagate():
+        log("every named artifact is updated, or recorded as unaffected")
+        patch_links(project, st["req"], change_requests=[st["cr"]])
+        patch_rollup(project, st["cr"], rollup("CYCLE-PROD", next_gate="delivery"))
+
+    return [("WF-CHANGE", "RAISE", raise_it), ("WF-CHANGE", "ASSESS", assess),
+            ("WF-CHANGE", "DECIDE", decide), ("WF-CHANGE", "PROPAGATE", propagate)]
+
+
+def scenario_migration(project, log):
+    """A schema change that transforms existing rows, rehearsed before it runs."""
+    st = {}
+
+    def impact():
+        log("affected data is counted, and the irreversibility point is named")
+        st["mig"] = write_artifact(
+            project, "MIG", status="draft", source="WF-CHANGE",
+            schema_change="Split events.payload into typed columns",
+            data_impact="4.1M rows across 2 tables, oldest 2024-01",
+            backward_compatibility="Dual-read for one release; old readers keep working",
+            forward_path="Backfill in 10k batches, idempotent on retry",
+            dry_run_evidence="pending", backup_verified="pending", restore_tested="pending",
+            rollback_procedure="Drop the new columns; the original payload column is retained",
+            rollback_tested="pending",
+            irreversible_after="the payload column is dropped, which is a later change",
+            expected_duration="~35 minutes", lock_behaviour="no table lock; batched updates",
+            rollup=rollup("CYCLE-ARCH", status="IN_PROGRESS", next_gate="DESIGN"))
+
+    def design():
+        log("the compatibility window and the rollback procedure are reviewed")
+        patch_status(project, st["mig"], "in-review")
+        _rewrite(project, st["mig"], lambda fm: fm.update({
+            "reviewers": [verdict("architecture-reviewer")],
+            "rollup": rollup("CYCLE-ARCH", next_gate="SAFETY")}) or fm)
+
+    def safety():
+        log("a backup is restored and its contents checked, not just its exit code")
+        _rewrite(project, st["mig"], lambda fm: fm.update({
+            "backup_verified": "2026-08-20, 41GB",
+            "restore_tested": "restored to staging in 18 minutes; row counts match",
+            "rollup": rollup("CYCLE-SRE", status="IN_PROGRESS", next_gate="REHEARSE")}) or fm)
+
+    def rehearse():
+        log("TEAM: the migration AND its rollback both run against restored data")
+        _rewrite(project, st["mig"], lambda fm: fm.update({
+            "dry_run_evidence": "4,118,204 rows transformed; matches the IMPACT prediction",
+            "rollback_tested": "executed on the restored copy; data usable afterwards",
+            "reviewers": [verdict("architecture-reviewer"), verdict("performance-reviewer")],
+            "rollup": rollup("CYCLE-QA", status="IN_PROGRESS", next_gate="AUTHORIZE")}) or fm)
+
+    def authorize():
+        log("a human authorizes against the measured evidence, not the plan (AP-05)")
+        patch_status(project, st["mig"], "approved")
+        _rewrite(project, st["mig"], lambda fm: fm.update({
+            "approvals": [approval("AP-05", "engineering-owner", recorded_in="gitlab-release")]})
+            or fm)
+
+    def execute():
+        log("run as rehearsed, with no in-flight edits to the procedure")
+        patch_status(project, st["mig"], "executed")
+        # EXECUTE completes CYCLE-DEVOPS: the deployment act opens and closes it.
+        _rewrite(project, st["mig"], lambda fm: fm.update({
+            "rollup": rollup("CYCLE-DEVOPS", next_gate="VERIFY")}) or fm)
+        emit(project, "MIGRATION_EXECUTED", st["mig"], st["mig"], rows_transformed="4118204")
+
+    def verify():
+        log("the data is checked, not the exit code")
+        _rewrite(project, st["mig"], lambda fm: fm.update({
+            "reviewers": [verdict("architecture-reviewer"), verdict("performance-reviewer"),
+                          verdict("test-reviewer")],
+            "rollup": rollup("CYCLE-QA", next_gate="CLOSE")}) or fm)
+
+    def close():
+        log("the rollback path is closed explicitly rather than forgotten")
+        write_artifact(project, "DEBT", status="open", source=st["mig"],
+                       links={"architecture": []},
+                       title="Remove the dual-read compatibility path")
+        _rewrite(project, st["mig"], lambda fm: fm.update({
+            "rollup": rollup("CYCLE-SRE", next_gate="done")}) or fm)
+
+    return [("WF-MIGRATION", "IMPACT", impact), ("WF-MIGRATION", "DESIGN", design),
+            ("WF-MIGRATION", "SAFETY", safety), ("WF-MIGRATION", "REHEARSE", rehearse),
+            ("WF-MIGRATION", "AUTHORIZE", authorize), ("WF-MIGRATION", "EXECUTE", execute),
+            ("WF-MIGRATION", "VERIFY", verify), ("WF-MIGRATION", "CLOSE", close)]
+
+
+
+def scenario_migration_rollback(project, log):
+    """Verification finds rows that did not transform, so it goes back.
+
+    The happy path proves the migration can run. This proves the organization can
+    undo it, which is the property the whole workflow is arranged around.
+    """
+    st = {}
+    steps = scenario_migration(project, log)
+    by_stage = {stage: fn for _, stage, fn in steps}
+
+    def through_execute():
+        for stage in ("IMPACT", "DESIGN", "SAFETY", "REHEARSE", "AUTHORIZE", "EXECUTE"):
+            by_stage[stage]()
+        st["mig"] = [a for a in check_dod.load_artifacts(project) if a["type"] == "migration-plan"][0]["id"]
+
+    def rollback():
+        log("the rehearsed rollback runs; what could not be recovered is named")
+        patch_status(project, st["mig"], "rolled-back")
+        _rewrite(project, st["mig"], lambda fm: fm.update({
+            "rollback_tested": "executed in production, 11 minutes",
+            "approvals": [approval("AP-05", "engineering-owner", recorded_in="gitlab-release")]})
+            or fm)
+        emit(project, "MIGRATION_ROLLED_BACK", st["mig"], st["mig"],
+             reason="4,102 rows failed the type conversion",
+             unrecoverable="none; the original column was retained")
+
+    return [("WF-MIGRATION", "EXECUTE", through_execute),
+            ("WF-MIGRATION", "ROLLBACK", rollback)]
+
+
 SCENARIOS = {
     "onboarding": scenario_onboarding,
     "feature": scenario_feature,
@@ -601,6 +768,9 @@ SCENARIOS = {
     "security-block": scenario_security_block,
     "release-rollback": scenario_release_rollback,
     "agent-change": scenario_agent_change,
+    "change-request": scenario_change_request,
+    "migration": scenario_migration,
+    "migration-rollback": scenario_migration_rollback,
 }
 
 

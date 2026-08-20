@@ -116,6 +116,8 @@ workflow declares entry and exit conditions and its failure paths.
 | `WF-RELEASE` release | Changes merged with gates satisfied | release-validation-team | Staging validation, Production approval (AP-01) | Deployed and verified, or rolled back and recorded |
 | `WF-ONBOARDING` project onboarding | A project with no configuration | single-agent | Human decision capture, Configuration approval | Valid, human-approved `project.yaml` |
 | `WF-AGENT-CHANGE` OS change | A gap or governance finding in this plugin | single-agent | Evaluation, Security, Governance (AP-10) | Merged, versioned, released with a migration note |
+| `WF-CHANGE` change request | A commitment the organization already made is to change | single-agent | Impact assessment (independent), Decision (AP-15) | Every affected artifact updated or recorded as unaffected |
+| `WF-MIGRATION` data migration | Existing data must be transformed, moved or backfilled | single-agent | Design (independent), Rehearsal (independent), Authorization (AP-05) | Executed and verified, with the rollback path open or explicitly closed |
 
 ## Stages that are dimensions, not stages
 
@@ -132,6 +134,48 @@ Making these stages would add three approval steps and no decisions. Where a
 project genuinely needs a separate security or performance phase — a regulated
 release, a capacity-critical launch — it adds one to
 `sdlc.required_stages` in its own configuration.
+
+## Two workflows about the things code cannot undo
+
+**`WF-CHANGE`** exists because "increase retention from 30 days to 90" is one
+sentence that touches requirements, architecture, capacity, cost, security,
+compliance, testing and release. The work is the impact assessment; the
+implementation that follows is ordinary delivery. What separates it from
+`WF-FEATURE` is that the system already does the thing — so the change request
+must point at the **current commitment** it alters, and the assessment must answer
+every declared dimension. `"none, because..."` is an answer; silence is not, and a
+dimension with no owner opens a `DEC` rather than being recorded as unaffected.
+
+Rejecting a change request is a normal outcome, and it is not cancellation: a
+rejected `CR` reached `DECIDE` and got an answer, while a cancelled one was
+abandoned before anyone decided.
+
+**`WF-MIGRATION`** exists because code can be rolled back and data written in a new
+format usually cannot. That asymmetry is why more of this workflow happens before
+production than after:
+
+```
+IMPACT → DESIGN → SAFETY → REHEARSE → AUTHORIZE → EXECUTE → VERIFY → CLOSE
+                                                       ↓
+                                                   ROLLBACK
+```
+
+Three of those stages exist to make a claim testable rather than aspirational:
+
+- **`SAFETY`** restores a backup somewhere and checks its contents. A backup nobody
+  has restored is a hope, and the restore's *duration* is the real recovery time.
+- **`REHEARSE`** runs the migration against restored production-shaped data and
+  then runs the rollback. A rollback that has never been executed is not a rollback
+  plan. Row counts are compared against the `IMPACT` prediction, and a mismatch is
+  treated as a defect in the query rather than in the prediction.
+- **`CLOSE`** records that the rollback path is now shut, and from when. A
+  compatibility window that is never explicitly closed is one that quietly stays
+  open in everyone's head while the code that supports it rots.
+
+The `MIG` artifact keeps `rollback_procedure` and `rollback_tested` as separate
+fields for the same reason, and `irreversible_after` names the point past which
+rollback stops being possible. A migration whose answer to that is "immediately"
+needs a different design, not a braver deployment.
 
 ## Failure paths
 
