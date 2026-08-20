@@ -450,6 +450,29 @@
       "notify": "never",
       "channel": "devops",
       "priority": "low"
+    },
+    {
+      "event": "WORK_STALE",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "DECISION_STALE",
+      "notify": "immediate",
+      "channel": "engineering-announcements",
+      "priority": "high",
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "project-owner",
+        "engineering-owner"
+      ]
     }
   ],
   "suppression": {

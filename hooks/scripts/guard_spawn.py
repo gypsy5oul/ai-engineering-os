@@ -14,6 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib"))
 import hooklib as H  # noqa: E402
+import ledger  # noqa: E402
 
 EVENT = "PreToolUse"
 TYPE_KEYS = ("subagent_type", "agent_type", "agentType", "type", "name")
@@ -25,6 +26,63 @@ def requested_type(tool_input):
         if isinstance(v, str) and v.strip():
             return v.split(":")[-1].strip()
     return ""
+
+
+def concurrency_limits():
+    policy = H.policy("concurrency-policy.json")
+    return (policy.get("per_role", {}),
+            policy.get("default_max_concurrent", 2),
+            (policy.get("session_limit") or {}).get("max_concurrent"),
+            (policy.get("ledger") or {}).get("entry_ttl_seconds", 1800))
+
+
+def concurrency_check(caller, target, data):
+    """Is this spawn one too many? Returns (over_limit, reason).
+
+    Spawn authority says whether a role may delegate. This says how much. A role
+    permitted to spawn thirteen kinds of agent may otherwise spawn thirteen agents
+    for a one-line change, and each one is a full Claude session.
+
+    Over the limit escalates rather than denies: a wide fan-out is sometimes
+    right, and the person running the session is the one who can tell. What must
+    not happen is that it occurs without anyone choosing it.
+    """
+    try:
+        per_role, default_max, session_max, ttl = concurrency_limits()
+        session = data.get("session_id")
+        if not session:
+            # Without a session id there is no boundary to count within, and every
+            # caller would share one ledger: unrelated work would contend for the
+            # same slots and eventually block each other. A limit that cannot be
+            # scoped correctly is not applied.
+            return False, ""
+        mine = len(ledger.open_spawns(H.plugin_data_dir(), session, ttl, caller))
+        cap = (per_role.get(caller) or {}).get("max_concurrent", default_max)
+        if mine >= cap:
+            return True, ("'%s' already has %d agent(s) running and its limit is %d. Each one is a "
+                          "full Claude session.\nWhat to do instead: let some finish, or say why "
+                          "this change needs more parallel work than the limit assumes. Limits are "
+                          "in policies/concurrency-policy.json." % (caller, mine, cap))
+        total = len(ledger.open_spawns(H.plugin_data_dir(), session, ttl))
+        if session_max and total >= session_max:
+            return True, ("This session already has %d agent(s) running and the limit is %d. "
+                          "Spawning '%s' would be one more.\nWhat to do instead: let some finish "
+                          "before widening further." % (total, session_max, target))
+    except Exception:
+        # A broken ledger must never block delegation. This is a guardrail against
+        # runaway fan-out, not a safety boundary.
+        return False, ""
+    return False, ""
+
+
+def record_spawn(caller, target, data):
+    try:
+        if not data.get("session_id"):
+            return
+        _, _, _, ttl = concurrency_limits()
+        ledger.record(H.plugin_data_dir(), data.get("session_id"), caller, target, ttl)
+    except Exception:
+        pass
 
 
 def main():
@@ -68,6 +126,12 @@ def main():
                  % target, rule_id="RH-CRIT")
 
     if target in allowed:
+        over, reason = concurrency_check(caller, target, data)
+        if over:
+            H.audit({"type": "spawn_guard", "decision": "escalate", "caller": caller,
+                     "target": target, "rule": "CC-LIMIT", "session": data.get("session_id")})
+            H.decide(EVENT, "escalate", reason, rule_id="CC-LIMIT")
+        record_spawn(caller, target, data)
         H.allow_silently()
 
     escalate_to = hierarchy.get("escalation", {}).get("paths", {}).get(caller, "the human operator")

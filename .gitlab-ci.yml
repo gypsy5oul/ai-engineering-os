@@ -180,6 +180,10 @@ fault-injection:
     # that never came, a corrupt guard policy, a model the organization does not
     # allow. Degradations that must NOT stop delivery are asserted the other way.
     - python3 scripts/inject_faults.py
+    # Liveness against this repository finds nothing: it has no work items. What
+    # matters in CI is that the checker runs and its thresholds are well-formed,
+    # which the tests assert. It is meant to be pointed at a real project.
+    - python3 scripts/check_liveness.py --project .
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH

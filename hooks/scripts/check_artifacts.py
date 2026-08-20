@@ -83,8 +83,27 @@ def problems(paths):
     return found
 
 
+def release_slot(data):
+    """Free the concurrency slot this piece of work was holding.
+
+    Whether the stop signal names the agent that finished is not guaranteed, so
+    the ledger falls back to closing the oldest entry, and expires entries anyway.
+    A slot that leaks would eventually stop a role delegating at all.
+    """
+    try:
+        import ledger
+        policy = H.policy("concurrency-policy.json")
+        ttl = (policy.get("ledger") or {}).get("entry_ttl_seconds", 1800)
+        target = (data.get("agent_type") or "").split(":")[-1] or None
+        ledger.release(H.plugin_data_dir(), data.get("session_id"), ttl, target=target)
+    except Exception:
+        pass
+
+
 def main():
     data = H.read_input()
+    if data.get("hook_event_name") == "SubagentStop" or data.get("agent_type"):
+        release_slot(data)
     # Claude Code sets this when the session is already being held open by a stop
     # hook. Ignoring it is how a hook becomes an infinite loop.
     if data.get("stop_hook_active"):

@@ -42,7 +42,7 @@ class TestFaultsAreHandled(unittest.TestCase):
         for needed in ("Architecture is rejected", "QA fails", "rework limit",
                        "escalation is still open", "withdrawn", "Agent teams are unavailable",
                        "notification channel", "GitLab is unreachable", "hook policy",
-                       "required model"):
+                       "required model", "nobody moves it", "concurrency limit"):
             with self.subTest(case=needed):
                 self.assertIn(needed, listing)
 
@@ -61,6 +61,11 @@ class TestFaultsDetectRemovedControls(unittest.TestCase):
          "    withdrawn: WITHDRAWN\n", "    withdrawn: ACCEPTED\n"),
         ("F-15", "an unavailable model downgrades instead of blocking",
          "scripts/resolve_model.py", 'if risk_now in ("HIGH", "CRITICAL"):', "if False:"),
+        ("F-16", "staleness stops being reported", "scripts/check_liveness.py",
+         'findings.sort(key=lambda f: -f["hours"])\n    return findings',
+         'findings.sort(key=lambda f: -f["hours"])\n    return []'),
+        ("F-17", "the concurrency check always says under limit",
+         "hooks/scripts/guard_spawn.py", "        if mine >= cap:", "        if False:"),
     ]
 
     def test_removing_a_control_makes_its_fault_fail(self):

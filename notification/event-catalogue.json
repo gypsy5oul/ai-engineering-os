@@ -553,6 +553,36 @@
       ],
       "category": "governance",
       "default_severity": "critical"
+    },
+    {
+      "type": "WORK_STALE",
+      "level": "department",
+      "emitted_by": "liveness",
+      "meaning": "A work item has sat in one state past its threshold. Nothing failed; nothing happened, which no state machine can notice on its own.",
+      "payload_fields": [
+        "state",
+        "hours",
+        "threshold",
+        "notify"
+      ],
+      "category": "task",
+      "default_severity": "normal",
+      "default_status": "blocked"
+    },
+    {
+      "type": "DECISION_STALE",
+      "level": "organization",
+      "emitted_by": "liveness",
+      "meaning": "An open decision has gone unanswered past its threshold. A DEC exists because an agent refused to guess; leaving it open turns that refusal into the delay it was meant to prevent.",
+      "payload_fields": [
+        "hours",
+        "threshold",
+        "notify",
+        "blocking"
+      ],
+      "category": "governance",
+      "default_severity": "high",
+      "default_status": "blocked"
     }
   ],
   "categories": {

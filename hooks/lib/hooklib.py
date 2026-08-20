@@ -162,11 +162,21 @@ def context(event, text):
 # Audit
 # --------------------------------------------------------------------------
 
-def audit_dir():
+def plugin_data_dir():
+    """Where this plugin keeps data that outlives a single hook invocation.
+
+    A hook is a fresh process every time, so anything a guard needs to remember
+    between calls -- how many agents a role currently has running, for instance --
+    has to live on disk.
+    """
     base = os.environ.get("CLAUDE_PLUGIN_DATA")
     if not base:
         base = os.path.join(os.path.expanduser("~"), ".claude", "ai-engineering-os")
-    return os.path.join(base, "audit")
+    return base
+
+
+def audit_dir():
+    return os.path.join(plugin_data_dir(), "audit")
 
 
 def audit(record):

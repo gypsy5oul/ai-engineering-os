@@ -1,0 +1,52 @@
+{
+  "version": "1",
+  "description": "How many agents a role may have running at once, and how many a session may run in total. Spawn authority answers whether a role may delegate; this answers how much. Without it, a role permitted to spawn thirteen kinds of agent may spawn thirteen agents for a one-line change.",
+  "why": [
+    "An agent-team member or subagent is a full Claude session. A feature that fans out to a director, three architects, five developers, four QA and three security roles is sixteen sessions, and nothing in the spawn hierarchy prevents that for a typo fix.",
+    "The limit escalates rather than denies. A wide fan-out is sometimes correct, and the person running the session is the one who can tell. What must not happen is that it occurs without anyone choosing it.",
+    "Concurrency is measured, not declared. hooks/lib/ledger.py records each allowed spawn and clears it when the work ends."
+  ],
+  "enforced_by": "hooks/scripts/guard_spawn.py, using hooks/lib/ledger.py",
+  "session_limit": {
+    "max_concurrent": 10,
+    "action": "escalate",
+    "why": "Across every role in one session. Ten concurrent agents is already an unusual amount of parallel work."
+  },
+  "per_role": {
+    "engineering-director": {
+      "max_concurrent": 6,
+      "why": "Forms cross-functional teams, so it legitimately fans out widest. Six is a large team by any human standard."
+    },
+    "incident-commander": {
+      "max_concurrent": 4,
+      "why": "An incident wants parallel investigation, but an incident that needs more than four simultaneous investigators needs a second commander, not a bigger one."
+    },
+    "development-lead": {
+      "max_concurrent": 4,
+      "why": "One worker per parallel stream. More streams than this in a single stage usually means the stories were not decomposed."
+    },
+    "qa-lead": {
+      "max_concurrent": 3,
+      "why": "Test execution parallelises; test design does not."
+    },
+    "product-manager": {
+      "max_concurrent": 2,
+      "why": "Requirements and UX work in parallel. Nothing else."
+    },
+    "security-architect": {
+      "max_concurrent": 2,
+      "why": "Security review and dependency review together."
+    }
+  },
+  "default_max_concurrent": 2,
+  "ledger": {
+    "entry_ttl_seconds": 1800,
+    "why": "An entry older than this is treated as finished whether or not a stop signal arrived. The hook cannot always correlate a subagent's end with its start, and a limit that leaks slots would eventually block all delegation. Erring toward forgetting is right: this is a guardrail against runaway fan-out, not an exact semaphore, and a stuck slot is worse than a missed one."
+  },
+  "limitations": [
+    "Teammate spawns that Claude Code performs outside the Agent tool are not counted; the hook never sees them.",
+    "The count is per session. Two sessions doing the same work do not see each other.",
+    "A subagent that ends without any stop signal holds its slot until the TTL expires.",
+    "A spawn with no session id is not counted and not limited. There would be no boundary to count within: every caller would share one ledger, and unrelated work would contend for the same slots. A limit that cannot be scoped correctly is not applied."
+  ]
+}

@@ -347,6 +347,67 @@ def f15(project):
     return True, "blocked, exit %d" % proc.returncode
 
 
+
+# ------------------------------------------------- F. nothing happens at all
+
+@fault("F-16", "Work sits in one state and nobody moves it",
+       "the stall is detected and named; a state machine cannot see this itself")
+def f16(project):
+    import subprocess
+    docs = os.path.join(project, "docs", "stories")
+    os.makedirs(docs, exist_ok=True)
+    with open(os.path.join(docs, "stuck.md"), "w", encoding="utf-8") as fh:
+        fh.write("---\nid: SIM-STORY-800\ntype: story\ntitle: Nobody picked this up\n"
+                 "status: in-review\nowner: development-lead\nversion: 1\n"
+                 "created_at: '2026-08-01'\nupdated_at: '2026-08-17T09:00:00'\n"
+                 "source: simulation\nlinks: {}\n---\n")
+    proc = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "scripts", "check_liveness.py"),
+         "--project", project, "--now", "2026-08-20T12:00:00", "--json"],
+        capture_output=True, text=True, timeout=120)
+    import json as _json
+    found = _json.loads(proc.stdout)["findings"]
+    mine = [f for f in found if f["id"] == "SIM-STORY-800"]
+    if not mine:
+        return False, "a review untouched for three days was not reported"
+    if proc.returncode == 0:
+        return False, "reported the stall but exited 0, so nothing automated would act"
+    return True, "%s stale %.0fh -> tell %s" % (mine[0]["id"], mine[0]["hours"], mine[0]["notify"])
+
+
+@fault("F-17", "A role fans out past its concurrency limit",
+       "the spawn escalates rather than proceeding; each agent is a full session")
+def f17(project):
+    import json as _json
+    import subprocess
+    import tempfile
+    data = tempfile.mkdtemp(prefix="aieos-cc-")
+    try:
+        policy = _json.load(open(os.path.join(ROOT, "policies", "concurrency-policy.json")))
+        cap = (policy["per_role"].get("development-lead") or {}).get("max_concurrent", 2)
+        env = dict(os.environ, CLAUDE_PLUGIN_DATA=data)
+        payload = _json.dumps({"tool_name": "Agent", "agent_type": "development-lead",
+                               "session_id": "F17",
+                               "tool_input": {"subagent_type": "backend-developer"}})
+        guard = os.path.join(ROOT, "hooks", "scripts", "guard_spawn.py")
+        for i in range(cap):
+            out = subprocess.run([sys.executable, guard], input=payload, capture_output=True,
+                                 text=True, env=env, timeout=30).stdout.strip()
+            if out:
+                return False, "blocked at spawn %d, below the limit of %d" % (i + 1, cap)
+        out = subprocess.run([sys.executable, guard], input=payload, capture_output=True,
+                             text=True, env=env, timeout=30).stdout.strip()
+        if not out:
+            return False, "spawn %d was allowed; the limit of %d did nothing" % (cap + 1, cap)
+        decision = _json.loads(out)["hookSpecificOutput"]["permissionDecision"]
+        if decision != "ask":
+            return False, "over the limit produced %r; it should ask, not %s"  % (
+                decision, "deny outright" if decision == "deny" else decision)
+        return True, "%d allowed, %dth asks" % (cap, cap + 1)
+    finally:
+        shutil.rmtree(data, ignore_errors=True)
+
+
 # ------------------------------------------------------------------- runner
 
 def run(selected=None, verbose=False):

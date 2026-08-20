@@ -3,6 +3,87 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.13.0] — Liveness and limits
+
+Two questions the state machines could not answer about themselves: what happens
+when nothing happens, and how much may one role run at once.
+
+### Added — time-based liveness
+
+Every state machine says what may happen next. None said how long the wait may be,
+so a workflow could be perfectly correct and stall forever. **Correctness does not
+imply progress.**
+
+`policies/sla-policy.json` sets how long an item may sit in one state before
+someone is told, and who. `scripts/check_liveness.py` reports it and exits 1 when
+something is stale, so a caller can act.
+
+The ladder is `lead → head → human_owner`, and the most severe threshold an item
+has passed wins, so a review stuck 27 hours goes to the head rather than producing
+two notifications. A `DEC` marked blocking runs on **half** every threshold: an
+ordinary open question can wait, one with work stopped behind it cannot.
+
+Two new events, `WORK_STALE` and `DECISION_STALE`. Staleness is a pattern rather
+than an incident, so `WORK_STALE` aggregates into a digest; an unanswered decision
+blocks work and only a human can clear it, so `DECISION_STALE` is told immediately.
+
+**It is not a scheduler, and does not pretend to be.** Claude Code has no
+persistent background process this plugin can rely on, so nothing fires by itself:
+it answers when run, from a session, from CI, or from whatever timer the project
+already has. `policies/sla-policy.json` states this in its own text rather than
+leaving it to be discovered.
+
+False positives are the real risk here — a report that fires on healthy work is one
+people learn to ignore. Accepted work, resolved decisions and anything that moved
+recently stay silent, and the tests spend as many cases proving that as proving
+detection.
+
+### Added — concurrency limits, mechanically enforced
+
+Spawn authority answered whether a role may delegate and never how much.
+`engineering-director` may spawn thirteen kinds of agent, and nothing stopped it
+spawning thirteen for a one-line change — each one a full Claude session.
+
+| Role | Concurrent |
+| --- | --- |
+| `engineering-director` | 6 |
+| `incident-commander`, `development-lead` | 4 |
+| `qa-lead` | 3 |
+| `product-manager`, `security-architect`, any other role | 2 |
+| **whole session** | **10** |
+
+`guard_spawn.py` enforces it and **escalates rather than denies**: a wide fan-out
+is sometimes right, and the person running the session is the one who can tell.
+What must not happen is that sixteen sessions get spawned without anyone choosing
+it. Being under the limit never makes a forbidden spawn allowed — the check runs
+only after `may_spawn` has already permitted the edge.
+
+The count is measured, not declared. `hooks/lib/ledger.py` records each allowed
+spawn; the `SubagentStop` hook clears it. Entries **expire** after 30 minutes,
+because the hook cannot reliably correlate a subagent's end with its start and a
+ledger that only cleared on an explicit close would leak slots until a role could
+never delegate again. An expiring entry can undercount; a leaking one eventually
+blocks everything. For a guardrail against runaway fan-out, undercounting is the
+safer failure — and a broken ledger never blocks delegation at all.
+
+Not seen, and stated in the policy: teammate spawns Claude Code performs outside
+the `Agent` tool, other sessions, and a subagent that ends with no stop signal
+until its entry expires.
+
+A spawn carrying **no** session id is not counted at all. The existing hierarchy
+tests found this on the first full run: with no session there is no boundary to
+count within, every caller shares one ledger, and unrelated work contends for the
+same slots until it blocks. A limit that cannot be scoped correctly is not
+applied.
+
+### Two new faults
+
+`F-16` stalls a review for three days and requires it to be reported. `F-17` fans
+a role past its cap and requires the spawn to escalate. Both mutation-tested:
+disable the control and the fault starts failing.
+
+Tests: **236 → 256.** Faults: **15 → 17.**
+
 ## [0.12.0] — Fault injection
 
 The simulation showed the process can complete. This shows it stops when it

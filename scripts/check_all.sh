@@ -38,6 +38,9 @@ python3 scripts/simulate_sdlc.py --all | tail -3
 step "Fault injection"
 python3 scripts/inject_faults.py | tail -3
 
+step "Liveness policy"
+python3 scripts/check_liveness.py --project . >/dev/null && echo "checker runs; thresholds validated by tests"
+
 step "Deterministic evaluations"
 python3 scripts/run_evaluations.py
 
