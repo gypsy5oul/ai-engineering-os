@@ -1,0 +1,235 @@
+{
+  "version": "1",
+  "description": "Per-role write scoping enforced by hooks/scripts/guard_write.py. Tool profiles decide whether a role can write at all; this file decides where. Paths are glob patterns matched against the path relative to the project root, and also against the absolute path.",
+  "modes": {
+    "allow": "Role may write only to paths matching allow[]. Everything else is denied.",
+    "deny": "Role may write anywhere except paths matching deny[]."
+  },
+  "global_deny": [
+    "**/.env",
+    "**/.env.*",
+    "**/*.key",
+    "**/secrets/**",
+    "**/*secret*.y*ml",
+    "**/credentials.json",
+    "**/.kube/config"
+  ],
+  "global_deny_note": "Credential-adjacent configuration. Escalated to the human rather than denied, because editing a local .env is a legitimate development action that the human may confirm.",
+  "roles": {
+    "product-manager": {
+      "mode": "allow",
+      "allow": [
+        "docs/requirements/**",
+        "docs/stories/**",
+        "docs/product/**",
+        ".ai-engineering/**"
+      ]
+    },
+    "requirements-analyst": {
+      "mode": "allow",
+      "allow": [
+        "docs/requirements/**"
+      ]
+    },
+    "solution-architect": {
+      "mode": "allow",
+      "allow": [
+        "docs/architecture/**",
+        "docs/adrs/**",
+        "docs/design/**"
+      ]
+    },
+    "ux-designer": {
+      "mode": "allow",
+      "allow": [
+        "docs/design/**"
+      ]
+    },
+    "qa-lead": {
+      "mode": "allow",
+      "allow": [
+        "docs/test-plans/**",
+        "docs/qa/**"
+      ]
+    },
+    "qa-engineer": {
+      "mode": "allow",
+      "allow": [
+        "tests/**",
+        "test/**",
+        "e2e/**",
+        "spec/**",
+        "**/*_test.*",
+        "**/*.test.*",
+        "**/*.spec.*",
+        "docs/qa/**"
+      ]
+    },
+    "security-architect": {
+      "mode": "allow",
+      "allow": [
+        "docs/security/**",
+        "docs/adrs/**"
+      ]
+    },
+    "release-manager": {
+      "mode": "allow",
+      "allow": [
+        "docs/release/**",
+        "CHANGELOG.md"
+      ]
+    },
+    "rca-analyst": {
+      "mode": "allow",
+      "allow": [
+        "docs/rcas/**",
+        "docs/incidents/**"
+      ]
+    },
+    "docs-writer": {
+      "mode": "allow",
+      "allow": [
+        "docs/**",
+        "README.md",
+        "**/README.md"
+      ]
+    },
+    "sre": {
+      "mode": "allow",
+      "allow": [
+        "ops/**",
+        "observability/**",
+        "monitoring/**",
+        "docs/runbooks/**",
+        "docs/incidents/**"
+      ]
+    },
+    "devops-engineer": {
+      "mode": "deny",
+      "deny": [
+        "docs/requirements/**",
+        "docs/architecture/**",
+        "docs/adrs/**",
+        "src/**",
+        "app/**",
+        "lib/**"
+      ]
+    },
+    "backend-developer": {
+      "mode": "deny",
+      "deny": [
+        "docs/requirements/**",
+        "docs/architecture/**",
+        "docs/adrs/**",
+        "docs/security/**",
+        ".ai-engineering/**",
+        ".gitlab-ci.yml",
+        "agents/**",
+        "policies/**",
+        "hooks/**"
+      ]
+    },
+    "frontend-developer": {
+      "mode": "deny",
+      "deny": [
+        "docs/requirements/**",
+        "docs/architecture/**",
+        "docs/adrs/**",
+        "docs/security/**",
+        ".ai-engineering/**",
+        ".gitlab-ci.yml",
+        "agents/**",
+        "policies/**",
+        "hooks/**"
+      ]
+    },
+    "data-engineer": {
+      "mode": "deny",
+      "deny": [
+        "docs/requirements/**",
+        "docs/architecture/**",
+        "docs/adrs/**",
+        "docs/security/**",
+        ".ai-engineering/**",
+        "agents/**",
+        "policies/**",
+        "hooks/**"
+      ]
+    },
+    "agent-architect": {
+      "mode": "allow",
+      "allow": [
+        "agents/**",
+        "docs/**",
+        "sdlc/**"
+      ]
+    },
+    "agent-developer": {
+      "mode": "deny",
+      "deny": []
+    },
+    "engineering-director": {
+      "mode": "allow",
+      "allow": [
+        "docs/decisions/**",
+        "docs/sdlc/**",
+        ".ai-engineering/**"
+      ]
+    },
+    "development-lead": {
+      "mode": "allow",
+      "allow": [
+        "docs/stories/**",
+        "docs/qa/**",
+        "docs/technical-debt/**"
+      ]
+    },
+    "incident-commander": {
+      "mode": "allow",
+      "allow": [
+        "docs/incidents/**"
+      ]
+    },
+    "notification-agent": {
+      "mode": "allow",
+      "allow": [
+        ".ai-engineering/outbox/**",
+        "docs/communications/**"
+      ]
+    }
+  },
+  "governed_paths": {
+    "paths": [
+      ".ai-engineering/**",
+      "agents/**",
+      "skills/**",
+      "hooks/**",
+      "policies/**",
+      "schemas/**",
+      "evaluations/**"
+    ],
+    "decision": "escalate",
+    "why": "These paths configure the control system. A change here is AP-10 and needs a human decision in-session as well as governance review in the merge request."
+  },
+  "global_hard_deny": [
+    "**/.ssh/**",
+    "**/id_rsa*",
+    "**/id_ed25519*",
+    "**/*.pem",
+    "**/*.p12",
+    "**/*.pfx",
+    "**/.aws/credentials",
+    "**/.gnupg/**",
+    "**/.git/hooks/**",
+    "**/.git/config"
+  ],
+  "global_hard_deny_note": "Private key material and git internals. Denied outright: there is no engineering task that requires an agent to write these.",
+  "global_deny_exceptions": [
+    "**/.env.example",
+    "**/.env.template",
+    "**/.env.sample",
+    "**/.env.dist",
+    "**/.env.*.example"
+  ],
+  "global_deny_exceptions_note": "Example and template env files are meant to be committed and contain no values. Escalating them trains people to click through the prompt, which is how the real .env gets approved by reflex. Their content is still scanned for secrets."
+}

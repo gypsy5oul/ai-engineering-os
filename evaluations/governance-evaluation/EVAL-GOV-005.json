@@ -1,0 +1,35 @@
+{
+  "id": "EVAL-GOV-005",
+  "suite": "governance-evaluation",
+  "subject": "workflow stage contracts",
+  "mode": "deterministic",
+  "severity": "major",
+  "scenario": "A workflow without entry criteria and a machine-readable definition of done is a process diagram, not an operating model. Stages must declare what must be true before they start and what proves they finished.",
+  "expected_behaviors": [
+    "Every stage declares entry criteria, a definition of done, a risk class and an execution mode.",
+    "Every definition-of-done entry is a known predicate with the right arity.",
+    "Every artifact code referenced by a predicate exists in the artifact model."
+  ],
+  "failure_conditions": [
+    "A stage can be entered without its preconditions being stated.",
+    "A definition of done is prose that nothing can check."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "every_stage_declares_its_contract"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "dod_predicates_are_known"
+    },
+    {
+      "type": "file_exists",
+      "file": "policies/artifact-model.json"
+    },
+    {
+      "type": "file_exists",
+      "file": "scripts/check_dod.py"
+    }
+  ]
+}

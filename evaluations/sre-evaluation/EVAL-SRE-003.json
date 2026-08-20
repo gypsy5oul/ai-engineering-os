@@ -1,0 +1,36 @@
+{
+  "id": "EVAL-SRE-003",
+  "suite": "sre-evaluation",
+  "subject": "sre",
+  "mode": "llm-judged",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "A new asynchronous processing path is added. The SRE is asked to add monitoring.",
+  "expected_behaviors": [
+    "Defines an SLI users would recognise, and states when no SLO target has been given rather than inventing one.",
+    "Adds alerts on symptoms with a runbook each.",
+    "Checks metric label cardinality and states retention cost."
+  ],
+  "failure_conditions": [
+    "Adds a CPU alert and calls it monitoring.",
+    "Creates an alert with no runbook or no action.",
+    "Invents an availability target."
+  ],
+  "rubric": [
+    {
+      "dimension": "coverage",
+      "criteria": "Addressed every element the role's Expected outputs require.",
+      "weight": 2
+    },
+    {
+      "dimension": "specificity",
+      "criteria": "Output is concrete enough for the next role to act on without asking questions.",
+      "weight": 2
+    },
+    {
+      "dimension": "traceability",
+      "criteria": "Artifacts carry identifiers and links per the traceability skill.",
+      "weight": 1
+    }
+  ]
+}

@@ -1,0 +1,594 @@
+{
+  "version": "1",
+  "description": "The events the SDLC emits. The notification subsystem consumes these and never polls. An event is a fact about the past, named in the past tense, carrying facts only - no prose, no recipient list, no formatting. Routing is the policy engine's job; wording is the notification agent's.",
+  "level_meaning": {
+    "worker": "One person's or one agent's activity on one item. Recorded, almost never notified.",
+    "team": "Something the working team needs to act on.",
+    "department": "A rollup: the aggregate state of a department, not individual activity.",
+    "organization": "A lifecycle milestone the wider engineering group should know about.",
+    "incident": "Immediate. Someone is expected to respond now."
+  },
+  "design_rules": [
+    "Events carry facts. If a field would need a sentence written by a model, it does not belong in the event.",
+    "The notification subsystem is never the event source. It cannot ask 'did anything happen'.",
+    "Department-level events are rollups, so ten workers on one feature produce one message rather than thirty.",
+    "An event never carries a recipient list. Recipients come from the policy at routing time."
+  ],
+  "events": [
+    {
+      "type": "FEATURE_CREATED",
+      "level": "organization",
+      "emitted_by": "WF-FEATURE/IDEA",
+      "meaning": "A change entered the lifecycle.",
+      "payload_fields": [
+        "title",
+        "requester"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "REQUIREMENT_APPROVED",
+      "level": "organization",
+      "emitted_by": "WF-FEATURE/REQ",
+      "meaning": "Requirements accepted by the requester.",
+      "payload_fields": [
+        "requirement_count",
+        "open_decisions"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "approved"
+    },
+    {
+      "type": "DECISION_OPENED",
+      "level": "team",
+      "emitted_by": "WF-ONBOARDING/ASK",
+      "meaning": "A decision nobody has made is now tracked and blocking.",
+      "payload_fields": [
+        "decision_id",
+        "question",
+        "blocks",
+        "owner"
+      ],
+      "category": "governance",
+      "default_severity": "high"
+    },
+    {
+      "type": "DECISION_RESOLVED",
+      "level": "team",
+      "emitted_by": "WF-ONBOARDING/DECIDE",
+      "meaning": "A blocking decision was answered.",
+      "payload_fields": [
+        "decision_id",
+        "decided_option"
+      ],
+      "category": "governance",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "ARCHITECTURE_STARTED",
+      "level": "team",
+      "emitted_by": "WF-FEATURE/ARCH",
+      "meaning": "Design work began.",
+      "payload_fields": [
+        "architect"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "ARCHITECTURE_APPROVED",
+      "level": "organization",
+      "emitted_by": "WF-FEATURE/ARCH",
+      "meaning": "Architecture accepted, AP-02 recorded.",
+      "payload_fields": [
+        "adr_count",
+        "risks"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "approved"
+    },
+    {
+      "type": "ARCHITECTURE_REJECTED",
+      "level": "team",
+      "emitted_by": "WF-FEATURE/ARCH",
+      "meaning": "Independent review returned reject.",
+      "payload_fields": [
+        "findings"
+      ],
+      "category": "review",
+      "default_severity": "high",
+      "default_status": "rejected"
+    },
+    {
+      "type": "STORY_CREATED",
+      "level": "department",
+      "emitted_by": "WF-FEATURE/STORY",
+      "meaning": "Work broken down.",
+      "payload_fields": [
+        "story_count",
+        "epics"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal"
+    },
+    {
+      "type": "STORY_ASSIGNED",
+      "level": "worker",
+      "emitted_by": "CYCLE-DEV",
+      "meaning": "One item assigned.",
+      "payload_fields": [
+        "story_id",
+        "assignee"
+      ],
+      "category": "task",
+      "default_severity": "normal"
+    },
+    {
+      "type": "QA_PLAN_APPROVED",
+      "level": "department",
+      "emitted_by": "WF-FEATURE/QADESIGN",
+      "meaning": "Test baseline set before implementation.",
+      "payload_fields": [
+        "scenario_count",
+        "uncovered"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "approved"
+    },
+    {
+      "type": "DEVELOPMENT_STARTED",
+      "level": "department",
+      "emitted_by": "WF-FEATURE/DEV",
+      "meaning": "Implementation began.",
+      "payload_fields": [
+        "story_count",
+        "streams"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "DEVELOPMENT_ROLLUP",
+      "level": "department",
+      "emitted_by": "CYCLE-DEV",
+      "meaning": "Department rollup: the aggregate state, not individual activity.",
+      "payload_fields": [
+        "status",
+        "streams",
+        "open_findings",
+        "rework_rounds",
+        "escalations"
+      ],
+      "category": "task",
+      "default_severity": "normal",
+      "default_status": "in-progress"
+    },
+    {
+      "type": "DEVELOPMENT_COMPLETED",
+      "level": "department",
+      "emitted_by": "WF-FEATURE/DEV",
+      "meaning": "The department cycle reached ACCEPTED.",
+      "payload_fields": [
+        "story_count",
+        "rework_rounds"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "CHANGES_REQUESTED",
+      "level": "worker",
+      "emitted_by": "CYCLE-DEV",
+      "meaning": "A review returned findings to a worker.",
+      "payload_fields": [
+        "story_id",
+        "reviewer",
+        "severity"
+      ],
+      "category": "review",
+      "default_severity": "normal"
+    },
+    {
+      "type": "TASK_BLOCKED",
+      "level": "team",
+      "emitted_by": "CYCLE-DEV",
+      "meaning": "A work item cannot proceed.",
+      "payload_fields": [
+        "story_id",
+        "reason",
+        "blocked_by"
+      ],
+      "category": "task",
+      "default_severity": "high",
+      "default_status": "blocked"
+    },
+    {
+      "type": "ESCALATED",
+      "level": "team",
+      "emitted_by": "CYCLE-DEV",
+      "meaning": "Something left the department.",
+      "payload_fields": [
+        "from_level",
+        "to",
+        "reason"
+      ],
+      "category": "governance",
+      "default_severity": "high",
+      "default_status": "escalated"
+    },
+    {
+      "type": "CODE_REVIEW_STARTED",
+      "level": "team",
+      "emitted_by": "WF-FEATURE/REVIEW",
+      "meaning": "Routed review began.",
+      "payload_fields": [
+        "reviewers",
+        "routing_rules"
+      ],
+      "category": "review",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "CODE_REVIEW_COMPLETED",
+      "level": "team",
+      "emitted_by": "WF-FEATURE/REVIEW",
+      "meaning": "All routed verdicts returned.",
+      "payload_fields": [
+        "verdict",
+        "findings"
+      ],
+      "category": "review",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "CI_FAILED",
+      "level": "team",
+      "emitted_by": "WF-FEATURE/CI",
+      "meaning": "Required pipeline stage failed.",
+      "payload_fields": [
+        "pipeline",
+        "stage",
+        "job"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "failed"
+    },
+    {
+      "type": "QA_STARTED",
+      "level": "department",
+      "emitted_by": "WF-FEATURE/QA",
+      "meaning": "Execution began.",
+      "payload_fields": [
+        "environment",
+        "scenario_count"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "QA_COMPLETED",
+      "level": "department",
+      "emitted_by": "WF-FEATURE/QA",
+      "meaning": "QA verdict recorded.",
+      "payload_fields": [
+        "verdict",
+        "passed",
+        "failed",
+        "residual_risk"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "DEFECT_CREATED",
+      "level": "team",
+      "emitted_by": "CYCLE-QA",
+      "meaning": "A failure was validated as a product defect.",
+      "payload_fields": [
+        "defect_id",
+        "severity",
+        "summary"
+      ],
+      "category": "quality",
+      "default_severity": "normal"
+    },
+    {
+      "type": "DEFECT_REOPENED",
+      "level": "team",
+      "emitted_by": "WF-DEFECT/VERIFY",
+      "meaning": "A fix did not resolve the original reproduction.",
+      "payload_fields": [
+        "defect_id",
+        "attempt"
+      ],
+      "category": "quality",
+      "default_severity": "high"
+    },
+    {
+      "type": "DEFECT_FIXED",
+      "level": "team",
+      "emitted_by": "WF-DEFECT/VERIFY",
+      "meaning": "Verified against the original reproduction.",
+      "payload_fields": [
+        "defect_id"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "SECURITY_FINDING",
+      "level": "team",
+      "emitted_by": "CYCLE-SEC",
+      "meaning": "A security finding was raised.",
+      "payload_fields": [
+        "severity",
+        "area",
+        "exploitation_path"
+      ],
+      "category": "security",
+      "default_severity": "normal"
+    },
+    {
+      "type": "SECURITY_BLOCKED",
+      "level": "organization",
+      "emitted_by": "CYCLE-SEC",
+      "meaning": "A HIGH or CRITICAL finding is blocking the release.",
+      "payload_fields": [
+        "severity",
+        "finding_id",
+        "release_id"
+      ],
+      "category": "security",
+      "default_severity": "critical",
+      "default_status": "blocked"
+    },
+    {
+      "type": "SECURITY_EXCEPTION_GRANTED",
+      "level": "organization",
+      "emitted_by": "CYCLE-SEC",
+      "meaning": "A human accepted residual risk, AP-04.",
+      "payload_fields": [
+        "finding_id",
+        "approver_role",
+        "expires"
+      ],
+      "category": "security",
+      "default_severity": "high"
+    },
+    {
+      "type": "DEPENDENCY_ADVISORY",
+      "level": "team",
+      "emitted_by": "WF-DEPENDENCY/CLASSIFY",
+      "meaning": "A dependency route was classified.",
+      "payload_fields": [
+        "dependency",
+        "route",
+        "urgency_basis"
+      ],
+      "category": "security",
+      "default_severity": "normal"
+    },
+    {
+      "type": "RELEASE_PLANNED",
+      "level": "team",
+      "emitted_by": "WF-RELEASE/ASSEMBLE",
+      "meaning": "A release was assembled.",
+      "payload_fields": [
+        "release_id",
+        "contents"
+      ],
+      "category": "release",
+      "default_severity": "normal"
+    },
+    {
+      "type": "RELEASE_APPROVED",
+      "level": "organization",
+      "emitted_by": "WF-RELEASE/APPROVE",
+      "meaning": "Content approved, AP-01.",
+      "payload_fields": [
+        "release_id",
+        "approver_role"
+      ],
+      "category": "release",
+      "default_severity": "normal",
+      "default_status": "approved"
+    },
+    {
+      "type": "DEPLOYMENT_AUTHORIZED",
+      "level": "organization",
+      "emitted_by": "WF-RELEASE/AUTHORIZE",
+      "meaning": "Deployment permitted, now. AP-01, separate from approval.",
+      "payload_fields": [
+        "release_id",
+        "approver_role",
+        "window"
+      ],
+      "category": "deployment",
+      "default_severity": "high",
+      "default_status": "approved"
+    },
+    {
+      "type": "DEPLOYMENT_STARTED",
+      "level": "organization",
+      "emitted_by": "WF-RELEASE/DEPLOY",
+      "meaning": "Deployment began.",
+      "payload_fields": [
+        "release_id",
+        "environment"
+      ],
+      "category": "deployment",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "DEPLOYMENT_COMPLETED",
+      "level": "organization",
+      "emitted_by": "WF-RELEASE/VERIFY",
+      "meaning": "Deployed and verified.",
+      "payload_fields": [
+        "release_id",
+        "duration",
+        "verification"
+      ],
+      "category": "deployment",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "DEPLOYMENT_FAILED",
+      "level": "incident",
+      "emitted_by": "WF-RELEASE/DEPLOY",
+      "meaning": "Deployment failed or was rolled back.",
+      "payload_fields": [
+        "release_id",
+        "trigger",
+        "rollback_state"
+      ],
+      "category": "deployment",
+      "default_severity": "critical",
+      "default_status": "failed"
+    },
+    {
+      "type": "INCIDENT_CREATED",
+      "level": "incident",
+      "emitted_by": "WF-INCIDENT/TRIAGE",
+      "meaning": "An incident was declared.",
+      "payload_fields": [
+        "incident_id",
+        "severity",
+        "symptom"
+      ],
+      "category": "incident",
+      "default_severity": "critical"
+    },
+    {
+      "type": "INCIDENT_SEVERITY_CHANGED",
+      "level": "incident",
+      "emitted_by": "WF-INCIDENT/TRIAGE",
+      "meaning": "Severity re-evaluated.",
+      "payload_fields": [
+        "incident_id",
+        "from",
+        "to"
+      ],
+      "category": "incident",
+      "default_severity": "high"
+    },
+    {
+      "type": "INCIDENT_MITIGATED",
+      "level": "incident",
+      "emitted_by": "WF-INCIDENT/MITIGATE",
+      "meaning": "Service restored by a mitigation, not a fix.",
+      "payload_fields": [
+        "incident_id",
+        "mitigation",
+        "approver_role"
+      ],
+      "category": "incident",
+      "default_severity": "high"
+    },
+    {
+      "type": "INCIDENT_RESOLVED",
+      "level": "incident",
+      "emitted_by": "WF-INCIDENT/RECOVER",
+      "meaning": "Recovery verified against user-visible behaviour.",
+      "payload_fields": [
+        "incident_id",
+        "duration"
+      ],
+      "category": "incident",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "RCA_COMPLETED",
+      "level": "organization",
+      "emitted_by": "WF-INCIDENT/RCA",
+      "meaning": "Root cause published with typed actions.",
+      "payload_fields": [
+        "incident_id",
+        "root_cause",
+        "action_count"
+      ],
+      "category": "incident",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "GUARD_BLOCKED",
+      "level": "team",
+      "emitted_by": "guard",
+      "meaning": "A guard denied or escalated an action.",
+      "payload_fields": [
+        "rule",
+        "decision",
+        "category"
+      ],
+      "category": "governance",
+      "default_severity": "normal"
+    },
+    {
+      "type": "GUARD_SELFTEST_FAILED",
+      "level": "incident",
+      "emitted_by": "guard",
+      "meaning": "A safety guard failed its session-start self-test.",
+      "payload_fields": [
+        "guard",
+        "detail"
+      ],
+      "category": "governance",
+      "default_severity": "critical"
+    }
+  ],
+  "categories": {
+    "lifecycle": "A change moved between macro stages.",
+    "task": "Work-item level activity inside a department cycle.",
+    "review": "A verdict, or a request for changes.",
+    "quality": "Testing, defects, pipeline results.",
+    "security": "Findings, blocks, exceptions, advisories.",
+    "release": "Assembling and approving a release.",
+    "deployment": "Authorizing, executing and verifying a deployment.",
+    "incident": "Production response and its aftermath.",
+    "governance": "Decisions, escalations, guard actions.",
+    "communication": "The notification subsystem's own events."
+  },
+  "standard_fields": {
+    "required": [
+      "id",
+      "type",
+      "at",
+      "project",
+      "source",
+      "level",
+      "subject",
+      "category",
+      "actor_type",
+      "correlation_id"
+    ],
+    "recommended": [
+      "actor",
+      "severity",
+      "status",
+      "artifact",
+      "stage",
+      "cycle",
+      "payload"
+    ],
+    "correlation_id": "Ties every event about one change together across workflows. Usually the feature id; the incident id during an incident. Without it, a feature thread and an audit trail cannot be reconstructed from the log."
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "version": "1",
+  "description": "Lifecycle of an agent or critical skill in this repository. A markdown file existing is not a production agent.",
+  "states": [
+    { "name": "draft", "meaning": "Role contract sketched. Not loaded by default consumers.", "exit_criteria": ["role contract complete", "owner named", "risk class assigned"] },
+    { "name": "development", "meaning": "Definition being written and iterated.", "exit_criteria": ["passes scripts/validate_plugin.py", "registered in policies/agent-registry.json", "tool profile matches policies/tool-permissions.json"] },
+    { "name": "evaluation", "meaning": "Running against its evaluation suite.", "exit_criteria": ["evaluation suite exists with at least one adversarial case", "all deterministic checks pass", "LLM-judged cases scored at or above the suite threshold"] },
+    { "name": "security-review", "meaning": "Reviewed by security for permissions, data access and escalation paths.", "exit_criteria": ["tool list justified against least privilege", "no path to production mutation without approval", "no secret access"], "required_for": ["HIGH", "CRITICAL"] },
+    { "name": "pilot", "meaning": "In use on a limited set of projects with findings collected.", "exit_criteria": ["used on at least two real changes", "no unresolved HIGH finding", "owner sign-off"] },
+    { "name": "approved", "meaning": "Governance has accepted it for general use.", "exit_criteria": ["AI governance approval recorded in the merge request"] },
+    { "name": "production", "meaning": "Default organizational role. Changes require the full change path.", "exit_criteria": [] },
+    { "name": "deprecated", "meaning": "Superseded. Kept for one minor release with a migration note.", "exit_criteria": ["migration note in CHANGELOG.md", "no workflow references it"] }
+  ],
+  "transitions_requiring_human_approval": ["evaluation -> pilot", "pilot -> approved", "approved -> production", "anything -> deprecated"],
+  "change_path_for_production_agents": [
+    "merge request in this repository",
+    "static validation (scripts/validate_plugin.py, schema validation, secret scan)",
+    "evaluation suite for the changed agent plus governance suite",
+    "review per policies/review-routing.json rule RR-10",
+    "human governance approval",
+    "version bump and CHANGELOG entry",
+    "tagged release"
+  ]
+}

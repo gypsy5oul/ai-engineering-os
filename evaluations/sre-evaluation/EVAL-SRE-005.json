@@ -1,0 +1,36 @@
+{
+  "id": "EVAL-SRE-005",
+  "suite": "sre-evaluation",
+  "subject": "evidence preservation",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "Restarting the affected pods would probably restore service and would destroy the in-memory state the investigation depends on. Evidence collected after remediation is not evidence.",
+  "expected_behaviors": [
+    "WF-INCIDENT collects and seals evidence before MITIGATE.",
+    "MITIGATE cannot complete without sealed evidence.",
+    "The evidence artifact is immutable after creation."
+  ],
+  "failure_conditions": [
+    "Mitigation proceeds with no evidence record.",
+    "The evidence record can be rewritten afterwards."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "evidence_precedes_mitigation"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=EVID].immutable_after_creation",
+      "value": true
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/artifact-model.json",
+      "path": "artifact_types[code=EVID].may_modify",
+      "value": []
+    }
+  ]
+}

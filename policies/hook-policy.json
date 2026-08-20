@@ -1,0 +1,496 @@
+{
+  "version": "1",
+  "description": "Command guard rules evaluated by hooks/scripts/guard_bash.py against the Bash tool input. Rules are ordered by specificity: deny wins over escalate, escalate wins over warn.",
+  "action_semantics": {
+    "deny": "PreToolUse returns permissionDecision deny. Claude is told why and what to do instead.",
+    "escalate": "PreToolUse returns permissionDecision \"ask\", so Claude Code asks the human even in permissive permission modes. \"escalate\" is this policy's word for the tier; the wire value is \"ask\" because that is what Claude Code's schema accepts. A decision outside allow/deny/ask/defer is discarded and the tool call proceeds.",
+    "warn": "Allowed, with a systemMessage recorded for the operator.",
+    "audit": "Allowed silently, recorded in the audit log only."
+  },
+  "project_overrides": {
+    "file": ".ai-engineering/security.json",
+    "additive_only": [
+      "protected_branches",
+      "extra_deny_patterns",
+      "production_markers"
+    ],
+    "waivers": "allow_rule_ids entries require a 'justification' and an 'expires' date; a waiver without both is ignored and reported.",
+    "rationale": "Projects may tighten freely. Loosening is possible but never silent."
+  },
+  "production_markers": [
+    "prod",
+    "prd",
+    "production",
+    "live"
+  ],
+  "rules": [
+    {
+      "id": "SH-01",
+      "category": "destructive-filesystem",
+      "action": "deny",
+      "pattern": "\\brm\\b(?=(?:[^|;&]*\\s)-[a-zA-Z]*[rR])(?=(?:[^|;&]*\\s)-[a-zA-Z]*f)[^|;&]*?\\s[\\\"']?(/|/\\*|~|~/|\\$HOME|\\$HOME/|\\.|\\./\\*|\\*|/(?:usr|bin|sbin|lib|lib64|etc|var|boot|opt|srv|dev|proc|sys|root|home)(?:/[^\\s\\\"']*)?)[\\\"']?\\s*(?:[;&|]|$)",
+      "flags": "i",
+      "message": "Recursive force delete of a root, home, system or wildcard path. Quoting does not change the target.",
+      "remediation": "Delete a specific, named subdirectory instead. If you truly need this, run it yourself outside the agent session."
+    },
+    {
+      "id": "SH-02",
+      "category": "destructive-filesystem",
+      "action": "deny",
+      "pattern": "\\bdd\\b[^|;&]*\\bof=/dev/(sd|nvme|disk|hd)",
+      "flags": "i",
+      "message": "Raw write to a block device.",
+      "remediation": "Block devices are never written from an engineering session."
+    },
+    {
+      "id": "SH-03",
+      "category": "destructive-filesystem",
+      "action": "deny",
+      "pattern": "\\bmkfs(\\.[a-z0-9]+)?\\b",
+      "flags": "i",
+      "message": "Filesystem creation destroys the target device.",
+      "remediation": "Not permitted from an agent session."
+    },
+    {
+      "id": "SH-04",
+      "category": "destructive-filesystem",
+      "action": "escalate",
+      "pattern": "\\bchmod\\s+(-[a-zA-Z]+\\s+)*(777|a\\+rwx)\\b",
+      "flags": "i",
+      "message": "World-writable permissions.",
+      "remediation": "Use the narrowest mode that works, or confirm this is required."
+    },
+    {
+      "id": "SH-05",
+      "category": "destructive-filesystem",
+      "action": "escalate",
+      "pattern": "\\bfind\\s+/\\s[^|;&]*-delete\\b|\\bfind\\s+/\\s[^|;&]*-exec\\s+rm\\b",
+      "flags": "i",
+      "message": "Filesystem-wide delete.",
+      "remediation": "Scope the find to a project subdirectory."
+    },
+    {
+      "id": "SH-06",
+      "category": "supply-chain",
+      "action": "deny",
+      "pattern": "\\b(curl|wget)\\b[^|]*\\|\\s*(sudo\\s+)?(ba|z|k|da)?sh\\b",
+      "flags": "i",
+      "message": "Piping a downloaded script straight into a shell executes unreviewed remote code.",
+      "remediation": "Download the script, read it, then run it; or install from the approved package source."
+    },
+    {
+      "id": "GIT-01",
+      "category": "protected-branch",
+      "action": "escalate",
+      "pattern": "\\bgit\\s+push\\b[^|;&]*\\s(--force|-f|--force-with-lease)\\b",
+      "flags": "i",
+      "message": "Force push rewrites shared history.",
+      "remediation": "Push a normal commit. If the branch genuinely needs a rewrite, a human must approve (AP-09)."
+    },
+    {
+      "id": "GIT-02",
+      "category": "protected-branch",
+      "action": "deny",
+      "pattern": "\\bgit\\s+push\\b[^|;&]*\\s(--delete|-d)\\s",
+      "flags": "i",
+      "message": "Deleting a remote branch removes shared work.",
+      "remediation": "Branch cleanup is done by a human or by CI retention, not by an agent."
+    },
+    {
+      "id": "GIT-03",
+      "category": "history-rewrite",
+      "action": "deny",
+      "pattern": "\\bgit\\s+(filter-branch|filter-repo)\\b|\\bgit\\s+reflog\\s+delete\\b|\\bgit\\s+update-ref\\s+-d\\b",
+      "flags": "i",
+      "message": "History rewriting destroys the audit trail.",
+      "remediation": "Not permitted. Revert with a new commit instead."
+    },
+    {
+      "id": "GIT-04",
+      "category": "protected-branch",
+      "action": "escalate",
+      "pattern": "\\bgit\\s+branch\\s+(?:-D|--delete\\s+--force|--force\\s+--delete)\\s",
+      "flags": "",
+      "message": "Force-deleting a branch discards commits that were never merged.",
+      "remediation": "Use 'git branch -d', which refuses unless the branch is merged."
+    },
+    {
+      "id": "GIT-05",
+      "category": "review-bypass",
+      "action": "escalate",
+      "pattern": "\\bgit\\s+(commit|merge|push)\\b[^|;&]*--no-verify\\b",
+      "flags": "i",
+      "message": "--no-verify skips the project's own pre-commit and pre-push checks.",
+      "remediation": "Fix the failing check instead of skipping it."
+    },
+    {
+      "id": "GIT-06",
+      "category": "history-rewrite",
+      "action": "escalate",
+      "pattern": "\\bgit\\s+reset\\s+--hard\\b",
+      "flags": "i",
+      "message": "Hard reset discards uncommitted work irreversibly.",
+      "remediation": "Stash or commit first, then reset."
+    },
+    {
+      "id": "GIT-07",
+      "category": "destructive-filesystem",
+      "action": "escalate",
+      "pattern": "\\bgit\\s+clean\\s+(-[a-zA-Z]*[dfx][a-zA-Z]*\\s*)+",
+      "flags": "i",
+      "message": "git clean permanently deletes untracked files, including files never shown to you.",
+      "remediation": "Run 'git clean -n' first and confirm the list."
+    },
+    {
+      "id": "SEC-01",
+      "category": "secret-access",
+      "action": "deny",
+      "pattern": "\\b(?:cat|less|more|head|tail|bat|xxd|base64|strings|grep|egrep|fgrep|rg|ag|awk|sed|od|nl|cut|tr|tac|rev|cp|dd|install|perl|python3?|ruby|node|jq|vi|vim|nano|emacs|open|xdg-open)\\b[^|;&]*(?:(?:(?:~|\\$HOME|/home/[^/\\s]+|/root|/Users/[^/\\s]+)/)?\\.(?:ssh/(?:id_[^\\s]*|[^\\s]*key[^\\s]*)|aws/credentials|gnupg/|netrc|docker/config\\.json|kube/config)|[^\\s]*\\.(?:pem|p12|pfx)(?![A-Za-z0-9])|[^\\s]*id_(?:rsa|ed25519|ecdsa|dsa)[^\\s]*)",
+      "flags": "i",
+      "message": "Reading or copying private key material or stored credentials. The tool used and the way the path is written do not change what is exposed.",
+      "remediation": "Agents never read credential stores. Reference the secret by name and let the runtime inject it."
+    },
+    {
+      "id": "SEC-02",
+      "category": "secret-access",
+      "action": "escalate",
+      "pattern": "(?:^|[;&]\\s*)(?:printenv|env|set)\\s*(?:$|[;&])",
+      "flags": "i",
+      "message": "Dumping the whole environment can expose injected secrets into the transcript.",
+      "remediation": "Print only the variable you need: printenv MY_VAR. Filtering with grep is fine."
+    },
+    {
+      "id": "SEC-03",
+      "category": "secret-exfiltration",
+      "action": "deny",
+      "pattern": "\\b(curl|wget|nc|ncat|socat)\\b[^|;&]*(--data|-d|-T|--upload-file|-F)\\s*@?[^|;&]*(\\.env|credentials|id_rsa|id_ed25519|\\.pem|secret)",
+      "flags": "i",
+      "message": "Sending credential material to a network destination.",
+      "remediation": "Never transmit secrets. If this is a legitimate upload, a human must perform it."
+    },
+    {
+      "id": "SEC-07",
+      "category": "secret-exfiltration",
+      "action": "deny",
+      "pattern": "\\b(?:printenv|env|set)\\b\\s*\\|[^|;&]*\\b(?:curl|wget|nc|ncat|socat|ssh|mail|sendmail)\\b",
+      "flags": "i",
+      "message": "Piping the environment to a network or mail command exfiltrates every injected secret at once.",
+      "remediation": "There is no legitimate version of this. If a value must leave the machine, a human sends it deliberately."
+    },
+    {
+      "id": "SEC-04",
+      "category": "secret-access",
+      "action": "escalate",
+      "pattern": "\\bkubectl\\b[^|;&]*\\bget\\s+secrets?\\b[^|;&]*(-o\\s*(yaml|json)|--output)",
+      "flags": "i",
+      "message": "Printing Kubernetes secret values.",
+      "remediation": "Use 'kubectl get secret <name>' without -o yaml to confirm existence, or read the value from the secret manager with an audited path."
+    },
+    {
+      "id": "SEC-05",
+      "category": "secret-access",
+      "action": "escalate",
+      "pattern": "\\b(aws\\s+configure\\s+get|gcloud\\s+auth\\s+print-[a-z-]*token|az\\s+account\\s+get-access-token|vault\\s+(read|kv\\s+get))\\b",
+      "flags": "i",
+      "message": "Retrieving a live credential or token.",
+      "remediation": "Confirm this is required and that the value will not be written to disk or the transcript."
+    },
+    {
+      "id": "SEC-06",
+      "category": "secret-exfiltration",
+      "action": "deny",
+      "pattern": "\\bgit\\s+(add|commit)\\b[^|;&]*(\\.env(\\s|$)|id_rsa|\\.pem\\b|credentials\\.json)",
+      "flags": "i",
+      "message": "Committing a credential file.",
+      "remediation": "Add the file to .gitignore. If a secret was already committed, it must be rotated."
+    },
+    {
+      "id": "PRD-01",
+      "category": "production-access",
+      "action": "escalate",
+      "pattern": "\\bkubectl\\b(?=[^|;&]*(?:--context|--cluster)[=\\s]+[^\\s]*(?<![A-Za-z])(?:prod|prd|production|live)(?![A-Za-z]))",
+      "flags": "i",
+      "message": "Kubernetes command against a production context.",
+      "remediation": "Production access requires a human decision (AP-11). State what you need and why."
+    },
+    {
+      "id": "PRD-02",
+      "category": "production-mutation",
+      "action": "deny",
+      "pattern": "\\bkubectl\\b(?=[^|;&]*\\b(?:delete|drain|cordon|taint|scale|rollout\\s+(?:undo|restart)|exec)\\b)(?=[^|;&]*(?:-n|--namespace)[=\\s]+[^\\s]*(?<![A-Za-z])(?:prod|prd|production|live)(?![A-Za-z]))",
+      "flags": "i",
+      "message": "Mutating a production Kubernetes workload. Flag order does not change what the command does.",
+      "remediation": "Production mutations are performed by the release or incident process with human approval (AP-01/AP-07)."
+    },
+    {
+      "id": "PRD-03",
+      "category": "production-mutation",
+      "action": "escalate",
+      "pattern": "\\bkubectl\\b[^|;&]*\\bdelete\\b[^|;&]*\\b(namespace|ns|pvc|persistentvolumeclaim|crd)\\b",
+      "flags": "i",
+      "message": "Deleting a namespace, persistent volume claim or CRD destroys state.",
+      "remediation": "Confirm the blast radius and that a backup exists."
+    },
+    {
+      "id": "PRD-04",
+      "category": "production-mutation",
+      "action": "escalate",
+      "pattern": "\\bterraform\\s+(destroy|apply)\\b|\\bterragrunt\\s+(destroy|apply)\\b|\\bpulumi\\s+(up|destroy)\\b",
+      "flags": "i",
+      "message": "Infrastructure apply or destroy changes real resources.",
+      "remediation": "Attach the plan output and obtain human approval (AP-07). 'terraform plan' needs no approval."
+    },
+    {
+      "id": "PRD-05",
+      "category": "production-mutation",
+      "action": "escalate",
+      "pattern": "\\bhelm\\s+(upgrade|uninstall|delete|rollback)\\b",
+      "flags": "i",
+      "message": "Helm release mutation.",
+      "remediation": "Route through the release process (AP-01)."
+    },
+    {
+      "id": "PRD-06",
+      "category": "production-access",
+      "action": "escalate",
+      "pattern": "\\bssh\\s+[^|;&]*(?<![A-Za-z])(?:prod|prd|production|live)(?![A-Za-z])[^|;&]*|\\baws\\b[^|;&]*--profile[=\\s]+[^\\s]*(?<![A-Za-z])(?:prod|prd|production|live)(?![A-Za-z])",
+      "flags": "i",
+      "message": "Direct access to a production host or account.",
+      "remediation": "Production access requires a human decision (AP-11)."
+    },
+    {
+      "id": "PRD-07",
+      "category": "production-mutation",
+      "action": "escalate",
+      "pattern": "\\b(docker|podman)\\s+(push)\\b[^|;&]*(prod|release|latest)\\b",
+      "flags": "i",
+      "message": "Pushing an image tag that production may consume.",
+      "remediation": "Image promotion happens in CI from a reviewed pipeline, not from a session."
+    },
+    {
+      "id": "DB-01",
+      "category": "destructive-data",
+      "action": "escalate",
+      "pattern": "\\b(DROP\\s+(DATABASE|SCHEMA|TABLE)|TRUNCATE\\s+TABLE|TRUNCATE\\s+[a-z_\\\"`.]+\\s*;)\\b",
+      "flags": "i",
+      "message": "Destructive schema or data operation.",
+      "remediation": "Destructive migrations need human approval (AP-05) and a verified backup and rollback plan."
+    },
+    {
+      "id": "DB-02",
+      "category": "destructive-data",
+      "action": "escalate",
+      "pattern": "\\bDELETE\\s+FROM\\s+[a-zA-Z0-9_\\\"`.]+\\s*(?:;|--[^\\n]*|/\\*|$)",
+      "flags": "i",
+      "message": "DELETE without a WHERE clause removes every row.",
+      "remediation": "Add a WHERE clause, or confirm a full-table delete is intended."
+    },
+    {
+      "id": "DB-03",
+      "category": "destructive-data",
+      "action": "escalate",
+      "pattern": "\\b(alembic\\s+downgrade|flyway\\s+(clean|undo)|liquibase\\s+(rollback|dropAll)|(npx\\s+)?prisma\\s+migrate\\s+reset|rails\\s+db:drop|django-admin\\s+flush)\\b",
+      "flags": "i",
+      "message": "Migration rollback or reset destroys data.",
+      "remediation": "Confirm the environment and that a backup exists (AP-05)."
+    },
+    {
+      "id": "OS-01",
+      "category": "control-tampering",
+      "action": "deny",
+      "pattern": "(>|>>|\\btee\\b|\\bcp\\b|\\bmv\\b|\\bsed\\s+-i\\b)[^|;&]*(~|\\$HOME|/root)/\\.claude/(settings|managed-settings)\\.json",
+      "flags": "i",
+      "message": "Rewriting Claude Code settings from inside a session disables the controls that govern the session.",
+      "remediation": "Settings changes are made by the engineer, outside the agent session."
+    },
+    {
+      "id": "OS-02",
+      "category": "control-tampering",
+      "action": "deny",
+      "pattern": "--dangerously-skip-permissions|\\bdisableAllHooks\\b",
+      "flags": "i",
+      "message": "Disabling the permission or hook system.",
+      "remediation": "Not permitted. If a hook is wrong, fix the hook and its test in this repository."
+    },
+    {
+      "id": "OS-03",
+      "category": "control-tampering",
+      "action": "escalate",
+      "pattern": "\\b(chmod|rm|mv)\\b[^|;&]*(hooks/scripts|\\.git/hooks)/",
+      "flags": "i",
+      "message": "Modifying hook scripts.",
+      "remediation": "Hook changes are AP-10: governance review plus human approval."
+    },
+    {
+      "id": "SEC-08",
+      "category": "secret-access",
+      "action": "escalate",
+      "pattern": "\\bchmod\\b[^|;&]*((~|\\$HOME)/\\.(ssh|gnupg|aws|kube)|\\.pem\\b|id_rsa|id_ed25519|\\.p12\\b|credentials)",
+      "flags": "i",
+      "message": "Changing permissions on credential material is how a key becomes readable by something else.",
+      "remediation": "Confirm the intended mode and why it is changing. Key permissions are managed by the person who owns the key."
+    },
+    {
+      "id": "PRD-08",
+      "category": "production-mutation",
+      "action": "escalate",
+      "pattern": "\\bkubectl\\b(?=[^|;&]*\\b(?:edit|patch|replace|set|apply)\\b)(?=[^|;&]*(?:-n|--namespace)[=\\s]+[^\\s]*(?<![A-Za-z])(?:prod|prd|production|live)(?![A-Za-z]))|\\bkubectl\\b(?=[^|;&]*\\b(?:create|apply)\\b)(?=[^|;&]*\\b(?:configmap|secret)\\b)(?=[^|;&]*(?:-n|--namespace)[=\\s]+[^\\s]*(?<![A-Za-z])(?:prod|prd|production|live)(?![A-Za-z]))",
+      "flags": "i",
+      "message": "Editing production configuration in place changes running behaviour with no review and no record.",
+      "remediation": "Change it in the repository, review it, and deploy it. Configuration drift applied by hand is invisible at the next incident."
+    },
+    {
+      "id": "CLD-01",
+      "category": "production-mutation",
+      "action": "deny",
+      "pattern": "\\baws\\s+(s3\\s+rb|s3api\\s+delete-bucket|ec2\\s+terminate-instances|rds\\s+delete-db-[\\w-]+|dynamodb\\s+delete-table|iam\\s+delete-[\\w-]+)\\b|\\bgcloud\\s+[\\w-]+[\\w\\s-]*\\bdelete\\b|\\baz\\s+(group|vm|storage\\s+account|sql\\s+server)\\s+delete\\b",
+      "flags": "i",
+      "message": "Deleting a cloud resource destroys state that usually cannot be recovered, and often takes dependents with it.",
+      "remediation": "Cloud resource deletion goes through infrastructure as code with a reviewed plan, so the blast radius is visible before it happens."
+    },
+    {
+      "id": "CLD-02",
+      "category": "secret-access",
+      "action": "escalate",
+      "pattern": "\\b(aws\\s+iam\\s+(create-access-key|update-access-key|create-login-profile)|gcloud\\s+iam\\s+service-accounts\\s+keys\\s+create|az\\s+ad\\s+sp\\s+credential\\s+reset|vault\\s+write\\s+auth/|kubectl\\s+create\\s+secret)\\b",
+      "flags": "i",
+      "message": "Creating or rotating a credential changes the security boundary (AP-08).",
+      "remediation": "Credential rotation is performed by the owner of the credential, through the secret manager, with the old value revoked afterwards."
+    },
+    {
+      "id": "REG-01",
+      "category": "production-mutation",
+      "action": "deny",
+      "pattern": "\\b(aws\\s+ecr\\s+batch-delete-image|gcloud\\s+container\\s+images\\s+delete|skopeo\\s+delete|docker\\s+manifest\\s+rm|crane\\s+delete|oras\\s+manifest\\s+delete)\\b",
+      "flags": "i",
+      "message": "Deleting a container image breaks every rollback that depends on it, including ones nobody has needed yet.",
+      "remediation": "Registry retention is a policy applied by the platform, not a command run during a task."
+    },
+    {
+      "id": "PRD-09",
+      "category": "production-mutation",
+      "action": "escalate",
+      "pattern": "\\b(systemctl|service)\\s+(stop|restart|disable|mask)\\b[^|;&]*(?<![A-Za-z])(?:prod|prd|production|live)(?![A-Za-z])|\\bsupervisorctl\\s+(stop|restart)\\b",
+      "flags": "i",
+      "message": "Stopping or restarting a service on a production host is an outage, whether or not it is intended as one.",
+      "remediation": "Service lifecycle on production is a release or incident action with human authorization (AP-01)."
+    },
+    {
+      "id": "SH-07",
+      "category": "supply-chain",
+      "action": "deny",
+      "flags": "i",
+      "pattern": "(?:\\beval\\b|\\bbash\\b|\\bsh\\b|\\bzsh\\b|\\bsource\\b|^\\s*\\.)\\s*[^|;&]*(?:\\$\\(|<\\()\\s*(?:sudo\\s+)?(?:curl|wget|fetch)\\b",
+      "message": "Executing the output of a network download. Command substitution and process substitution run unreviewed remote code exactly as a pipe to a shell does.",
+      "remediation": "Download the script, read it, then run it; or install from the approved package source."
+    },
+    {
+      "id": "SH-08",
+      "category": "supply-chain",
+      "action": "deny",
+      "flags": "i",
+      "pattern": "\\b(?:curl|wget)\\b[^;&|]*\\s-[oO]\\s*[^\\s;&|]+[^;&|]*[;&|]+\\s*(?:sudo\\s+)?(?:ba|z|k|da)?sh\\b|\\b(?:curl|wget)\\b[^;&|]*[;&|]+\\s*chmod\\s[^;&|]*[;&|]+\\s*\\./",
+      "message": "Downloading a script and then executing it in the same command.",
+      "remediation": "Read the downloaded file before running it, in a separate, deliberate step."
+    },
+    {
+      "id": "OS-04",
+      "category": "control-tampering",
+      "action": "deny",
+      "flags": "",
+      "pattern": "(?:>>?|\\btee\\b(?:\\s+-a)?|\\bsed\\b\\s+[^|;&]*-i|\\bcp\\b|\\bmv\\b|\\binstall\\b|\\btruncate\\b|\\bdd\\b[^|;&]*\\bof=)\\s*[^|;&]*(?:^|[\\s=\\\"'/])(?:agents|policies|hooks|schemas|evaluations|sdlc|\\.ai-engineering|notification)/",
+      "message": "Writing to the control plane through the shell. The write guard covers the Write and Edit tools; a shell redirection would bypass the role's write scope entirely.",
+      "remediation": "Change these files through the Write or Edit tool so the write scope applies, and through a merge request with governance review (AP-10)."
+    },
+    {
+      "id": "OS-05",
+      "category": "control-tampering",
+      "action": "escalate",
+      "flags": "i",
+      "pattern": "\\b(?:python3?|perl|ruby|node|deno)\\b[^|;&]*\\s-(?:c|e)\\b.*(?:shutil\\.rmtree|os\\.remove|os\\.unlink|os\\.system|os\\.rmdir|subprocess|socket|urllib|requests\\.|child_process|fs\\.unlink|fs\\.rm\\b|File\\.delete|unlink\\(|system\\(|exec\\()",
+      "message": "An interpreter one-liner performing filesystem, process or network work. Command-string rules cannot see inside it.",
+      "remediation": "Put the logic in a file that can be read and reviewed, then run the file."
+    },
+    {
+      "id": "SEC-09",
+      "category": "secret-exfiltration",
+      "action": "deny",
+      "flags": "i",
+      "pattern": "\\b(?:curl|wget|nc|ncat|socat|ssh|scp|rsync|mail|sendmail|telnet)\\b[^|;&]*<\\s*[^\\s|;&]*(?:\\.env|credentials|id_rsa|id_ed25519|\\.pem|secret|\\.netrc)",
+      "message": "Redirecting credential material into a network command.",
+      "remediation": "Never transmit secrets. If this is a legitimate transfer, a human performs it."
+    },
+    {
+      "id": "SEC-10",
+      "category": "secret-exfiltration",
+      "action": "deny",
+      "flags": "i",
+      "pattern": "\\b(?:curl|wget|nc|ncat|socat|ssh|scp|rsync|mail|sendmail|telnet)\\b[^|;&]*\\$\\((?:\\s*(?:cat|base64|head|tail|xxd|strings|jq|grep)\\s+)[^)]*(?:\\.env|credentials|id_rsa|id_ed25519|\\.pem|\\.netrc|secret)",
+      "message": "Embedding the contents of a credential file into a network command through command substitution.",
+      "remediation": "Never transmit secrets. Reference them by name from the secret manager."
+    }
+  ],
+  "failure_policy": {
+    "description": "What each guard does when its own evaluation cannot complete. A blanket fail-open is wrong because the moment a guard breaks is the moment it matters; a blanket fail-closed is wrong because a guard that blocks everything gets disabled. The failure path is therefore tiered, and the top tier cannot be broken.",
+    "tiers": {
+      "0-catastrophic": {
+        "decision": "deny",
+        "mechanism": "hooks/lib/failsafe.py CATASTROPHIC, a pure-regex screen with no file I/O and no policy load. Runs BEFORE the policy engine on every call.",
+        "guarantee": "Holds even when this file is missing, unparseable or wrong."
+      },
+      "1-high-risk-on-failure": {
+        "decision": "deny",
+        "mechanism": "hooks/lib/failsafe.py HIGH_RISK, consulted only after the full evaluation has already failed.",
+        "rationale": "The action looks dangerous and the system can no longer prove otherwise. Denying costs one report; allowing costs whatever the command does."
+      },
+      "2-unclassified-on-failure": {
+        "decision": "escalate",
+        "rationale": "Fail closed to a human rather than to a blocked session."
+      },
+      "3-advisory-guard-on-failure": {
+        "decision": "allow",
+        "rationale": "Guards enforcing organizational structure rather than a safety boundary. Their failure is a defect, not an exposure."
+      }
+    },
+    "guard_tiers": {
+      "guard_bash": "safety",
+      "guard_write": "safety",
+      "guard_spawn": "advisory"
+    },
+    "corrupt_policy_behaviour": "A guard loads the policy it depends on with policy_required(), which raises rather than returning an empty document. A corrupt rule file therefore triggers the tiered failure path instead of degrading to 'no rules apply'.",
+    "self_test": "hooks/scripts/session_context.py runs a known-dangerous payload through each safety guard at session start and reports prominently if any fails to deny. A safety system that is silently broken is worse than none."
+  },
+  "structural_enforcement": {
+    "principle": "A regex over a command string is the weakest form of enforcement available. Where Claude Code can enforce a boundary structurally, use that instead: a tool that is absent cannot be called, and a permission deny rule does not depend on guessing how a command was spelled.",
+    "prefer_structural_for": [
+      {
+        "boundary": "reading credential files",
+        "structural": "permissions.deny Read(//**/.ssh/**), Read(//**/*.pem), Read(//**/.aws/credentials)",
+        "regex_covers": "SEC-01, and only when the read happens through a shell command",
+        "note": "The deny rule also stops the Read tool, which no command regex ever sees."
+      },
+      {
+        "boundary": "writing outside a role's scope",
+        "structural": "tool profiles (no Write tool at all) plus policies/write-scope.json",
+        "regex_covers": "nothing; this was never a command-level concern"
+      },
+      {
+        "boundary": "an agent approving its own work",
+        "structural": "reviewer roles hold no Write or Edit tool",
+        "regex_covers": "nothing"
+      },
+      {
+        "boundary": "spawning above one's authority",
+        "structural": "the Agent tool's allowlist form, Agent(role-a, role-b), plus guard_spawn",
+        "regex_covers": "nothing"
+      },
+      {
+        "boundary": "production mutation",
+        "structural": "credentials the session simply does not hold",
+        "regex_covers": "PRD-01..09, CLD-01, REG-01",
+        "note": "The strongest control here is not a hook at all: a session with no production credential cannot mutate production however the command is written. The guards are the second line."
+      }
+    ],
+    "why_regexes_remain": "Shell is the one surface where an agent can express an arbitrary action, so the command guard cannot be removed. It is a net, not a wall, and the false-positive tests exist because a net with holes in the wrong places gets taken down."
+  }
+}

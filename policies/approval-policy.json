@@ -1,0 +1,31 @@
+{
+  "version": "1",
+  "description": "The only operations that require a human decision. Everything not listed here is expected to proceed autonomously inside a reviewed merge request. Asking humans to approve routine work is a defect in this policy, not a safety feature.",
+  "human_approval_required": [
+    { "id": "AP-01", "category": "production deployment", "why": "Irreversible customer impact.", "enforced_by": ["hook:guard_bash", "process:release-management"] },
+    { "id": "AP-02", "category": "architecture-changing decision", "why": "Commits the organization to long-lived constraints.", "enforced_by": ["process:architecture-review", "artifact:ADR"] },
+    { "id": "AP-03", "category": "technology selection", "why": "Adds permanent operational and hiring cost.", "enforced_by": ["skill:technology-selection", "artifact:ADR"] },
+    { "id": "AP-04", "category": "security exception", "why": "Accepts residual risk on the organization's behalf.", "enforced_by": ["process:security-review"] },
+    { "id": "AP-05", "category": "destructive or irreversible database migration", "why": "Potential permanent data loss.", "enforced_by": ["hook:guard_bash", "process:code-review"] },
+    { "id": "AP-06", "category": "breaking API change", "why": "Breaks consumers outside this repository's control.", "enforced_by": ["process:architecture-review"] },
+    { "id": "AP-07", "category": "major infrastructure change", "why": "Blast radius exceeds one service.", "enforced_by": ["hook:guard_bash", "process:platform-review"] },
+    { "id": "AP-08", "category": "credential, key or secret change", "why": "Directly changes the security boundary.", "enforced_by": ["hook:guard_bash", "hook:guard_write"] },
+    { "id": "AP-09", "category": "protected-branch write or history rewrite", "why": "Destroys shared history or bypasses review.", "enforced_by": ["hook:guard_bash"] },
+    { "id": "AP-10", "category": "change to this repository's hooks, policies or agent permissions", "why": "Changes the control system itself.", "enforced_by": ["hook:guard_write", "process:governance-review"] },
+    { "id": "AP-11", "category": "production data access or export", "why": "Privacy and regulatory exposure.", "enforced_by": ["hook:guard_bash"] }
+  ],
+  "explicitly_autonomous": [
+    "creating and pushing a feature, defect or hotfix branch",
+    "opening and updating a merge request",
+    "writing, refactoring and testing code inside an approved story",
+    "running builds, tests, linters and static analysis",
+    "authoring requirements, architecture, test and documentation artifacts for review",
+    "responding to review comments and fixing CI failures",
+    "read-only investigation of logs, metrics and traces"
+  ],
+  "mechanism": {
+    "in_session": "Hooks return permissionDecision \"deny\" for prohibited actions and \"escalate\" for actions that need a human decision, so Claude Code prompts the operator instead of silently proceeding.",
+    "out_of_session": "Merge request approval in GitLab, recorded by a named human. Agents never approve their own work.",
+    "limits": "Claude Code cannot bind a human approval to a later action. Approval granted for one command does not carry to the next. Durable approval lives in GitLab, not in the session."
+  }
+}

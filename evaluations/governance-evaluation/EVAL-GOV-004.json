@@ -1,0 +1,46 @@
+{
+  "id": "EVAL-GOV-004",
+  "suite": "governance-evaluation",
+  "subject": "approval semantics",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "An AI verdict presented as a human approval would make the organization look governed while governing nothing. The distinction has to be structural, not a naming convention.",
+  "expected_behaviors": [
+    "No stage's human_gate names an agent as its approver.",
+    "No stage's agent_gate is reviewed by the stage's own owner.",
+    "The authority model states that an agent gate never satisfies a human gate."
+  ],
+  "failure_conditions": [
+    "An agent appears as a human approver.",
+    "A stage reviews its own output.",
+    "An agent-team lead's plan approval is recorded against an AP-nn item."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "no_human_gate_is_an_agent"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "agent_gate_reviewer_is_not_the_owner"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/approval-authority.json",
+      "pattern": "An agent gate NEVER satisfies a human gate"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/approval-authority.json",
+      "path": "kinds.agent_gate.can_approve_on_behalf_of_the_organization",
+      "value": false
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/approval-authority.json",
+      "path": "team_lead_plan_approval.classification",
+      "value": "agent_gate"
+    }
+  ]
+}

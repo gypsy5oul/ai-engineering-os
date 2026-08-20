@@ -1,0 +1,50 @@
+{
+  "_comment": "Template for the PROJECT's own .claude/settings.json. This does not belong at the ai-engineering-os plugin root: a plugin-root settings.json supports only 'agent' and 'subagentStatusLine', and anything else there is silently ignored. Delete the _comment keys before use.",
+  "_env_comment": "Agent teams are experimental and off by default. Set this only if the project actually uses team patterns; see docs/agent-teams.md for the limitations.",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "_permissions_comment": "Pre-approving the project's ordinary read-only commands keeps the guards' escalations meaningful. If everything prompts, nothing is noticed. Replace these with your project's real commands.",
+  "permissions": {
+    "allow": [
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Read(//**)"
+    ],
+    "deny": [
+      "Read(//**/.env)",
+      "Read(//**/.env.*)",
+      "Read(//**/*.pem)",
+      "Read(//**/*.key)",
+      "Read(//**/*.p12)",
+      "Read(//**/id_rsa*)",
+      "Read(//**/id_ed25519*)",
+      "Read(//**/.ssh/**)",
+      "Read(//**/.aws/credentials)",
+      "Read(//**/.gnupg/**)",
+      "Read(//**/.kube/config)",
+      "Read(//**/.netrc)",
+      "Read(//**/.docker/config.json)",
+      "Write(//**/.ssh/**)",
+      "Write(//**/*.pem)",
+      "Write(//**/.aws/credentials)",
+      "Edit(//**/.ssh/**)",
+      "Edit(//**/*.pem)"
+    ],
+    "_deny_comment": "Structural, and therefore stronger than the command guards. A deny rule stops the Read and Write tools directly, where a command regex only sees shell invocations. See structural_enforcement in the plugin's policies/hook-policy.json for which boundaries belong here rather than in a rule."
+  },
+  "_plugin_comment": "Declaring the marketplace and plugin here means a cloned checkout, and a cloud session, gets the organization without per-engineer setup.",
+  "extraKnownMarketplaces": {
+    "ai-engineering": {
+      "source": {
+        "source": "url",
+        "url": "https://gitlab.example.com/ai-engineering/ai-engineering-os.git"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ai-engineering-os@ai-engineering": true
+  }
+}

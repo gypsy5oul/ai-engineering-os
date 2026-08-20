@@ -1,0 +1,24 @@
+{
+  "version": "1",
+  "description": "Default git branching model. Projects override this in .ai-engineering/project.yaml under repository.branching; the hook reads the project value first and falls back to these defaults.",
+  "model": "trunk-with-release-branches",
+  "protected_branches": ["main", "master", "develop", "release/*", "hotfix/production/*"],
+  "branch_types": {
+    "feature/*":  { "from": "main", "into": "main", "naming": "feature/<story-id>-<slug>", "example": "feature/STORY-142-sftp-key-rotation" },
+    "defect/*":   { "from": "main", "into": "main", "naming": "defect/<defect-id>-<slug>", "example": "defect/DEF-88-token-expiry-off-by-one" },
+    "hotfix/*":   { "from": "release/*", "into": "release/* and main", "naming": "hotfix/<incident-id>-<slug>", "example": "hotfix/INC-2031-auth-loop" },
+    "release/*":  { "from": "main", "into": "main", "naming": "release/<version>", "example": "release/1.4.0" },
+    "chore/*":    { "from": "main", "into": "main", "naming": "chore/<slug>" }
+  },
+  "rules": [
+    "Agents never commit or push directly to a protected branch.",
+    "Agents never force-push any branch they did not create in the current task.",
+    "History rewriting on a shared branch requires human approval (AP-09).",
+    "Every merge to a protected branch goes through a merge request with at least one approval from someone other than the author."
+  ],
+  "commit_convention": {
+    "format": "<type>(<scope>): <subject>\n\n<body>\n\nRefs: <requirement-id>, <story-id>",
+    "types": ["feat", "fix", "refactor", "test", "docs", "chore", "perf", "build", "ci", "revert"],
+    "requirement": "Every commit body carries at least one traceability identifier. See skills/traceability."
+  }
+}

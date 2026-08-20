@@ -1,0 +1,150 @@
+# Generated against schemas/department-cycle.schema.json.
+# The generic contract is policies/department-cycle.json; this instantiates it.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: CYCLE-QA
+name: QA execution
+version: 1.0.0
+department: qa
+description: "Scenario to executed test with evidence. A tester finding a failure does not create a development defect: the lead validates it first, because most first-round failures are the environment, the data or a wrong expectation."
+used_by_stages:
+  - WF-FEATURE/QADESIGN
+  - WF-FEATURE/QA
+  - WF-RELEASE/STAGING
+  - WF-DEFECT/VERIFY
+work_item:
+  kind: test scenario
+  artifact: TEST
+  acceptance_source: the approved test plan, itself derived from requirements and risk
+positions:
+  human_owner:
+    role: qa-owner
+    authority:
+      - Accepts residual risk where QA exit criteria are waived
+    receives: escalations-and-approvals
+  head:
+    kind: agent
+    role: engineering-director
+    receives: rollup
+    authority:
+      - Plan and delegate the department's work
+      - Request acceptance once every item reaches READY_FOR_INTEGRATION
+      - Escalate to the human owner what the department cannot resolve
+  lead: qa-lead
+  workers:
+    - qa-engineer
+  peer_reviewer: test-reviewer
+  specialist_reviewers:
+    - performance-reviewer
+states:
+  - ASSIGNED
+  - IN_PROGRESS
+  - SELF_VALIDATION
+  - PEER_REVIEW
+  - LEAD_REVIEW
+  - CHANGES_REQUESTED
+  - READY_FOR_INTEGRATION
+  - ACCEPTANCE_REQUESTED
+  - ACCEPTED
+  - WITHDRAWN
+  - ESCALATED
+  - BLOCKED
+  - DEFECT_TRIAGE
+transitions:
+  ASSIGNED:
+    start: IN_PROGRESS
+    blocked: BLOCKED
+  IN_PROGRESS:
+    submit: SELF_VALIDATION
+    blocked: BLOCKED
+  SELF_VALIDATION:
+    pass: PEER_REVIEW
+    fail: IN_PROGRESS
+    observed_failure: DEFECT_TRIAGE
+  PEER_REVIEW:
+    pass: LEAD_REVIEW
+    minor: CHANGES_REQUESTED
+    major: LEAD_REVIEW
+    architecture_issue: ESCALATED
+    requirement_issue: ESCALATED
+  LEAD_REVIEW:
+    pass: READY_FOR_INTEGRATION
+    changes_required: CHANGES_REQUESTED
+    architecture_issue: ESCALATED
+    cannot_resolve: ESCALATED
+  CHANGES_REQUESTED:
+    resume: IN_PROGRESS
+    limit_reached: ESCALATED
+  READY_FOR_INTEGRATION:
+    set_complete: ACCEPTANCE_REQUESTED
+    sibling_pending: READY_FOR_INTEGRATION
+  ESCALATED:
+    resolved: IN_PROGRESS
+    requirement_changed: ASSIGNED
+    withdrawn: WITHDRAWN
+  BLOCKED:
+    unblocked: IN_PROGRESS
+    decision_open: BLOCKED
+  DEFECT_TRIAGE:
+    product_defect: ESCALATED
+    test_defect: IN_PROGRESS
+    not_a_defect: IN_PROGRESS
+    environment_defect: BLOCKED
+    requirement_ambiguity: ESCALATED
+  ACCEPTANCE_REQUESTED:
+    dod_pass: ACCEPTED
+    dod_fail: CHANGES_REQUESTED
+    dod_requires_evidence: BLOCKED
+rework:
+  limit: 3
+  on_limit: Escalate to qa-lead, then the QA owner. A third round means the acceptance criteria, the design or an unwritten disagreement is the problem, not the implementation.
+escalation:
+  order:
+    - worker
+    - peer_reviewer
+    - lead
+    - head
+    - human_owner
+  lateral:
+    architecture_issue: architecture-reviewer
+    requirement_issue: product-manager
+    environment_issue: devops-engineer
+    security_issue: security-reviewer
+rollup:
+  produced_by: qa-lead
+  consumed_by: engineering-director
+  fields:
+    - work_item_set
+    - status
+    - streams
+    - reviews
+    - open_findings
+    - rework_rounds
+    - escalations
+    - artifacts
+    - next_gate
+acceptance:
+  conditions:
+    - artifact_exists(TESTREPORT)
+    - every_linked(REQ, TEST)
+    - agent_verdict(test-reviewer, pass)
+    - no_unresolved_findings(high)
+  requested_by: head
+  determined_by: scripts/check_dod.py against acceptance.conditions
+sub_cycles:
+  - id: SUB-QA-TRIAGE
+    name: Defect validation before it becomes a development item
+    trigger: A tester observes a failure.
+    owner: qa-lead
+    questions:
+      - Is this a real failure, or the expected behaviour under a condition nobody wrote down?
+      - Is the expected behaviour in the test actually what the requirement says?
+      - Is the environment the one the strategy specifies?
+      - Is the test data correct and current?
+      - Does it reproduce, from the record alone, by someone other than the observer?
+    outcomes:
+      not-a-defect: Closed with the reason. The scenario or the expectation is corrected.
+      test-defect: Stays inside QA as a defect in the test, not in the product.
+      environment-defect: To devops-engineer. Not a development item.
+      requirement-ambiguity: To product-manager, and it may become a DEC.
+      product-defect: Risk and impact assessed, then raised as a DEF and entered into WF-DEFECT.

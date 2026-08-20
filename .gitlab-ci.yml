@@ -1,0 +1,203 @@
+# CI for the ai-engineering-os plugin itself.
+#
+# Two constraints shape this pipeline:
+#   1. No dependency installation. The bundled minyaml and jsonschema_mini exist
+#      so that a runner with nothing but python3 produces the same result as an
+#      engineer's laptop.
+#   2. Fail fast on a malformed component. A broken manifest makes every later
+#      result meaningless, so validation runs before anything else.
+
+stages:
+  - validate
+  - security
+  - test
+  - evaluate
+
+default:
+  image: python:3.11-slim
+  interruptible: true
+
+variables:
+  GIT_DEPTH: "50"
+
+# ---------------------------------------------------------------- validate
+
+plugin-structure:
+  stage: validate
+  script:
+    - python3 --version
+    - python3 scripts/validate_plugin.py
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+schemas:
+  stage: validate
+  script:
+    - python3 scripts/validate_schemas.py
+    - python3 scripts/validate_project_config.py templates/project/project.yaml
+
+contracts:
+  stage: validate
+  script:
+    # Every definition-of-done entry must be a known predicate with the right
+    # arity, and model routing must resolve for every stage. Prose that nothing
+    # can check is what turns an operating model back into a diagram.
+    - python3 scripts/check_dod.py --grammar
+    - python3 scripts/resolve_model.py --all
+    # Level 2: the delegation loop inside each department. An unreachable state or a
+    # review position filled by the worker is a control that does not exist.
+    - python3 scripts/check_cycle.py
+    # Communications: every event routes, no channel admits a level it does not declare,
+    # and no webhook credential is in the tree.
+    - python3 scripts/route_event.py --table > /dev/null
+  artifacts:
+    when: always
+    expire_in: 30 days
+    reports: {}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+strict-structure:
+  stage: validate
+  script:
+    # Warnings become errors on protected branches: a placeholder marketplace URL
+    # or a non-executable hook script must not reach a release.
+    - python3 scripts/validate_plugin.py --strict
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+claude-plugin-validate:
+  stage: validate
+  script:
+    - |
+      if command -v claude >/dev/null 2>&1; then
+        # With marketplace.json present this validates the marketplace manifest
+        # only, so the plugin manifest is validated from a copy without it.
+        claude plugin validate . --strict
+        tmp="$(mktemp -d)"
+        cp -r .claude-plugin agents skills hooks policies schemas sdlc evaluations templates scripts "$tmp"/
+        rm -f "$tmp/.claude-plugin/marketplace.json"
+        claude plugin validate "$tmp" --strict
+      else
+        echo "claude CLI not available on this runner."
+        echo "Install it on the runner image to enable Claude Code's own structural check."
+        exit 1
+      fi
+  # The Claude Code CLI is not guaranteed on a runner. When it is present the
+  # result is real; when it is not, the job says so rather than passing silently.
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+markdown-links:
+  stage: validate
+  script:
+    - python3 scripts/check_links.py
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------- security
+
+secret-scan:
+  stage: security
+  script:
+    - python3 scripts/secret_scan.py .
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+guard-failure-behaviour:
+  stage: security
+  script:
+    # The tiered failure path is the control that matters most when something
+    # else has already gone wrong, so it is exercised on every pipeline.
+    - python3 -m unittest tests.test_failsafe -v
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+hook-permissions:
+  stage: security
+  script:
+    # A hook script that is not executable, or that is writable by anyone, is a
+    # supply-chain problem in a repository whose whole purpose is guarding things.
+    - |
+      set -e
+      fail=0
+      for f in hooks/scripts/*.py; do
+        if [ ! -x "$f" ]; then echo "ERROR $f is not executable"; fail=1; fi
+        case "$(stat -c '%a' "$f")" in
+          *2|*3|*6|*7) echo "ERROR $f is world-writable"; fail=1 ;;
+        esac
+      done
+      exit $fail
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------- test
+
+unit-tests:
+  stage: test
+  script:
+    - python3 -m unittest discover -s tests -v
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# ---------------------------------------------------------------- evaluate
+
+sdlc-simulation:
+  stage: evaluate
+  script:
+    # Runs every loop end to end against a throwaway project, creating real
+    # artifacts and evaluating each stage's definition of done at the moment that
+    # stage completes. A workflow that cannot be completed fails here.
+    - python3 scripts/simulate_sdlc.py --all
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+deterministic-evaluations:
+  stage: evaluate
+  script:
+    - python3 scripts/run_evaluations.py
+    - python3 scripts/run_evaluations.py --json > evaluation-report.json
+  artifacts:
+    when: always
+    expire_in: 30 days
+    paths:
+      - evaluation-report.json
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+llm-evaluation-bundle:
+  stage: evaluate
+  script:
+    # LLM-judged cases are never run or auto-passed in CI. The bundle is emitted
+    # so that agent-evaluator can score them out of band. See docs/evaluation.md.
+    - python3 scripts/run_evaluations.py --emit-llm-bundle --out reports/
+  artifacts:
+    expire_in: 30 days
+    paths:
+      - reports/llm-bundle.json
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+release-readiness:
+  stage: evaluate
+  script:
+    - python3 scripts/check_release.py
+  rules:
+    - if: $CI_COMMIT_TAG

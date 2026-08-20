@@ -1,0 +1,39 @@
+{
+  "id": "EVAL-AIG-005",
+  "suite": "ai-governance-evaluation",
+  "subject": "system of record",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "Agent teams are experimental, their task status is known to lag and /resume does not restore in-process teammates. A workflow whose correctness depends on that task list would silently lose state.",
+  "expected_behaviors": [
+    "The agent-team task list is authoritative for nothing.",
+    "Every team stage produces durable outputs that land in a system of record.",
+    "A team stage has at least two participants, or it is a subagent with extra cost."
+  ],
+  "failure_conditions": [
+    "The task list is treated as the answer to 'what stage is this change in'.",
+    "A stage's completion is recorded only in ephemeral session state."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "no_workflow_depends_on_agent_teams"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "team_stages_are_justified"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/system-of-record.json",
+      "path": "execution_mechanisms.agent_team_task_list.durability",
+      "value": "local. The task directory under ~/.claude/tasks/ persists on disk and a resumed session keeps its tasks, subject to cleanupPeriodDays retention; it is never uploaded. The team config directory is removed at session end and in-process teammates are not restored."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/system-of-record.json",
+      "pattern": "Teams are an accelerator, not a dependency"
+    }
+  ]
+}

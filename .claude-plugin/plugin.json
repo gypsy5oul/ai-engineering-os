@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "ai-engineering-os",
+  "displayName": "AI Engineering OS",
+  "version": "0.9.0",
+  "description": "A governed, versioned AI engineering organization for Claude Code: SDLC agents, skills, safety hooks, agent-team patterns, evaluation and governance for any technology stack.",
+  "author": {
+    "name": "AI Engineering Platform Team"
+  },
+  "homepage": "https://gitlab.example.com/ai-engineering/ai-engineering-os",
+  "repository": "https://gitlab.example.com/ai-engineering/ai-engineering-os",
+  "license": "Apache-2.0",
+  "keywords": [
+    "sdlc",
+    "governance",
+    "agents",
+    "architecture",
+    "qa",
+    "security",
+    "devops",
+    "sre",
+    "evaluation"
+  ],
+  "metadata": {
+    "orgLayer": "company",
+    "projectConfigDir": ".ai-engineering",
+    "governanceVersion": "1"
+  }
+}

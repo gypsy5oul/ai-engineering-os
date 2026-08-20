@@ -1,0 +1,98 @@
+{
+  "version": "1",
+  "description": "Chat destinations. NO WEBHOOK URLS LIVE HERE. Each channel names the environment variable that holds its URL; the value is supplied at send time from CI or the operator's shell and never enters this repository.",
+  "secret_handling": {
+    "rule": "A Google Chat incoming webhook URL is a bearer credential: anyone holding it can post to the space. Google's own documentation says not to put it in a public repository.",
+    "where_it_lives": "A masked, protected CI variable, or the project's secret manager.",
+    "enforced_by": [
+      "policies/secret-patterns.json SP-10 denies a URL with inline credentials being written",
+      "policies/write-scope.json global_deny covers **/secrets/** and **/.env*",
+      "scripts/secret_scan.py runs over the whole tree in CI"
+    ],
+    "if_leaked": "Rotate the webhook in the Chat space. Deleting the file does not un-publish it."
+  },
+  "transport": {
+    "v1": "Google Chat incoming webhook. One-way, outgoing only. Supports posting a message and replying into a thread by thread key.",
+    "not_v1": "Anything interactive. Receiving @mentions, commands or button clicks needs a real Google Chat app that handles interaction events, not an incoming webhook.",
+    "never": "Approval. A chat message must never become production authorization; that lives in GitLab. See policies/approval-authority.json."
+  },
+  "channels": {
+    "engineering-announcements": {
+      "purpose": "Organization-level lifecycle milestones, plus the incident-level events the wider group must know about: a failed deployment, a resolved incident, a published RCA.",
+      "webhook_env": "AIEOS_CHAT_WEBHOOK_ANNOUNCEMENTS",
+      "audience": "All engineering",
+      "expected_volume": "a few messages a day",
+      "accepts_levels": [
+        "organization",
+        "incident"
+      ]
+    },
+    "feature-delivery": {
+      "purpose": "One thread per feature, carrying its whole timeline.",
+      "webhook_env": "AIEOS_CHAT_WEBHOOK_FEATURE_DELIVERY",
+      "audience": "Delivery teams",
+      "threading": "subject",
+      "expected_volume": "a handful per feature per day, threaded",
+      "accepts_levels": [
+        "team",
+        "department",
+        "organization"
+      ]
+    },
+    "qa": {
+      "purpose": "Defects, QA verdicts, test failures.",
+      "webhook_env": "AIEOS_CHAT_WEBHOOK_QA",
+      "audience": "QA and the owning development team",
+      "accepts_levels": [
+        "team",
+        "department"
+      ]
+    },
+    "security": {
+      "purpose": "Findings, blocks, exceptions, advisories.",
+      "webhook_env": "AIEOS_CHAT_WEBHOOK_SECURITY",
+      "audience": "Security chapter and the owning team",
+      "note": "Findings are posted by severity and area, never with an exploitation path. A chat space is not an access-controlled vulnerability tracker.",
+      "accepts_levels": [
+        "team",
+        "organization"
+      ]
+    },
+    "devops": {
+      "purpose": "Pipeline and infrastructure events.",
+      "webhook_env": "AIEOS_CHAT_WEBHOOK_DEVOPS",
+      "audience": "Platform",
+      "accepts_levels": [
+        "team",
+        "department"
+      ]
+    },
+    "releases": {
+      "purpose": "Release planning, approval, authorization, deployment, verification.",
+      "webhook_env": "AIEOS_CHAT_WEBHOOK_RELEASES",
+      "audience": "Engineering and stakeholders",
+      "accepts_levels": [
+        "team",
+        "organization",
+        "incident"
+      ]
+    },
+    "incidents": {
+      "purpose": "Active incidents only. Everything here expects a response now.",
+      "webhook_env": "AIEOS_CHAT_WEBHOOK_INCIDENTS",
+      "audience": "On-call, incident commander, engineering leadership",
+      "note": "Keep this space quiet. A space that receives routine traffic stops being read at 03:00.",
+      "accepts_levels": [
+        "incident"
+      ],
+      "also_accepts_events": [
+        "RCA_COMPLETED"
+      ]
+    }
+  },
+  "channel_admission": {
+    "rule": "A channel declares which event levels it accepts. Routing a lower level into a channel is what turns a space into noise, so it is a validation error rather than a judgement call at authoring time.",
+    "why_incidents_is_narrow": "The incidents space accepts incident-level events only, plus RCA_COMPLETED because it closes the incident's own thread. A space that receives routine traffic stops being read at 03:00, and then it is worse than not having it.",
+    "why_announcements_takes_incidents": "A failed deployment and a resolved incident are organizational facts, not just on-call ones. The narrow channel is 'incidents', which is where the response happens; announcements is where the organization finds out."
+  }
+}

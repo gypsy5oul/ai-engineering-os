@@ -1,0 +1,48 @@
+{
+  "_comment": "Template for your organization's MANAGED settings, deployed by your device-management or server-managed-settings mechanism. Managed settings apply after every other source, so a user cannot override them. This is what makes the AI Engineering OS non-bypassable. Verify every key against the current settings reference before relying on it, and delete the _comment keys before use.",
+
+  "_lock_comment": "Without this, an engineer can drop a file at .claude/agents/code-reviewer.md and shadow the plugin's reviewer, or add a project hook that undoes a guard. Blocks skills, agents, hooks and MCP servers from user and project sources so they can only come from plugins or managed settings.",
+  "strictPluginOnlyCustomization": ["skills", "agents", "hooks", "mcp"],
+
+  "_sideload_comment": "Rejects --plugin-dir, --plugin-url, --agents and --mcp-config at startup, which are otherwise a one-command bypass of the line above.",
+  "disableSideloadFlags": true,
+
+  "_marketplace_comment": "Register the organization's marketplace centrally so engineers do not add it by hand, and so the name cannot be claimed by another source.",
+  "extraKnownMarketplaces": {
+    "ai-engineering": {
+      "source": {
+        "source": "url",
+        "url": "https://gitlab.example.com/ai-engineering/ai-engineering-os.git"
+      }
+    }
+  },
+
+  "_enable_comment": "Roll the plugin out to everyone rather than asking each engineer to install it.",
+  "enabledPlugins": {
+    "ai-engineering-os@ai-engineering": true
+  },
+
+  "_permissions_comment": "Structural denies. Stronger than the plugin's command guards, because they stop the Read and Write tools directly rather than pattern-matching a shell string. Deny is evaluated before ask and allow, and a deny rule cannot carry allowlist exceptions.",
+  "permissions": {
+    "deny": [
+      "Read(//**/.ssh/**)",
+      "Read(//**/*.pem)",
+      "Read(//**/*.p12)",
+      "Read(//**/id_rsa*)",
+      "Read(//**/id_ed25519*)",
+      "Read(//**/.aws/credentials)",
+      "Read(//**/.gnupg/**)",
+      "Read(//**/.netrc)",
+      "Read(//**/.docker/config.json)",
+      "Write(//**/.ssh/**)",
+      "Edit(//**/.ssh/**)"
+    ]
+  },
+
+  "_model_comment": "Restricting availableModels changes what the plugin's model policy can resolve to. If opus is not permitted, HIGH and CRITICAL roles are substituted downward and the risk floors in policies/risk-classification.json stop being met, silently. Check the allowlist against the floors before restricting.",
+
+  "_teams_comment": "Agent teams are experimental and off by default. Set this deliberately: the plugin works without them, and one stage is TEAM_REQUIRED and escalates rather than silently falling back. See docs/execution.md.",
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "0"
+  }
+}

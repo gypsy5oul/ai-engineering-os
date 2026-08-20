@@ -1,0 +1,103 @@
+{
+  "version": "1",
+  "description": "Risk-based review routing. Not every change needs every reviewer; requiring all of them is how review becomes theatre. Routing is additive: a change matching several signals gets the union of reviewers.",
+  "always": [
+    "code-reviewer"
+  ],
+  "routes": [
+    {
+      "id": "RR-01",
+      "signal": "only documentation, comments or non-executable assets changed",
+      "reviewers": [
+        "docs-writer"
+      ],
+      "replaces_always": true,
+      "gate": "advisory"
+    },
+    {
+      "id": "RR-02",
+      "signal": "source or test files changed",
+      "reviewers": [
+        "code-reviewer",
+        "test-reviewer"
+      ],
+      "gate": "blocking"
+    },
+    {
+      "id": "RR-03",
+      "signal": "public interface, contract or schema changed",
+      "reviewers": [
+        "architecture-reviewer"
+      ],
+      "gate": "blocking"
+    },
+    {
+      "id": "RR-04",
+      "signal": "auth, crypto, secret handling, input parsing or deserialization touched",
+      "reviewers": [
+        "security-reviewer"
+      ],
+      "gate": "blocking"
+    },
+    {
+      "id": "RR-05",
+      "signal": "dependency manifest or lockfile changed",
+      "reviewers": [
+        "dependency-reviewer",
+        "security-reviewer"
+      ],
+      "gate": "blocking"
+    },
+    {
+      "id": "RR-06",
+      "signal": "database schema or migration changed",
+      "reviewers": [
+        "data-engineer",
+        "architecture-reviewer"
+      ],
+      "gate": "blocking"
+    },
+    {
+      "id": "RR-07",
+      "signal": "hot path, batch size, query pattern, concurrency or caching changed",
+      "reviewers": [
+        "performance-reviewer"
+      ],
+      "gate": "blocking"
+    },
+    {
+      "id": "RR-08",
+      "signal": "retry, timeout, failover, queue, idempotency or health-check behaviour changed",
+      "reviewers": [
+        "reliability-reviewer"
+      ],
+      "gate": "blocking"
+    },
+    {
+      "id": "RR-09",
+      "signal": "CI/CD, container, infrastructure or deployment configuration changed",
+      "reviewers": [
+        "devops-engineer",
+        "security-reviewer"
+      ],
+      "gate": "blocking"
+    },
+    {
+      "id": "RR-10",
+      "signal": "this repository's agents, skills, hooks, policies or schemas changed",
+      "reviewers": [
+        "agent-evaluator",
+        "ai-governance",
+        "security-reviewer"
+      ],
+      "gate": "blocking",
+      "notes": "agent-evaluator and ai-governance are deliberately spawnable by no delivery role. A change to this repository's own agents, hooks or policies is AP-10 work: the review is dispatched from the main session, not delegated down a line the change could itself alter."
+    }
+  ],
+  "rules": [
+    "The author never reviews its own change. If the routed reviewer is the authoring role, the review escalates to that role's owner chapter.",
+    "A blocking gate with an unresolved HIGH or CRITICAL finding stops the merge.",
+    "Advisory gates surface findings without blocking.",
+    "Reviewers read the diff and the linked requirement, story and architecture artifacts. A review that cannot name what the change is for is not a review."
+  ]
+}

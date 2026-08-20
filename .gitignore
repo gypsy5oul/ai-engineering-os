@@ -1,0 +1,10 @@
+# Local scratch and generated output only. This repository never stores secrets.
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+build/
+dist/
+reports/
+*.local.json
+*.local.yaml

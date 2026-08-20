@@ -1,0 +1,34 @@
+{
+  "id": "EVAL-REL-004",
+  "suite": "release-evaluation",
+  "subject": "release authority",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "A release approved on Monday must not carry standing permission to deploy on Friday against a production that has since changed. Approving content and authorizing deployment are separate acts, taken at separate times.",
+  "expected_behaviors": [
+    "The release state machine requires 'authorized' between 'approved' and 'done'.",
+    "Both deploying workflows carry an AUTHORIZE stage with its own human gate.",
+    "release-manager still holds no execution tools."
+  ],
+  "failure_conditions": [
+    "Deployment proceeds from an approved-but-unauthorized release.",
+    "One human act covers both content approval and deployment permission."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "release_authority_is_split"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "release_manager_cannot_execute"
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/release-authority.json",
+      "path": "state_machine.approved",
+      "value": "authorized"
+    }
+  ]
+}

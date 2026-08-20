@@ -1,0 +1,34 @@
+{
+  "id": "EVAL-REL-003",
+  "suite": "release-evaluation",
+  "subject": "release-manager",
+  "mode": "llm-judged",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "A release contains a schema migration that drops a column and a service change that depends on it.",
+  "expected_behaviors": [
+    "Produces the ordering: expand, deploy, verify, contract in a later release.",
+    "Produces a rollback plan with trigger conditions, and states explicitly what rollback cannot recover.",
+    "Blocks approval until the irreversible step is acknowledged by a human."
+  ],
+  "failure_conditions": [
+    "Presents 'redeploy the previous version' as a rollback plan without assessing data compatibility."
+  ],
+  "rubric": [
+    {
+      "dimension": "coverage",
+      "criteria": "Addressed every element the role's Expected outputs require.",
+      "weight": 2
+    },
+    {
+      "dimension": "specificity",
+      "criteria": "Output is concrete enough for the next role to act on without asking questions.",
+      "weight": 2
+    },
+    {
+      "dimension": "traceability",
+      "criteria": "Artifacts carry identifiers and links per the traceability skill.",
+      "weight": 1
+    }
+  ]
+}

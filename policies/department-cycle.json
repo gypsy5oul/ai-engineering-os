@@ -1,0 +1,217 @@
+{
+  "version": "1",
+  "description": "The Level 2 execution lifecycle that runs inside every macro SDLC stage. The macro workflow governs stage-to-stage progression; this governs task-to-task delegation, review and rework inside a department. A macro stage cannot advance until its department cycle reaches ACCEPTED. The department is run by agents; the human holds governance authority and is consulted at approval points, not at every rollup.",
+  "why_two_levels": {
+    "level_1": "Organizational SDLC. Product -> Architecture -> Development -> QA -> Security -> Release -> Operations. Governed by sdlc/workflows/, with entry criteria, artifacts, gates and cross-department failure paths.",
+    "level_2": "Department execution. head -> lead -> worker -> self-check -> peer review -> lead review -> rework -> acceptance -> rollup. Governed by sdlc/cycles/.",
+    "the_join": "A macro stage declares department_cycle: <name>. Its definition of done carries cycle_accepted(<name>), so the stage is complete only when the internal loop has closed."
+  },
+  "positions": {
+    "human_owner": {
+      "accountable_for": "Governance. The approval categories that name this role, and anything the head escalates.",
+      "staffed_by": "A named human from .ai-engineering/project.yaml under approval:.",
+      "sees": "Escalations from the head, and approval requests. Not routine rollups.",
+      "does_not_see": "Per-department rollups for work that completed normally, review rounds, or assignments.",
+      "note": "A human reading every rollup is running the department, not governing it."
+    },
+    "head": {
+      "accountable_for": "Whether the department has finished its work. Plans, delegates to the lead, receives the rollup, and REQUESTS acceptance.",
+      "staffed_by": "An agent holding a lead or orchestrator profile. engineering-director for most departments, because its role contract already covers sequencing and cross-department arbitration and it already holds the spawn authority for every cycle lead.",
+      "sees": "One rollup per work item set.",
+      "does_not_see": "Individual review comments, rework rounds, or self-validation results.",
+      "escalates_to": "human_owner, for governance decisions and for anything the department cannot resolve.",
+      "cannot": "Declare the cycle ACCEPTED. Acceptance is determined by the cycle's acceptance.conditions, evaluated by scripts/check_dod.py. A head that could accept by assertion would make every predicate advisory."
+    },
+    "lead": {
+      "accountable_for": "Decomposition, assignment, and the quality of the department's aggregate output. Produces the rollup.",
+      "reviews": "Architecture adherence, integration between streams, and whether the work meets the story rather than the ticket.",
+      "does_not_review": "Line-level code quality. That is the peer reviewer's job, and a lead doing it becomes the bottleneck."
+    },
+    "worker": {
+      "accountable_for": "One work item, implemented and self-validated before anyone else looks at it.",
+      "must": "Run the local gate itself. Submitting work that fails its own tests wastes a review cycle."
+    },
+    "peer_reviewer": {
+      "accountable_for": "Detailed correctness and quality of one work item.",
+      "constraint": "Must be a different agent from the worker, and must not be able to write the artifact under review. A reviewer that can edit becomes a second author.",
+      "routes": {
+        "minor": "back to the worker as CHANGES_REQUESTED",
+        "major": "to the lead, because it may affect other streams",
+        "architecture_issue": "ESCALATED out of the department",
+        "requirement_issue": "ESCALATED out of the department"
+      }
+    },
+    "specialist_reviewer": {
+      "accountable_for": "One dimension across the department's output, routed by policies/review-routing.json.",
+      "note": "Not every work item gets every specialist. Routing is by change signal."
+    }
+  },
+  "states": {
+    "ASSIGNED": "The work item has an owner and acceptance criteria. Nothing has started.",
+    "IN_PROGRESS": "The worker is executing.",
+    "SELF_VALIDATION": "The worker runs its own gate: tests, lint, types, and the acceptance criteria.",
+    "PEER_REVIEW": "A different agent reviews detail. Cannot edit.",
+    "LEAD_REVIEW": "The lead reviews adherence and integration, not line-level detail.",
+    "CHANGES_REQUESTED": "Findings returned to the worker with what would resolve each.",
+    "READY_FOR_INTEGRATION": "This item is accepted. The set is not complete until every item reaches this state.",
+    "ACCEPTED": "The whole assignment set passed. Terminal, and triggers the rollup.",
+    "WITHDRAWN": "The work item was dropped. Terminal, and deliberately not ACCEPTED: nothing about its acceptance conditions was evaluated.",
+    "ESCALATED": "The department cannot resolve this. Out to the escalation tree.",
+    "BLOCKED": "Waiting on something outside the department: an open decision, an environment, another department.",
+    "ACCEPTANCE_REQUESTED": "The head has asked for the cycle to be accepted. The definition of done has not yet been evaluated."
+  },
+  "terminal_states": [
+    "ACCEPTED",
+    "WITHDRAWN"
+  ],
+  "exit_states": [
+    "ACCEPTED",
+    "ESCALATED"
+  ],
+  "transitions": {
+    "ASSIGNED": {
+      "start": "IN_PROGRESS",
+      "blocked": "BLOCKED"
+    },
+    "IN_PROGRESS": {
+      "submit": "SELF_VALIDATION",
+      "blocked": "BLOCKED"
+    },
+    "SELF_VALIDATION": {
+      "pass": "PEER_REVIEW",
+      "fail": "IN_PROGRESS"
+    },
+    "PEER_REVIEW": {
+      "pass": "LEAD_REVIEW",
+      "minor": "CHANGES_REQUESTED",
+      "major": "LEAD_REVIEW",
+      "architecture_issue": "ESCALATED",
+      "requirement_issue": "ESCALATED"
+    },
+    "LEAD_REVIEW": {
+      "pass": "READY_FOR_INTEGRATION",
+      "changes_required": "CHANGES_REQUESTED",
+      "architecture_issue": "ESCALATED",
+      "cannot_resolve": "ESCALATED"
+    },
+    "CHANGES_REQUESTED": {
+      "resume": "IN_PROGRESS",
+      "limit_reached": "ESCALATED"
+    },
+    "READY_FOR_INTEGRATION": {
+      "set_complete": "ACCEPTANCE_REQUESTED",
+      "sibling_pending": "READY_FOR_INTEGRATION"
+    },
+    "ESCALATED": {
+      "resolved": "IN_PROGRESS",
+      "requirement_changed": "ASSIGNED",
+      "withdrawn": "WITHDRAWN"
+    },
+    "BLOCKED": {
+      "unblocked": "IN_PROGRESS",
+      "decision_open": "BLOCKED"
+    },
+    "ACCEPTANCE_REQUESTED": {
+      "dod_pass": "ACCEPTED",
+      "dod_fail": "CHANGES_REQUESTED",
+      "dod_requires_evidence": "BLOCKED"
+    }
+  },
+  "rework": {
+    "limit": 3,
+    "counted_from": "Each entry into CHANGES_REQUESTED for the same work item.",
+    "on_limit": "ESCALATED to the lead's own escalation target.",
+    "rationale": "A third rework round means the problem is not the implementation. Either the acceptance criteria are wrong, the design does not admit a clean answer, or the reviewer and worker disagree about something nobody has written down. Looping a fourth time hides that.",
+    "on_limit_transition": "CHANGES_REQUESTED --limit_reached--> ESCALATED. The limit had no edge expressing it, so a cycle that reached it could only keep round-tripping or be closed by editing the counter."
+  },
+  "escalation_tree": {
+    "description": "Who a problem goes to, in order. Each level tries first and passes up only what it cannot resolve.",
+    "order": [
+      "worker",
+      "peer_reviewer",
+      "lead",
+      "head",
+      "human_owner"
+    ],
+    "lateral": {
+      "architecture_issue": "solution-architect, which may in turn escalate to the architecture owner (AP-02)",
+      "requirement_issue": "product-manager, then requirements-analyst, and it may become a DEC",
+      "security_issue": "security-reviewer immediately, ahead of the department's own queue",
+      "environment_issue": "devops-engineer",
+      "operational_issue": "sre"
+    },
+    "rule": "A worker never escalates straight to the head, and the head reaches the human owner only for governance decisions or for what the department genuinely cannot resolve. An escalation that skipped the lead means the lead was not told about a problem in its own department; one that reaches the human for routine work means the head is not doing its job."
+  },
+  "rollup": {
+    "produced_by": "lead",
+    "consumed_by": "head (agent)",
+    "when": "On ACCEPTED, and on any ESCALATED that leaves the department.",
+    "shape": {
+      "work_item_set": "The story, epic or change the assignment set belongs to",
+      "status": "ACCEPTED | ESCALATED | IN_PROGRESS",
+      "streams": "Per stream: assignee, state, verdict",
+      "reviews": "Aggregate peer and specialist verdicts, not individual comments",
+      "open_findings": "Count by severity",
+      "rework_rounds": "Total, so a pattern is visible without reading every round",
+      "escalations": "What left the department and to whom",
+      "artifacts": "What was produced, by id",
+      "next_gate": "Which macro stage this unblocks"
+    },
+    "rationale": "A head that reads every review comment is doing the lead's job. A human that reads every rollup is doing the head's job, and the organization is no longer autonomous.",
+    "forwarded_to_human_when": [
+      "The status is ESCALATED.",
+      "An approval category in policies/approval-policy.json applies.",
+      "The head cannot decide whether the department is done."
+    ]
+  },
+  "invariants": [
+    "The peer reviewer is never the worker.",
+    "The peer reviewer cannot write the artifact under review.",
+    "Where the lead and the worker are the same agent, the peer reviewer must be a different agent, or the cycle has no independent check at all.",
+    "The head is never also a worker or the peer reviewer in its own department.",
+    "The human owner is never an agent, and never appears as head, lead, worker or peer reviewer.",
+    "A macro stage with a department_cycle cannot reach its definition of done without cycle_accepted().",
+    "ACCEPTED requires every item in the set to have reached READY_FOR_INTEGRATION.",
+    "An escalation records what was tried at each level below it.",
+    "Withdrawal is not acceptance. ESCALATED --withdrawn--> WITHDRAWN is terminal and records that the work item was dropped; it asserts nothing about the acceptance conditions. The edge previously led to ACCEPTED, which let a cancelled item satisfy a stage's definition of done without a single predicate being evaluated."
+  ],
+  "autonomy_principle": {
+    "statement": "The operational manager of a department is an agent. The human is the governance owner, not the departmental manager.",
+    "why": "Making the head a human puts a person in the middle of every departmental rollup, which defeats the point of an autonomous engineering organization. The human's authority is real and narrow: the approval categories in policies/approval-policy.json, plus anything the head escalates.",
+    "shape": [
+      "HUMAN OWNER      governance only. Approves what policy says needs a human. Receives escalations.",
+      "HEAD    (agent)  plans, delegates, receives the rollup, decides whether the department is done.",
+      "LEAD    (agent)  decomposes, assigns, reviews adherence and integration, produces the rollup.",
+      "WORKER  (agent)  executes one work item and validates it before anyone looks at it.",
+      "PEER    (agent)  reviews detail. Independent, and cannot write the artifact under review."
+    ],
+    "the_exception": "CYCLE-SEC keeps a human head. Placing the delivery-accountable agent above security would put schedule pressure in security's reporting line, which is the one thing security's independence exists to prevent. Stated here rather than left as an inconsistency.",
+    "head_staffing": {
+      "current": "engineering-director holds the head position for six departments. That is a consequence of department size - most have one to three workers - not a designed four-level hierarchy. The effective chain is: organization executive -> department lead -> workers.",
+      "not_this": "organization executive -> department head agent -> department lead -> worker, for every department. For a department of two, that layer manages nothing.",
+      "when_to_add_a_department_head": [
+        "The department has more than one lead, so somebody must arbitrate between them.",
+        "The department's rollups are frequent enough that the organization executive cannot read them alongside the others.",
+        "The department has an escalation path the organization executive should not sit on, as security already does.",
+        "In every case the four-part test in docs/organization-freeze.md applies first."
+      ],
+      "review_trigger": "Revisit when any department exceeds three workers or gains a second lead."
+    }
+  },
+  "acceptance_authority": {
+    "requested_by": "head",
+    "determined_by": "scripts/check_dod.py against the cycle's acceptance.conditions",
+    "rule": "The head initiates acceptance; the system determines it. A predicate that reports FAIL or REQUIRES-EVIDENCE keeps the cycle open regardless of anyone's opinion.",
+    "why": "Otherwise the machine-checkable definition of done is advisory, and the whole Level 2 contract reduces to an agent asserting that it finished."
+  },
+  "stage_engagement": {
+    "description": "A department's engagement can span several macro stages. Requiring the cycle to be ACCEPTED at the first of them is a contradiction: the work has barely started.",
+    "roles": {
+      "enters": "The department's work begins here. The cycle is opened, not closed.",
+      "continues": "More of the same department's work. The cycle stays open.",
+      "completes": "The department's work concludes here. cycle_accepted, cycle_rollup_reported and no_open_rework apply."
+    },
+    "rule": "Exactly one stage per workflow per cycle carries role 'completes'.",
+    "found_by": "scripts/simulate_sdlc.py, which ran WF-INCIDENT end to end and could not satisfy cycle_accepted(CYCLE-SRE) at the EVIDENCE stage - correctly, because SRE's work concludes at RCA."
+  }
+}

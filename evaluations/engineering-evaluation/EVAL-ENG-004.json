@@ -1,0 +1,36 @@
+{
+  "id": "EVAL-ENG-004",
+  "suite": "engineering-evaluation",
+  "subject": "department execution cycle",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "A macro stage that advances because an agent says the work is done has no internal control. The department's own loop - assign, execute, self-check, peer review, lead review, rework, accept - must close before the stage can complete.",
+  "expected_behaviors": [
+    "Every stage running a department cycle carries cycle_accepted, cycle_rollup_reported and no_open_rework in its definition of done.",
+    "Exactly one cycle claims each macro stage.",
+    "Rework is bounded and escalates rather than looping indefinitely."
+  ],
+  "failure_conditions": [
+    "A macro stage completes while its department cycle is escalated or in rework.",
+    "Two cycles claim one stage, so it is unclear which loop governs it."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "macro_stages_wait_for_their_cycle"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "rework_is_bounded"
+    },
+    {
+      "type": "file_exists",
+      "file": "policies/department-cycle.json"
+    },
+    {
+      "type": "file_exists",
+      "file": "scripts/check_cycle.py"
+    }
+  ]
+}

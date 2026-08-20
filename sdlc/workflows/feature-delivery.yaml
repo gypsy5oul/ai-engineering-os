@@ -1,0 +1,854 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-FEATURE
+name: Feature delivery
+version: 2.0.0
+description: The canonical lifecycle from business idea to production and back into the next cycle. Stages are skipped deliberately and the skip is recorded; they are never skipped silently. Every stage declares what must be true before it starts, what it produces, and a definition of done built from the predicates in policies/artifact-model.json.
+applies_when:
+  - A new capability or a material change to existing behaviour is requested.
+skip_when:
+  - The change is a defect fix; use WF-DEFECT.
+  - The change is a dependency upgrade only; use WF-DEPENDENCY.
+team_pattern: feature-engineering-team
+entry_conditions:
+  - A human has stated a business intent.
+  - The project configuration exists and validates, or WF-ONBOARDING has been run.
+exit_conditions:
+  - The change is running in production and post-deployment verification has passed.
+  - Every artifact carries traceability identifiers linking requirement to release.
+definition_of_done:
+  - artifact_status(REQ, approved)
+  - artifact_status(ARCH, approved)
+  - artifact_status(TP, approved)
+  - artifact_status(STORY, done)
+  - every_linked(REQ, TEST)
+  - every_linked(STORY, REQ)
+  - agent_verdict(architecture-reviewer, pass)
+  - agent_verdict(security-reviewer, pass)
+  - agent_verdict(qa-lead, pass)
+  - no_unresolved_findings(high)
+  - pipeline_passed(required)
+  - tests_pass(unit)
+  - tests_pass(integration)
+  - human_approval_recorded(AP-01)
+  - rollback_plan_or_acknowledged()
+  - no_blocking_open_decisions(all)
+  - release_authorized()
+  - human_identity_recorded(AP-01)
+  - no_open_blocking_decisions_for(ARCH)
+failure_paths:
+  - when: Requirements cannot be quantified
+    goto: REQ
+    note: Blocks architecture rather than proceeding on assumptions.
+  - when: Architecture review returns reject
+    goto: ARCH
+  - when: QA exit criteria are not met
+    goto: DEV
+  - when: Security review returns a HIGH or CRITICAL finding
+    goto: DEV
+    note: A security exception is a human decision (AP-04), not a developer decision.
+  - when: Post-deployment verification fails
+    goto: INC
+    note: Enter WF-INCIDENT; the rollback plan from RELEASE is the first option.
+stages:
+  - id: IDEA
+    name: Idea intake
+    owner: engineering-director
+    participants:
+      - product-manager
+    skills:
+      - sdlc-navigator
+    risk: LOW
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - A human has stated an intent in their own words.
+    actions:
+      - Choose the workflow and state which stages this change needs.
+      - Name the stages being skipped and why.
+    inputs:
+      - The request as stated
+      - Existing project artifacts
+    outputs:
+      - Stage plan
+      - Recorded skips
+    exit_criteria:
+      - The stage plan is stated
+      - Every skipped stage has a written reason
+    definition_of_done:
+      - skip_recorded(UX)
+      - config_valid()
+    emits:
+      - FEATURE_CREATED
+  - id: REQ
+    name: Requirement discovery and product analysis
+    owner: product-manager
+    participants:
+      - requirements-analyst
+      - qa-lead
+    skills:
+      - requirements-engineering
+      - traceability
+    risk: MEDIUM
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - A stage plan exists
+      - The project configuration validates
+      - The requester is reachable for questions
+    actions:
+      - Establish the business objective and the measure that proves it.
+      - Decompose into identified functional requirements with testable acceptance criteria.
+      - Quantify every material non-functional dimension, or raise it as a blocking open question.
+      - Record constraints, dependencies, assumptions, out-of-scope, risks and user journeys.
+    inputs:
+      - Business intent
+      - Existing product context
+      - Known constraints
+    outputs:
+      - PRD
+      - Functional requirements
+      - Quantified non-functional requirements
+      - Open questions
+    produces:
+      - REQ
+      - NFR
+    artifacts:
+      - docs/requirements/
+    exit_criteria:
+      - Every requirement has an identifier and a testable acceptance criterion
+      - Material non-functional requirements are quantified or listed as blocking open questions
+      - Out-of-scope is written down
+    definition_of_done:
+      - artifact_exists(REQ)
+      - artifact_status(REQ, approved)
+      - field_quantified(NFR, target)
+      - agent_verdict(qa-lead, pass)
+      - human_approval_recorded(none)
+      - required_fields_present(REQ)
+      - artifact_owned_by(REQ, requirements-analyst)
+      - no_open_blocking_decisions_for(REQ)
+      - cycle_accepted(CYCLE-PROD)
+      - cycle_rollup_reported(CYCLE-PROD)
+      - no_open_rework(CYCLE-PROD)
+    agent_gate:
+      reviewer: qa-lead
+      blocking: true
+      recorded_in: the requirements artifact
+      verdict:
+        - testable
+        - not-testable
+      purpose: "testability: are the acceptance criteria testable and the non-functional targets measurable. Not whether the requirement is the right one."
+    human_gate:
+      approver: requester
+      recorded_in: project-decision-log
+      decision:
+        - accept scope
+        - reject
+        - clarify
+      approver_role: requester
+    department_cycle: CYCLE-PROD
+    emits:
+      - REQUIREMENT_APPROVED
+    cycle_role: completes
+  - id: FEAS
+    name: Feasibility
+    owner: solution-architect
+    skills:
+      - architecture-design
+      - technology-selection
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Requirements are approved
+      - The approved technology configuration is available
+    actions:
+      - Assess the requirements against the approved stack.
+      - Where the stack does not cover the need, produce a technology-decision proposal rather than a design.
+    inputs:
+      - Approved requirements
+      - Approved technology configuration
+    outputs:
+      - Feasibility assessment
+      - Technology-decision proposal where required
+    produces:
+      - FEAS
+    exit_criteria:
+      - A go, no-go or conditional verdict exists with its conditions stated
+    definition_of_done:
+      - artifact_exists(FEAS)
+      - human_approval_recorded(AP-03)
+      - required_fields_present(FEAS)
+      - no_open_blocking_decisions_for(FEAS)
+    agent_gate:
+      reviewer: architecture-reviewer
+      blocking: true
+      recorded_in: the feasibility artifact
+      purpose: "feasibility completeness: every requirement assessed against the approved stack, and every gap named rather than deferred."
+    human_gate:
+      approver: engineering owner
+      recorded_in: project-decision-log
+      policy_ref: AP-03
+      approver_role: engineering-owner
+    optional_when:
+      - The change fits entirely inside an existing, proven design.
+    department_cycle: CYCLE-ARCH
+    cycle_role: enters
+  - id: ARCH
+    name: Architecture
+    owner: solution-architect
+    participants:
+      - security-architect
+      - sre
+      - architecture-reviewer
+    skills:
+      - architecture-design
+      - adr-management
+      - api-design
+      - database-design
+    risk: HIGH
+    complexity: novel
+    execution: team
+    entry_criteria:
+      - Requirements are approved and quantified
+      - Feasibility is go or conditional with conditions stated
+    actions:
+      - Produce the design the change actually needs, and say which artifacts are not being produced and why.
+      - Walk the failure modes for every dependency and boundary.
+      - Record every significant decision as an ADR with real alternatives.
+      - A team is used because security, operability and design must challenge each other rather than review in sequence.
+    inputs:
+      - Approved requirements
+      - Feasibility verdict
+      - Existing architecture and ADRs
+      - Threat model where one exists
+    outputs:
+      - HLD
+      - LLD for touched components
+      - API contracts
+      - Data model
+      - Deployment model
+      - ADRs
+      - Risk register
+    produces:
+      - ARCH
+      - ADR
+      - SEC
+    artifacts:
+      - docs/architecture/
+      - docs/adrs/
+      - docs/security/
+    exit_criteria:
+      - Every approved requirement maps to a component that satisfies it
+      - Every significant decision has an ADR
+      - Failure modes are stated, not only the happy path
+    definition_of_done:
+      - artifact_exists(ARCH)
+      - every_linked(REQ, ARCH)
+      - artifact_status(ADR, accepted)
+      - agent_verdict(architecture-reviewer, pass)
+      - human_approval_recorded(AP-02)
+      - no_unresolved_findings(major)
+      - required_fields_present(ARCH)
+      - artifact_owned_by(ARCH, solution-architect)
+      - no_open_blocking_decisions_for(ARCH)
+      - cycle_accepted(CYCLE-ARCH)
+      - cycle_rollup_reported(CYCLE-ARCH)
+      - no_open_rework(CYCLE-ARCH)
+    agent_gate:
+      reviewer: architecture-reviewer
+      blocking: true
+      recorded_in: the architecture artifact
+      verdict:
+        - approve
+        - approve-with-conditions
+        - reject
+      purpose: "requirement coverage and non-functional fitness: every approved requirement maps to a component, and every quantified target has a named mechanism."
+    human_gate:
+      approver: architecture owner
+      recorded_in: project-decision-log
+      policy_ref: AP-02
+      approver_role: architecture-owner
+    team_requirement: TEAM_PREFERRED
+    degraded_mode:
+      fallback: subagent
+      guarantees_lost:
+        - Security, operability and design review sequentially instead of challenging each other, so a trade-off one discipline would have contested can pass unexamined.
+        - The design is reviewed after it is written rather than while it is forming.
+      requires_human_acknowledgement: false
+    coupled_artifacts:
+      - api-contract
+      - database-schema
+      - event-schema
+    department_cycle: CYCLE-ARCH
+    emits:
+      - ARCHITECTURE_APPROVED
+      - ARCHITECTURE_REJECTED
+      - ARCHITECTURE_STARTED
+    cycle_role: completes
+  - id: UX
+    name: UX and design
+    owner: ux-designer
+    skills:
+      - frontend-development
+      - requirements-engineering
+    risk: LOW
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - The change has a user-facing surface
+      - Requirements include user journeys
+    actions:
+      - Specify screens, states and interactions, including the states nobody demonstrates.
+      - State accessibility criteria as testable acceptance criteria.
+    inputs:
+      - PRD user journeys
+      - Design system
+      - Existing UI
+    outputs:
+      - Personas and journeys
+      - Screen and state specifications
+      - Accessibility criteria
+      - Frontend contract
+    produces:
+      - DES
+    artifacts:
+      - docs/design/
+    exit_criteria:
+      - Every screen has its non-happy states specified
+      - Accessibility criteria are testable
+    definition_of_done:
+      - artifact_exists(DES)
+      - agent_verdict(product-manager, pass)
+      - required_fields_present(DES)
+    agent_gate:
+      reviewer: product-manager
+      blocking: true
+      recorded_in: the design artifact
+      purpose: "specification completeness: every state and every accessibility criterion is present and testable."
+    optional_when:
+      - The change has no user-facing surface.
+    parallel_with:
+      - ARCH
+  - id: STORY
+    name: Story decomposition
+    owner: development-lead
+    skills:
+      - story-decomposition
+      - traceability
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - Architecture review verdict is approve or approve-with-conditions
+      - UX contract exists where the change is user-facing
+    actions:
+      - Decompose into stories that one role can finish and another can verify.
+      - Assign owned paths so parallel stories cannot collide.
+    inputs:
+      - Reviewed architecture
+      - UX contract
+      - Approved requirements
+    outputs:
+      - Epics
+      - Stories with acceptance criteria and definition of done
+      - Execution order
+      - Review routing
+    produces:
+      - EPIC
+      - STORY
+    artifacts:
+      - docs/stories/
+    exit_criteria:
+      - Every story traces to a requirement
+      - Parallel stories own disjoint paths
+      - Every story has a definition of done
+    definition_of_done:
+      - artifact_exists(STORY)
+      - every_linked(STORY, REQ)
+      - agent_verdict(qa-lead, pass)
+      - required_fields_present(STORY)
+    agent_gate:
+      reviewer: qa-lead
+      blocking: true
+      recorded_in: the story set
+      purpose: "testability: can each story's acceptance criteria be verified as written."
+    coupled_artifacts:
+      - api-contract
+      - database-schema
+    emits:
+      - STORY_CREATED
+  - id: QADESIGN
+    name: QA test design
+    owner: qa-lead
+    participants:
+      - test-reviewer
+    skills:
+      - test-design
+      - traceability
+    risk: MEDIUM
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Stories exist with acceptance criteria
+      - The architecture risk register exists
+      - No implementation has begun for the stories in scope
+    actions:
+      - Derive scenarios from requirements, acceptance criteria and architectural risk.
+      - "Design before the code exists: tests designed after reading the implementation test what the code does."
+    inputs:
+      - Approved requirements
+      - Reviewed architecture and its risks
+      - Stories
+    outputs:
+      - Test strategy
+      - Scenarios mapped to criteria and risks
+      - Automation strategy
+      - QA exit criteria
+    produces:
+      - TP
+      - TEST
+    artifacts:
+      - docs/test-plans/
+    exit_criteria:
+      - Every acceptance criterion maps to at least one scenario
+      - Every HIGH architectural risk maps to a scenario
+      - Uncovered areas are listed with reasons
+    definition_of_done:
+      - artifact_exists(TP)
+      - every_linked(REQ, TP)
+      - agent_verdict(test-reviewer, pass)
+      - required_fields_present(TP)
+    agent_gate:
+      reviewer: test-reviewer
+      blocking: true
+      recorded_in: the test plan
+      purpose: "coverage: every acceptance criterion and every HIGH architectural risk maps to a scenario, and the gaps are named."
+    department_cycle: CYCLE-QA
+    emits:
+      - QA_PLAN_APPROVED
+    cycle_role: enters
+  - id: DEV
+    name: Development
+    owner: development-lead
+    participants:
+      - backend-developer
+      - frontend-developer
+      - data-engineer
+      - qa-engineer
+    skills:
+      - backend-development
+      - frontend-development
+      - git-workflow
+      - test-automation
+    risk: MEDIUM
+    complexity: complex
+    execution: team
+    entry_criteria:
+      - Stories are assigned with acceptance criteria
+      - The QA test baseline is approved
+      - The approved technology configuration covers everything the stories need
+    actions:
+      - Implement each story inside the approved design and prove it with tests.
+      - A team is used only where stories own disjoint paths; otherwise the stories run sequentially in one session.
+    inputs:
+      - Assigned stories
+      - Reviewed architecture
+      - Test baseline
+      - Approved technology configuration
+    outputs:
+      - Implementation on feature branches
+      - Tests
+      - Merge requests with traceability
+    exit_criteria:
+      - Acceptance criteria demonstrably met by tests
+      - Build, tests, lint and static analysis pass
+    definition_of_done:
+      - tests_pass(unit)
+      - tests_pass(integration)
+      - every_linked(STORY, TEST)
+      - artifact_status(STORY, done)
+      - cycle_accepted(CYCLE-DEV)
+      - cycle_rollup_reported(CYCLE-DEV)
+      - no_open_rework(CYCLE-DEV)
+    team_requirement: TEAM_OPTIONAL
+    degraded_mode:
+      fallback: inline
+      guarantees_lost:
+        - Parallelism only. A single session implements the same stories sequentially with identical guarantees, just slower.
+      requires_human_acknowledgement: false
+    coupled_artifacts:
+      - api-contract
+      - database-schema
+      - deployment-manifest
+      - event-schema
+      - shared-configuration
+    department_cycle: CYCLE-DEV
+    emits:
+      - DEVELOPMENT_COMPLETED
+      - DEVELOPMENT_STARTED
+    cycle_role: completes
+  - id: REVIEW
+    name: Code review
+    owner: code-reviewer
+    participants:
+      - security-reviewer
+      - architecture-reviewer
+      - performance-reviewer
+      - reliability-reviewer
+      - dependency-reviewer
+      - test-reviewer
+    skills:
+      - code-review
+      - security-review
+    risk: MEDIUM
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - A merge request exists
+      - CI has run at least once
+      - The change links to a story
+    actions:
+      - Route the change to the reviewers it needs, per policies/review-routing.json.
+      - Each reviewer produces an agent verdict. None of them approves the merge.
+    inputs:
+      - Merge request diff
+      - Linked story and architecture
+    outputs:
+      - Findings with severity
+      - Reviewer verdicts
+      - Human merge approval
+    produces:
+      - REVIEW
+    exit_criteria:
+      - Every routed reviewer has returned a verdict
+      - No unresolved HIGH or CRITICAL finding
+    definition_of_done:
+      - agent_verdict(code-reviewer, pass)
+      - no_unresolved_findings(high)
+      - human_approval_recorded(AP-09)
+      - cycle_accepted(CYCLE-SEC)
+      - cycle_rollup_reported(CYCLE-SEC)
+      - no_open_rework(CYCLE-SEC)
+    agent_gate:
+      reviewer: routed reviewers per policies/review-routing.json
+      blocking: true
+      recorded_in: the merge request
+      purpose: defect detection across the routed dimensions. The verdict blocks; it does not approve the merge.
+    human_gate:
+      approver: a human other than the author
+      recorded_in: gitlab-merge-request-approval
+      policy_ref: AP-09
+      decision:
+        - approve
+        - request-changes
+      approver_role: merge-approver
+    department_cycle: CYCLE-SEC
+    emits:
+      - CODE_REVIEW_COMPLETED
+      - CODE_REVIEW_STARTED
+    cycle_role: completes
+  - id: CI
+    name: Continuous integration
+    owner: devops-engineer
+    skills:
+      - ci-cd
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - A merge request exists
+    actions:
+      - Run the required pipeline stages on the merge commit.
+    inputs:
+      - Merge request
+    outputs:
+      - Pipeline result
+      - Artifacts traceable to a commit
+    exit_criteria:
+      - All required pipeline stages pass on the merge commit
+    definition_of_done:
+      - pipeline_passed(required)
+    department_cycle: CYCLE-DEVOPS
+    emits:
+      - CI_FAILED
+    cycle_role: enters
+  - id: QA
+    name: QA execution
+    owner: qa-lead
+    participants:
+      - qa-engineer
+      - performance-reviewer
+    skills:
+      - test-automation
+      - performance-engineering
+    risk: MEDIUM
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - The change is merged
+      - The test environment matches the strategy
+      - The approved scenarios are implemented
+    actions:
+      - Execute the scenarios and record results with evidence.
+      - Raise defects that are reproducible from their record alone.
+    inputs:
+      - Merged change
+      - Test scenarios
+      - Test environment
+    outputs:
+      - Execution results with evidence
+      - Defects
+      - QA verdict
+      - Residual risk
+    produces:
+      - TESTREPORT
+    exit_criteria:
+      - QA exit criteria met, or residual risk explicitly accepted by a named human
+    definition_of_done:
+      - artifact_exists(TESTREPORT)
+      - tests_pass(e2e)
+      - agent_verdict(test-reviewer, pass)
+      - no_unresolved_findings(high)
+      - cycle_accepted(CYCLE-QA)
+      - cycle_rollup_reported(CYCLE-QA)
+      - no_open_rework(CYCLE-QA)
+    agent_gate:
+      reviewer: test-reviewer
+      blocking: true
+      recorded_in: the test report
+      purpose: "coverage and evidence quality: were the approved scenarios actually executed, and is the evidence sufficient."
+    human_gate:
+      approver: QA owner
+      recorded_in: project-decision-log
+      decision:
+        - accept residual risk
+        - reject
+      approver_role: qa-owner
+    department_cycle: CYCLE-QA
+    emits:
+      - QA_COMPLETED
+      - QA_STARTED
+    cycle_role: completes
+  - id: RELEASE
+    name: Release planning and approval
+    owner: release-manager
+    participants:
+      - sre
+      - security-reviewer
+    skills:
+      - release-management
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Every change in scope is merged
+      - QA and security verdicts exist for every change
+      - Migration plans exist for every schema change
+    actions:
+      - Assemble the change set and find the interactions individual review cannot see.
+      - Produce the rollback plan before approval is sought, not after something goes wrong.
+    inputs:
+      - Merged change set
+      - Gate verdicts
+      - Migration plan
+      - Deployment mechanics
+    outputs:
+      - Release plan
+      - Migration and rollback plan
+      - Validation plan
+      - Release notes
+      - Approval request
+    produces:
+      - REL
+    artifacts:
+      - docs/release/
+    exit_criteria:
+      - Every gate has a recorded verdict
+      - A rollback plan exists, or irreversibility is acknowledged by a human
+    definition_of_done:
+      - artifact_exists(REL)
+      - rollback_plan_or_acknowledged()
+      - human_approval_recorded(AP-01)
+      - required_fields_present(REL)
+    agent_gate:
+      reviewer: sre
+      blocking: true
+      recorded_in: the release plan
+      purpose: "operational readiness: is the rollback plan real, and are the trigger conditions measurable."
+    human_gate:
+      approver: named release approver
+      recorded_in: gitlab-release
+      policy_ref: AP-01
+      decision:
+        - approve
+        - approve-with-conditions
+        - hold
+      approver_role: release-approver
+  - id: AUTHORIZE
+    name: Production deployment authorization
+    owner: release-manager
+    risk: CRITICAL
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The release artifact is in state 'approved'
+      - The change window, if the project declares one, is open
+      - Production is in a state the release assumed
+    actions:
+      - Approving the CONTENT and permitting the DEPLOYMENT are separate acts. This stage is the second one, taken now rather than inherited from a decision made days ago.
+      - Confirm nothing has changed since approval that invalidates the rollback plan.
+    inputs:
+      - Approved release artifact
+      - Current production state
+    outputs:
+      - Deployment authorization recorded against the release
+    exit_criteria:
+      - The release artifact is in state 'authorized'
+      - The authorization names the human who gave it and when
+    definition_of_done:
+      - release_authorized()
+      - human_approval_recorded(AP-01)
+      - human_identity_recorded(AP-01)
+    human_gate:
+      approver: named release approver
+      approver_role: release-approver
+      policy_ref: AP-01
+      recorded_in: gitlab-release
+      decision:
+        - authorize
+        - hold
+        - withdraw approval
+  - id: DEPLOY
+    name: Deployment
+    owner: devops-engineer
+    skills:
+      - ci-cd
+    risk: HIGH
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The release artifact is in state 'authorized'
+      - The rollback path has been tested
+    actions:
+      - Deploy the artifact that was tested. Never rebuild for production.
+    inputs:
+      - Approved release
+      - Deployment mechanics
+    outputs:
+      - Deployed release
+      - Deployment record
+    exit_criteria:
+      - Deployment completed and health-gated
+      - Rollback remains available
+    definition_of_done:
+      - release_authorized()
+      - human_approval_recorded(AP-01)
+      - cycle_accepted(CYCLE-DEVOPS)
+      - cycle_rollup_reported(CYCLE-DEVOPS)
+      - no_open_rework(CYCLE-DEVOPS)
+    human_gate:
+      approver: named release approver
+      recorded_in: gitlab-release
+      policy_ref: AP-01
+      approver_role: release-approver
+    coupled_artifacts:
+      - deployment-manifest
+    department_cycle: CYCLE-DEVOPS
+    cycle_role: completes
+  - id: VERIFY
+    name: Post-deployment verification
+    owner: release-manager
+    participants:
+      - sre
+      - qa-engineer
+    skills:
+      - observability
+      - release-management
+    risk: HIGH
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The release is deployed
+      - A production verification plan exists
+    actions:
+      - Execute the verification plan within the stated window and record the result.
+      - "Verification nobody performs is worse than none: it creates false confidence."
+    inputs:
+      - Production verification plan
+    outputs:
+      - Verification record
+    exit_criteria:
+      - Verification executed and recorded
+      - Any deviation raised as an incident
+    definition_of_done:
+      - artifact_exists(REL)
+      - no_unresolved_findings(high)
+      - required_fields_present(REL)
+    department_cycle: CYCLE-SRE
+    cycle_role: enters
+  - id: OPS
+    name: Operations and feedback
+    owner: sre
+    skills:
+      - observability
+      - incident-management
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The change is running in production
+    actions:
+      - Observe SLOs and alert quality against the change's new failure modes.
+    inputs:
+      - Running system
+      - SLOs
+      - Alerts
+    outputs:
+      - Operational signal
+      - Incidents
+      - Improvement items
+    exit_criteria:
+      - SLOs observed
+      - Alerts actionable
+    definition_of_done:
+      - no_unresolved_findings(high)
+      - cycle_accepted(CYCLE-SRE)
+      - cycle_rollup_reported(CYCLE-SRE)
+      - no_open_rework(CYCLE-SRE)
+    department_cycle: CYCLE-SRE
+    cycle_role: completes
+  - id: INC
+    name: Incident and RCA feedback
+    owner: incident-commander
+    participants:
+      - rca-analyst
+    skills:
+      - incident-management
+      - root-cause-analysis
+    risk: HIGH
+    complexity: novel
+    execution: inline
+    entry_criteria:
+      - An incident occurred against this change
+    actions:
+      - Hand off to WF-INCIDENT, which forms the incident-response team. This stage exists so the feature workflow closes the loop rather than ending at deployment.
+    inputs:
+      - Alerts or reports
+    outputs:
+      - Incident record
+      - RCA
+      - Typed follow-up items
+    produces:
+      - INC
+      - RCA
+    exit_criteria:
+      - Follow-up items typed and owned
+      - Feeding the next cycle
+    definition_of_done:
+      - artifact_exists(RCA)
+      - every_linked(RCA, DEF)
+    optional_when:
+      - No incident occurred.

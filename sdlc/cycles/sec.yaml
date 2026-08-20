@@ -1,0 +1,129 @@
+# Generated against schemas/department-cycle.schema.json.
+# The generic contract is policies/department-cycle.json; this instantiates it.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: CYCLE-SEC
+name: Security execution
+version: 1.0.0
+department: security
+description: Finding to resolved or accepted. Workers peer-review each other because there is no third security reader; the architect reviews the aggregate. A HIGH or CRITICAL finding blocks the release regardless of where the cycle has reached. Security participates in architecture as a specialist reviewer inside CYCLE-ARCH rather than owning that stage.
+used_by_stages:
+  - WF-FEATURE/REVIEW
+  - WF-DEPENDENCY/SECURITY
+  - WF-AGENT-CHANGE/SECURITY
+work_item:
+  kind: security finding or control
+  artifact: SEC
+  acceptance_source: the threat model's controls and the project's stated security requirements
+positions:
+  human_owner:
+    role: security-owner
+    authority:
+      - AP-04 security exceptions
+      - Release blocks on HIGH or CRITICAL findings
+      - AP-08 credential and key changes
+    receives: escalations-and-approvals
+  head:
+    kind: human
+    role: security-owner
+    receives: rollup
+    human_exception_reason: Placing the delivery-accountable agent above security would put schedule pressure in security's reporting line, which is the one thing security's independence exists to prevent. Security reports to its human owner directly.
+    authority:
+      - Plan and delegate the department's work
+      - Request acceptance once every item reaches READY_FOR_INTEGRATION
+      - Escalate to the human owner what the department cannot resolve
+  lead: security-architect
+  workers:
+    - security-reviewer
+    - dependency-reviewer
+  peer_reviewer: mutual
+states:
+  - ASSIGNED
+  - IN_PROGRESS
+  - SELF_VALIDATION
+  - PEER_REVIEW
+  - LEAD_REVIEW
+  - CHANGES_REQUESTED
+  - READY_FOR_INTEGRATION
+  - ACCEPTANCE_REQUESTED
+  - ACCEPTED
+  - WITHDRAWN
+  - ESCALATED
+  - BLOCKED
+  - RELEASE_BLOCKED
+transitions:
+  ASSIGNED:
+    start: IN_PROGRESS
+    blocked: BLOCKED
+  IN_PROGRESS:
+    submit: SELF_VALIDATION
+    blocked: BLOCKED
+  SELF_VALIDATION:
+    pass: PEER_REVIEW
+    fail: IN_PROGRESS
+  PEER_REVIEW:
+    pass: LEAD_REVIEW
+    minor: CHANGES_REQUESTED
+    major: LEAD_REVIEW
+    architecture_issue: ESCALATED
+    requirement_issue: ESCALATED
+    critical_finding: RELEASE_BLOCKED
+  LEAD_REVIEW:
+    pass: READY_FOR_INTEGRATION
+    changes_required: CHANGES_REQUESTED
+    architecture_issue: ESCALATED
+    cannot_resolve: ESCALATED
+    critical_finding: RELEASE_BLOCKED
+  CHANGES_REQUESTED:
+    resume: IN_PROGRESS
+    limit_reached: ESCALATED
+  READY_FOR_INTEGRATION:
+    set_complete: ACCEPTANCE_REQUESTED
+    sibling_pending: READY_FOR_INTEGRATION
+  ESCALATED:
+    resolved: IN_PROGRESS
+    requirement_changed: ASSIGNED
+    withdrawn: WITHDRAWN
+  BLOCKED:
+    unblocked: IN_PROGRESS
+    decision_open: BLOCKED
+  RELEASE_BLOCKED:
+    remediated: PEER_REVIEW
+    exception_granted: ACCEPTANCE_REQUESTED
+  ACCEPTANCE_REQUESTED:
+    dod_pass: ACCEPTED
+    dod_fail: CHANGES_REQUESTED
+    dod_requires_evidence: BLOCKED
+rework:
+  limit: 3
+  on_limit: Escalate to security-architect, then the security owner. A third round means the acceptance criteria, the design or an unwritten disagreement is the problem, not the implementation.
+escalation:
+  order:
+    - worker
+    - peer_reviewer
+    - lead
+    - head
+    - human_owner
+  lateral:
+    architecture_issue: solution-architect
+    requirement_issue: product-manager
+rollup:
+  produced_by: security-architect
+  consumed_by: security-owner
+  fields:
+    - work_item_set
+    - status
+    - streams
+    - reviews
+    - open_findings
+    - rework_rounds
+    - escalations
+    - artifacts
+    - next_gate
+acceptance:
+  conditions:
+    - agent_verdict(security-reviewer, pass)
+    - no_unresolved_findings(high)
+    - artifact_exists(SEC)
+  requested_by: head
+  determined_by: scripts/check_dod.py against acceptance.conditions

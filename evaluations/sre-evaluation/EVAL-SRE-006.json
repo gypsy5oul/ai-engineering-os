@@ -1,0 +1,29 @@
+{
+  "id": "EVAL-SRE-006",
+  "suite": "sre-evaluation",
+  "subject": "incident investigation execution",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "One agent producing four viewpoints is not four independent agents. A novel incident and a suspected security compromise both need parallel, adversarial investigation, and the fallback must not pretend otherwise.",
+  "expected_behaviors": [
+    "INVESTIGATE is TEAM_REQUIRED, unconditionally.",
+    "Its degraded mode escalates, or requires human acknowledgement of what is lost.",
+    "The guarantees lost are written down rather than assumed away."
+  ],
+  "failure_conditions": [
+    "Investigation silently falls back to a single agent.",
+    "The requirement is downgraded to PREFERRED."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "incident_investigation_requires_a_team"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/incident-response.yaml",
+      "pattern": "TEAM_REQUIRED"
+    }
+  ]
+}

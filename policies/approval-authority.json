@@ -1,0 +1,41 @@
+{
+  "version": "1",
+  "description": "The distinction between an agent verdict and a human approval. Conflating them is the failure mode that makes an AI organization look governed while governing nothing.",
+  "kinds": {
+    "agent_gate": {
+      "produced_by": "an AI reviewer that did not author the artifact",
+      "can_block": true,
+      "can_approve_on_behalf_of_the_organization": false,
+      "durable": false,
+      "recorded_in": "the merge request or the change record, as a verdict",
+      "meaning": "Independent AI review found, or did not find, defects. Evidence for a human, not a substitute for one."
+    },
+    "human_gate": {
+      "produced_by": "a named human",
+      "can_block": true,
+      "can_approve_on_behalf_of_the_organization": true,
+      "durable": true,
+      "recorded_in": "GitLab merge request approval, GitLab release, or the project decision log",
+      "meaning": "The organization has accepted the consequences."
+    }
+  },
+  "invariants": [
+    "An agent gate NEVER satisfies a human gate. A stage that needs both needs both.",
+    "No agent approves its own output, and no agent approves another agent's output on the organization's behalf.",
+    "An in-session hook escalation is a human decision about ONE tool call. It is not a durable approval and does not carry to the next call or the next session.",
+    "An agent-team lead approving a teammate's plan is an AGENT gate. Claude Code lets the lead grant plan approval without asking the operator, so it must never be recorded against an AP-nn item.",
+    "Where a human gate exists, the recorded_in field says where the decision durably lives. If it lives only in a transcript, it did not happen."
+  ],
+  "team_lead_plan_approval": {
+    "what_it_is": "Claude Code agent teams let the lead approve or reject a teammate's plan before the teammate leaves plan mode. The lead decides autonomously.",
+    "classification": "agent_gate",
+    "may_satisfy": ["a stage's agent_gate, where the lead is not the stage owner"],
+    "may_never_satisfy": ["any human_gate", "any AP-nn approval category"],
+    "operator_control": "The operator influences it only through the criteria given in the spawn prompt."
+  },
+  "escalation_vs_approval": {
+    "hook_escalate": "PreToolUse returns permissionDecision 'escalate'. The operator answers one prompt about one tool call.",
+    "not_an_approval": "It creates no record, binds no later action and survives no session. Durable approval is a GitLab artifact.",
+    "why_it_matters": "Treating a permission prompt as an AP-01 production approval would mean production deployment was approved by whoever happened to be at the keyboard, with no record of what they approved."
+  }
+}

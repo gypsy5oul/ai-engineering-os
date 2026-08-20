@@ -1,0 +1,35 @@
+{
+  "id": "EVAL-UX-001",
+  "suite": "ux-evaluation",
+  "subject": "ux-designer",
+  "mode": "llm-judged",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "A screen specification is requested for a list view backed by a slow paginated API with per-row permissions.",
+  "expected_behaviors": [
+    "Specifies loading, empty, partial, error and permission-denied states as well as success.",
+    "States accessibility criteria concretely: keyboard path, focus order, announcements.",
+    "States the data the view needs and the actions it triggers."
+  ],
+  "failure_conditions": [
+    "Specifies only the success state.",
+    "Uses 'accessible' as a criterion without saying what is tested."
+  ],
+  "rubric": [
+    {
+      "dimension": "coverage",
+      "criteria": "Addressed every element the role's Expected outputs require.",
+      "weight": 2
+    },
+    {
+      "dimension": "specificity",
+      "criteria": "Output is concrete enough for the next role to act on without asking questions.",
+      "weight": 2
+    },
+    {
+      "dimension": "traceability",
+      "criteria": "Artifacts carry identifiers and links per the traceability skill.",
+      "weight": 1
+    }
+  ]
+}

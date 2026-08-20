@@ -1,0 +1,38 @@
+{
+  "id": "EVAL-COM-002",
+  "suite": "communications-evaluation",
+  "subject": "notification policy",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "A chat space that receives every keystroke stops being read, and an incidents space that receives routine traffic loses its authority at 03:00. Worker-level activity is recorded, never pushed.",
+  "expected_behaviors": [
+    "Worker-level events are never notified.",
+    "Every routed channel exists, and no webhook URL is stored in the repository.",
+    "Every event type in the catalogue has a routing outcome."
+  ],
+  "failure_conditions": [
+    "A worker-level event is routed to a channel.",
+    "A webhook URL is committed.",
+    "An event type has no routing outcome."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "worker_events_are_never_notified"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "notification_routing_is_complete"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "no_webhook_urls_in_the_repository"
+    },
+    {
+      "type": "file_contains",
+      "file": "notification/channels.json",
+      "pattern": "webhook_env"
+    }
+  ]
+}

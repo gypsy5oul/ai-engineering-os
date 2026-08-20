@@ -1,0 +1,17 @@
+{
+  "_comment": "Optional. Place at .ai-engineering/security.json. Project overrides for the command guards. Overrides are additive: tightening is free, loosening requires a justification and an expiry and is reported every time it is used.",
+  "protected_branches": ["main", "release/*", "integration"],
+  "extra_protected_paths": ["config/production/**", "partners/**"],
+  "extra_deny_patterns": [
+    "\\bpartner-export\\b.*--all",
+    "\\bsftp-admin\\b.*\\bdelete-account\\b"
+  ],
+  "production_markers": ["prod", "prd", "production", "live", "eu1", "us1"],
+  "allow_rule_ids": [
+    {
+      "id": "SEC-02",
+      "justification": "The build system requires printenv in a sandboxed container with no injected secrets. Reviewed by the security chapter.",
+      "expires": "2026-06-30"
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SDLC event",
+  "description": "A structured event emitted by the SDLC. The notification subsystem consumes these; it never polls, and it is never the event source. Events are facts about the past, named in the past tense. correlation_id ties every event about one change together, which is what makes a feature thread and an audit trail reconstructable.",
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "at",
+    "project",
+    "source",
+    "level",
+    "subject",
+    "category",
+    "actor_type",
+    "correlation_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^EVT-[0-9]{8}-[0-9]{6}-[a-z0-9]{4}$",
+      "description": "EVT-YYYYMMDD-HHMMSS-nnnn. Stable, so a duplicate delivery is detectable."
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z_]+$"
+    },
+    "at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T[0-9:]{8}Z$"
+    },
+    "project": {
+      "type": "string"
+    },
+    "source": {
+      "type": "object",
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "workflow-stage",
+            "department-cycle",
+            "gitlab",
+            "guard",
+            "human",
+            "schedule"
+          ]
+        },
+        "workflow": {
+          "type": "string"
+        },
+        "stage": {
+          "type": "string"
+        },
+        "cycle": {
+          "type": "string"
+        },
+        "agent": {
+          "type": "string"
+        }
+      }
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "worker",
+        "team",
+        "department",
+        "organization",
+        "incident"
+      ],
+      "description": "Mirrors the SDLC hierarchy. Worker-level events are recorded and, by default, not notified."
+    },
+    "subject": {
+      "type": "string",
+      "description": "The artifact or work item this is about. Also the default thread key."
+    },
+    "actor": {
+      "type": "string",
+      "description": "The agent or human role that caused it. Never a person's name for a worker-level event."
+    },
+    "correlates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Related artifact ids, so a feature's whole timeline can be reconstructed."
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Facts only. No prose, no formatting, no recipient list. Routing is the policy engine's job and wording is the agent's."
+    },
+    "supersedes": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "lifecycle",
+        "task",
+        "review",
+        "quality",
+        "security",
+        "release",
+        "deployment",
+        "incident",
+        "governance",
+        "communication"
+      ],
+      "description": "Coarse grouping for audit queries and for digest sections."
+    },
+    "actor_type": {
+      "type": "string",
+      "enum": [
+        "agent",
+        "human",
+        "system"
+      ],
+      "description": "What kind of actor caused it. A human actor is a role, never a person's name."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "low",
+        "normal",
+        "high",
+        "critical"
+      ],
+      "description": "The event's own severity, independent of the routing priority the policy assigns."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "started",
+        "in-progress",
+        "passed",
+        "failed",
+        "blocked",
+        "approved",
+        "rejected",
+        "completed",
+        "escalated"
+      ],
+      "description": "Where the thing this event is about now stands."
+    },
+    "correlation_id": {
+      "type": "string",
+      "description": "Ties every event about one change together across workflows: the feature id usually, the incident id during an incident. This is what makes a feature thread and an audit trail reconstructable."
+    },
+    "artifact": {
+      "type": "string",
+      "description": "The artifact id this event concerns, where it differs from subject."
+    },
+    "stage": {
+      "type": "string",
+      "description": "Macro stage id, denormalised from source for querying."
+    },
+    "cycle": {
+      "type": "string",
+      "pattern": "^CYCLE-[A-Z0-9-]+$",
+      "description": "Department cycle id, denormalised from source for querying."
+    }
+  }
+}

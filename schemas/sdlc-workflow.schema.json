@@ -1,0 +1,370 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SDLC workflow definition",
+  "description": "Machine-readable definition of one lifecycle workflow. These files are read by the sdlc-navigator skill and by validation; Claude Code has no native workflow primitive, so they inform agents rather than execute themselves. See docs/sdlc.md.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "entry_conditions",
+    "stages",
+    "exit_conditions",
+    "definition_of_done"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^WF-[A-Z0-9-]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "description": {
+      "type": "string"
+    },
+    "applies_when": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "skip_when": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "team_pattern": {
+      "type": "string",
+      "description": "Name of a pattern in skills/team-patterns, or 'single-agent'."
+    },
+    "entry_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "exit_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "failure_paths": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "when",
+          "goto"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "when": {
+            "type": "string"
+          },
+          "goto": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "stages": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "entry_criteria",
+          "inputs",
+          "outputs",
+          "exit_criteria",
+          "definition_of_done",
+          "risk",
+          "execution"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Z0-9-]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string",
+            "description": "Agent name that owns the stage."
+          },
+          "participants": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "inputs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "outputs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "exit_criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "optional_when": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "parallel_with": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "agent_gate": {
+            "type": "object",
+            "description": "A verdict produced by an AI reviewer. It can block progress, but it is NEVER an approval on the organization's behalf and can never satisfy a human_gate.",
+            "required": [
+              "reviewer",
+              "purpose",
+              "blocking"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "reviewer": {
+                "type": "string",
+                "description": "Agent that produces the verdict. Must not be the stage owner."
+              },
+              "blocking": {
+                "type": "boolean"
+              },
+              "verdict": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "recorded_in": {
+                "type": "string",
+                "description": "Where the verdict is written down, e.g. the merge request."
+              },
+              "purpose": {
+                "type": "string",
+                "minLength": 5,
+                "description": "What this reviewer is actually checking. A gate whose purpose is 'approve the artifact' is an approval, which an agent may not give. State the dimension: testability, feasibility completeness, coverage, operability."
+              }
+            }
+          },
+          "human_gate": {
+            "type": "object",
+            "description": "A decision a named human takes on the organization's behalf. Durable, recorded outside the session, and never produced by any agent \u2014 including an agent-team lead approving a teammate's plan.",
+            "required": [
+              "approver",
+              "recorded_in"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "approver": {
+                "type": "string",
+                "description": "Role of the human, named per project. Never an agent name."
+              },
+              "policy_ref": {
+                "type": "string",
+                "pattern": "^AP-[0-9]{2}$"
+              },
+              "recorded_in": {
+                "type": "string",
+                "enum": [
+                  "gitlab-merge-request-approval",
+                  "gitlab-release",
+                  "gitlab-issue",
+                  "project-decision-log",
+                  "in-session-escalation"
+                ]
+              },
+              "decision": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "approver_role": {
+                "type": "string",
+                "description": "Human role identifier recorded on the approval. Never an agent name."
+              }
+            }
+          },
+          "entry_criteria": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            },
+            "description": "What must already be true before this stage may start. Checked, not assumed."
+          },
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "produces": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Artifact type ids from policies/artifact-model.json that this stage must create or update."
+          },
+          "definition_of_done": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            },
+            "description": "Machine-checkable predicates. See policies/artifact-model.json dod_predicates."
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ]
+          },
+          "complexity": {
+            "type": "string",
+            "enum": [
+              "routine",
+              "complex",
+              "novel"
+            ]
+          },
+          "execution": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "subagent",
+              "team"
+            ]
+          },
+          "team_requirement": {
+            "type": "string",
+            "enum": [
+              "TEAM_REQUIRED",
+              "TEAM_PREFERRED",
+              "TEAM_OPTIONAL"
+            ],
+            "description": "Only meaningful when execution is 'team'. REQUIRED means a single agent is not equivalent: without teams the stage escalates or runs a declared degraded mode. PREFERRED means the fallback is acceptable with reduced independence."
+          },
+          "degraded_mode": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fallback",
+              "guarantees_lost"
+            ],
+            "properties": {
+              "fallback": {
+                "type": "string",
+                "enum": [
+                  "subagent",
+                  "inline",
+                  "escalate"
+                ]
+              },
+              "guarantees_lost": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                },
+                "description": "What is genuinely weaker without a team. Silence here would pretend equivalence."
+              },
+              "requires_human_acknowledgement": {
+                "type": "boolean"
+              }
+            }
+          },
+          "coupled_artifacts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shared surfaces this stage may touch: an API contract, a migration, a schema, a deployment manifest. Two parallel workers may not both change one, even in different files. See policies/coupling-policy.json."
+          },
+          "department_cycle": {
+            "type": "string",
+            "pattern": "^CYCLE-[A-Z0-9-]+$",
+            "description": "The Level 2 execution cycle this stage runs internally. The stage cannot reach its definition of done until the cycle reaches ACCEPTED. See sdlc/cycles/."
+          },
+          "emits": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z_]+$"
+            },
+            "description": "Event types this stage emits, from notification/event-catalogue.json. The SDLC is the event source; the notification subsystem only consumes. Kept consistent with the catalogue's emitted_by field in both directions."
+          },
+          "cycle_role": {
+            "type": "string",
+            "enum": [
+              "enters",
+              "continues",
+              "completes"
+            ],
+            "description": "Where this stage sits in the department's engagement. Only a 'completes' stage requires cycle_accepted: a department whose work spans several stages cannot have finished at the first of them. Exactly one stage per workflow per cycle completes it."
+          }
+        }
+      }
+    },
+    "definition_of_done": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      },
+      "description": "Workflow-level definition of done. The union of the stage DoDs plus anything only true at the end."
+    }
+  }
+}

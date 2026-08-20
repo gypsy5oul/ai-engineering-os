@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Dispatch a formatted notification to a chat webhook.
+
+Deliberately separated from the notification agent. The agent formats; this
+sends. Sending is a credentialed side effect that publishes content outside the
+organization, so it is a distinct, explicit act.
+
+  # default is DRY RUN: prints exactly what would be sent, and sends nothing
+  aieos-notify --decision routing.json --message message.txt
+
+  # actually send. Requires the webhook in the environment.
+  AIEOS_CHAT_WEBHOOK_INCIDENTS=... aieos-notify --decision routing.json \
+      --message message.txt --send
+
+The webhook URL is a bearer credential: anyone holding it can post to the space.
+It is read from the environment and never printed, logged or written to disk.
+"""
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+
+MAX_BYTES = 4000
+
+
+def redact(url):
+    """A webhook URL must never reach a log. Show only enough to identify it."""
+    if not url:
+        return "(unset)"
+    try:
+        host = url.split("//", 1)[1].split("/", 1)[0]
+    except IndexError:
+        host = "?"
+    return "https://%s/…(%d chars, redacted)" % (host, len(url))
+
+
+def post(url, body, timeout):
+    data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(url, data=data,
+                                 headers={"Content-Type": "application/json; charset=UTF-8"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.status, resp.read().decode("utf-8", "replace")[:400]
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--decision", required=True, help="routing decision from scripts/route_event.py")
+    ap.add_argument("--message", required=True, help="file holding the formatted message text")
+    ap.add_argument("--send", action="store_true", help="actually send. Default is a dry run.")
+    ap.add_argument("--timeout", type=int, default=10)
+    args = ap.parse_args()
+
+    with open(args.decision, encoding="utf-8") as fh:
+        decision = json.load(fh)
+    with open(args.message, encoding="utf-8") as fh:
+        text = fh.read().strip()
+
+    if not decision.get("send"):
+        print("policy says do not send: %s" % decision.get("reason", "(no reason given)"))
+        return 0
+    if not text:
+        print("ERROR the message is empty. Refusing to post a blank notification.")
+        return 1
+    if len(text.encode("utf-8")) > MAX_BYTES:
+        print("ERROR message is %d bytes, over the %d limit. Summarise rather than truncating: a "
+              "cut-off notification is worse than a short one."
+              % (len(text.encode("utf-8")), MAX_BYTES))
+        return 1
+
+    failures = 0
+    for channel in decision["channels"]:
+        env_name = channel["webhook_env"]
+        url = os.environ.get(env_name)
+        thread = decision.get("thread_key")
+        body = {"text": text}
+        target = url
+        if thread:
+            body["thread"] = {"threadKey": thread}
+            if url:
+                sep = "&" if "?" in url else "?"
+                target = "%s%smessageReplyOption=REPLY_MESSAGE_FALLBACK_TO_NEW_THREAD" % (url, sep)
+
+        print("\n── %s  priority=%s%s" % (channel["name"], decision.get("priority"),
+                                          "  thread=%s" % thread if thread else ""))
+        print("   webhook %s = %s" % (env_name, redact(url)))
+        if decision.get("recipients"):
+            print("   recipients (roles): %s" % ", ".join(decision["recipients"]))
+
+        if not args.send:
+            print("   DRY RUN — nothing sent. Add --send to publish.")
+            print("   " + "\n   ".join(text.splitlines()))
+            continue
+
+        if not url:
+            print("   ERROR %s is not set in the environment. Not sending." % env_name)
+            failures += 1
+            continue
+        try:
+            status, snippet = post(target, body, args.timeout)
+            print("   sent, HTTP %s" % status)
+        except urllib.error.HTTPError as exc:
+            print("   ERROR HTTP %s from the chat service" % exc.code)
+            failures += 1
+        except Exception as exc:
+            # Never let the exception text carry the URL into a log.
+            print("   ERROR send failed: %s" % type(exc).__name__)
+            failures += 1
+
+    if not args.send:
+        print("\nDry run. Nothing was published. Sending a notification publishes content outside "
+              "the organization; add --send deliberately.")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

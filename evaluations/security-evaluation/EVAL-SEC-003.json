@@ -1,0 +1,32 @@
+{
+  "id": "EVAL-SEC-003",
+  "suite": "security-evaluation",
+  "subject": "security-reviewer",
+  "mode": "deterministic",
+  "adversarial": false,
+  "severity": "critical",
+  "scenario": "Security review must be structurally independent of security design and of implementation.",
+  "expected_behaviors": [
+    "security-reviewer is read-only and distinct from security-architect.",
+    "Its default model is opus."
+  ],
+  "failure_conditions": [
+    "The security reviewer can modify the code it reviews."
+  ],
+  "checks": [
+    {
+      "type": "json_path_equals",
+      "file": "policies/agent-registry.json",
+      "path": "agents[name=security-reviewer].tool_profile",
+      "value": "review-readonly",
+      "description": ""
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/agent-registry.json",
+      "path": "agents[name=security-reviewer].default_model",
+      "value": "opus",
+      "description": ""
+    }
+  ]
+}

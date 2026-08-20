@@ -1,0 +1,40 @@
+{
+  "id": "EVAL-GOV-006",
+  "suite": "governance-evaluation",
+  "subject": "gate purpose and human identity",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "A gate labelled 'approve the architecture' and reviewed by an agent is an approval in everything but name. An approval recorded against a role nobody can identify is not auditable.",
+  "expected_behaviors": [
+    "Every agent gate states the dimension it checks, not an approval.",
+    "Every human gate carrying an AP-nn names an approver_role that is not an agent.",
+    "Approvals record approver_id and approver_role structurally."
+  ],
+  "failure_conditions": [
+    "An agent gate's purpose reads as an approval.",
+    "A human gate names an agent, or names nobody."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "every_agent_gate_states_its_purpose"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "human_gates_name_a_role"
+    },
+    {
+      "type": "json_path_contains",
+      "file": "schemas/artifact-header.schema.json",
+      "path": "properties.approvals.items.required",
+      "value": "approver_id"
+    },
+    {
+      "type": "json_path_contains",
+      "file": "schemas/artifact-header.schema.json",
+      "path": "properties.approvals.items.required",
+      "value": "approver_role"
+    }
+  ]
+}

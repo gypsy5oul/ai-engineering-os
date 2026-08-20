@@ -1,0 +1,39 @@
+{
+  "id": "EVAL-GOV-008",
+  "suite": "governance-evaluation",
+  "subject": "department management",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "An organization whose departments are managed by humans is not autonomous: a person sits in the middle of every departmental rollup. The human's authority must be real and narrow - governance and approval - not operational management.",
+  "expected_behaviors": [
+    "Every department is headed by an agent, and the head can spawn its own lead.",
+    "Every human_owner names specific authority, and is never an agent.",
+    "Escalation runs worker to peer to lead to head to human_owner, in that order.",
+    "Any human-headed department argues the exception explicitly."
+  ],
+  "failure_conditions": [
+    "A human receives routine departmental rollups.",
+    "A human_owner is an agent, or decides nothing specific.",
+    "A head cannot delegate to its own lead."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "departments_are_run_by_agents"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "escalation_reaches_the_human_last"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "heads_receive_only_rollups"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/department-cycle.json",
+      "pattern": "The operational manager of a department is an agent"
+    }
+  ]
+}

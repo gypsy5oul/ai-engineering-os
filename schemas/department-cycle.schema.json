@@ -1,0 +1,329 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Department execution cycle",
+  "description": "One department's instantiation of the generic cycle in policies/department-cycle.json. Defines who fills each position, what the work item is, and which state machine governs it.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "version",
+    "department",
+    "work_item",
+    "positions",
+    "states",
+    "transitions",
+    "rework",
+    "escalation",
+    "rollup",
+    "acceptance"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^CYCLE-[A-Z0-9-]+$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "department": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "used_by_stages": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Macro stage ids, as WORKFLOW/STAGE, that run this cycle."
+    },
+    "work_item": {
+      "type": "object",
+      "required": [
+        "kind",
+        "artifact",
+        "acceptance_source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "What one unit of work is here: a story, a test scenario, a finding, a design section."
+        },
+        "artifact": {
+          "type": "string",
+          "description": "Artifact code the item produces or updates."
+        },
+        "acceptance_source": {
+          "type": "string",
+          "description": "Where the item's acceptance criteria come from. Never invented inside the cycle."
+        }
+      }
+    },
+    "positions": {
+      "type": "object",
+      "required": [
+        "human_owner",
+        "head",
+        "lead",
+        "workers",
+        "peer_reviewer"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "head": {
+          "type": "object",
+          "required": [
+            "kind",
+            "role"
+          ],
+          "additionalProperties": false,
+          "description": "The department's operational manager. An agent by default: making this a human puts a person in every departmental rollup and defeats the autonomy target.",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "agent",
+                "human"
+              ]
+            },
+            "role": {
+              "type": "string"
+            },
+            "receives": {
+              "type": "string",
+              "enum": [
+                "rollup"
+              ]
+            },
+            "human_exception_reason": {
+              "type": "string",
+              "description": "Required when kind is 'human'. Why an agent head would be wrong for this department."
+            },
+            "authority": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "What the head decides. Must not include accepting the cycle: acceptance is determined by the definition of done, not asserted."
+            }
+          }
+        },
+        "lead": {
+          "type": "string"
+        },
+        "workers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "peer_reviewer": {
+          "type": "string",
+          "description": "Agent that reviews detail, or the literal 'mutual' where the department's workers peer-review each other's items. 'mutual' requires at least two workers, and the reviewer of an item is never that item's own worker."
+        },
+        "specialist_reviewers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "human_owner": {
+          "type": "object",
+          "required": [
+            "role",
+            "authority"
+          ],
+          "additionalProperties": false,
+          "description": "The named human holding governance authority over this department. Consulted at approval points and on escalation, never for routine rollups.",
+          "properties": {
+            "role": {
+              "type": "string",
+              "description": "Human role from the project's approval section. Never an agent name."
+            },
+            "authority": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              },
+              "description": "What this human actually decides. AP-nn references, or a named decision."
+            },
+            "receives": {
+              "type": "string",
+              "enum": [
+                "escalations-and-approvals"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "states": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "string"
+      }
+    },
+    "transitions": {
+      "type": "object",
+      "patternProperties": {
+        "^[A-Z_]+$": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "sub_cycles": {
+      "type": "array",
+      "description": "Nested loops inside the department, such as QA defect triage before a defect becomes a development item.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "trigger",
+          "owner",
+          "questions",
+          "outcomes"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "trigger": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "questions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "outcomes": {
+            "type": "object",
+            "patternProperties": {
+              "^[a-z_-]+$": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "rework": {
+      "type": "object",
+      "required": [
+        "limit",
+        "on_limit"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "on_limit": {
+          "type": "string"
+        }
+      }
+    },
+    "escalation": {
+      "type": "object",
+      "required": [
+        "order",
+        "lateral"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "order": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string"
+          }
+        },
+        "lateral": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z_]+$": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "rollup": {
+      "type": "object",
+      "required": [
+        "produced_by",
+        "consumed_by",
+        "fields"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "produced_by": {
+          "type": "string"
+        },
+        "consumed_by": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "required": [
+        "conditions",
+        "requested_by",
+        "determined_by"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "conditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Definition-of-done predicates that must hold for the cycle to reach ACCEPTED."
+        },
+        "requested_by": {
+          "type": "string",
+          "description": "Position that initiates acceptance. Never the position that determines it."
+        },
+        "determined_by": {
+          "type": "string",
+          "description": "The mechanism that decides. Always the definition-of-done evaluator."
+        }
+      }
+    }
+  }
+}

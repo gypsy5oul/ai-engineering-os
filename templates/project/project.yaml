@@ -1,0 +1,179 @@
+# .ai-engineering/project.yaml
+#
+# The record of human decisions about this project. The AI Engineering OS is
+# technology-neutral; everything technology-specific lives here.
+#
+# Rules:
+#   - Only put a technology here once a human has approved it. Observing it in
+#     the repository is not approval.
+#   - Never invent a number. An unknown availability target belongs in
+#     open_decisions, not in a requirement.
+#   - Validate after editing:
+#       python3 "${CLAUDE_PLUGIN_ROOT}/scripts/validate_project_config.py"
+#
+# The example below is a file-transfer platform. Replace every value. Delete the
+# layers the project does not have rather than inventing them.
+
+schema_version: 1
+
+project:
+  name: Enterprise SFTP Platform
+  key: SFTP                      # uppercase prefix for traceability ids: SFTP-REQ-001
+  description: Managed file transfer for partner integrations with audit and retention guarantees.
+  tier: 1                        # 1 business critical .. 4 experimental
+  owner: Integration Platform Team
+  compliance: [SOC2]
+
+technology:
+  backend:
+    language: go
+    framework: standard-library
+    status: approved
+    adr: SFTP-ADR-001
+  database:
+    primary: postgresql
+    version: "16"
+    status: approved
+    adr: SFTP-ADR-002
+  storage:
+    name: s3-compatible-object-store
+    status: approved
+  authentication:
+    name: ssh-public-key
+    status: approved
+  api_style: sftp-protocol
+  containerization:
+    name: docker
+    status: approved
+  infrastructure_as_code:
+    name: terraform
+    status: approved
+  # No frontend layer: this platform has no user interface. Do not invent one.
+
+repository:
+  host: gitlab-self-managed
+  url: https://gitlab.example.com/integration/sftp-platform
+  edition: ce                    # ce | ee-premium | ee-ultimate | other
+  branching:
+    model: trunk-with-release-branches
+    protected_branches: [main, "release/*"]
+    feature_prefix: feature/
+    defect_prefix: defect/
+    hotfix_prefix: hotfix/
+    release_prefix: release/
+  merge_request:
+    min_approvals: 1
+    author_may_approve: false
+    required_pipelines: [build, test, secret-scan, dependency-audit]
+
+environments:
+  - name: dev
+    purpose: Developer integration and smoke testing.
+    production: false
+    deployment_approval: none
+    data: synthetic
+  - name: staging
+    purpose: Release validation against production-like configuration.
+    production: false
+    deployment_approval: peer
+    data: anonymised
+  - name: production
+    purpose: Partner-facing service.
+    production: true
+    deployment_approval: human-owner
+    data: production
+
+deployment:
+  platform: kubernetes
+  strategy: rolling
+  rollback: Redeploy the previous image tag; schema changes are expand-only within a release.
+
+security:
+  data_classification: confidential
+  secret_management: External secret manager, injected at runtime. Never in the repository or an image.
+  threat_model: docs/security/SFTP-SEC-001-threat-model.md
+  requirements:
+    - Host keys are rotated without dropping established sessions.
+    - Every transfer is recorded in an append-only audit log with partner identity and file digest.
+    - Partner credentials are never written to application logs.
+    - Transfers are restricted to a per-partner directory with no path traversal.
+  review_required_for:
+    - Changes to authentication or authorization
+    - Changes to the audit log format or retention
+    - Any new network egress
+
+testing:
+  required_levels: [unit, integration, e2e, security]
+  coverage_target: 75
+  test_data: synthetic
+  environments: [dev, staging]
+
+release:
+  strategy: scheduled
+  versioning: semver
+  approval: Integration Platform Team lead, named per release.
+  change_window: Tuesday and Thursday, 09:00-11:00 UTC
+
+observability:
+  metrics: prometheus
+  logs: structured-json-to-central-store
+  traces: opentelemetry
+  alerting: alertmanager
+  slos:
+    - name: transfer-success-rate
+      objective: 99.5% of partner transfers succeed, measured over 30 days.
+    - name: session-establishment-latency
+      objective: p95 under 800ms, measured over 7 days.
+
+knowledge:
+  root: docs
+  id_prefix: SFTP
+
+sdlc:
+  required_stages: [REQ, ARCH, STORY, QADESIGN, DEV, REVIEW, CI, QA, RELEASE, DEPLOY, VERIFY]
+  skipped_stages:
+    - stage: UX
+      reason: The platform has no user interface. Partner-facing behaviour is protocol behaviour.
+
+approval:
+  # Named humans who hold each authority. An approval category with no named human
+  # cannot be satisfied, and validation says so rather than letting it pass.
+  # approver_role is what gets recorded on the approval; it is never an agent name.
+  release_approver:
+    role: release-approver
+    identity: gitlab:jchen
+    delegate: gitlab:mokafor
+  architecture_owner:
+    role: architecture-owner
+    identity: gitlab:pdesai
+  security_owner:
+    role: security-owner
+    identity: gitlab:security-chapter
+  engineering_owner:
+    role: engineering-owner
+    identity: gitlab:jchen
+  project_owner:
+    role: project-owner
+    identity: gitlab:jchen
+  on_call_owner:
+    role: on-call-owner
+    identity: gitlab:integration-oncall
+  qa_owner:
+    role: qa-owner
+    identity: gitlab:rnakamura
+
+ai:
+  agent_teams_available: false     # experimental and off by default; stages declaring 'team' fall back to 'subagent'
+  model_overrides:
+    data-engineer:
+      model: opus
+      effort: high
+      reason: Every migration here touches the audit log, which is the compliance artifact.
+  execution_overrides:
+    ARCH: subagent                 # this team is small; a four-way architecture team is not worth the multiplier
+
+open_decisions:
+  - id: SFTP-OD-001
+    question: What is the required RPO and RTO for the audit log store?
+    owner: Integration Platform Team lead
+    blocking: true

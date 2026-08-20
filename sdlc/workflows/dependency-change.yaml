@@ -1,0 +1,253 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-DEPENDENCY
+name: Dependency change
+version: 2.0.0
+description: "Changing what the system depends on. Dependency work is not only compatibility: a security advisory, an end-of-life runtime and a licence change each need a different route and a different urgency. CLASSIFY picks the route before any work is done."
+applies_when:
+  - A dependency is added, removed or upgraded.
+  - A vulnerability advisory affects a current dependency.
+  - A dependency reaches or approaches end of life.
+  - A dependency's licence or its terms change.
+skip_when:
+  - The change adds a new capability class rather than moving a version; that is a technology decision (AP-03).
+team_pattern: single-agent
+entry_conditions:
+  - A specific dependency change is proposed, with a reason.
+exit_conditions:
+  - The change is merged with tests passing and the risk assessment recorded.
+  - Where the route was security or end-of-life, the urgency decision is recorded with the reason.
+definition_of_done:
+  - artifact_exists(DEPA)
+  - agent_verdict(dependency-reviewer, pass)
+  - agent_verdict(security-reviewer, pass)
+  - tests_pass(unit)
+  - tests_pass(integration)
+  - no_unresolved_findings(high)
+  - human_approval_recorded(AP-09)
+  - required_fields_present(DEPA)
+  - human_identity_recorded(AP-09)
+failure_paths:
+  - when: The upgrade breaks a public contract
+    goto: CLASSIFY
+    note: A breaking change is an architecture decision (AP-06), not a dependency bump.
+  - when: No safe version exists for a vulnerable dependency
+    goto: CLASSIFY
+    note: Route to security-architect for a compensating control and an exception record (AP-04).
+  - when: The dependency provides a capability the approved stack does not have
+    goto: CLASSIFY
+    note: "Leave this workflow: technology-selection and a human decision (AP-03)."
+  - when: The licence change is incompatible with the project's obligations
+    goto: CLASSIFY
+    note: Removal or replacement, decided by a human with legal input.
+stages:
+  - id: CLASSIFY
+    name: Classification and routing
+    owner: dependency-reviewer
+    skills:
+      - security-review
+      - code-review
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - A specific dependency change is proposed with a reason
+    actions:
+      - "Pick exactly one route, because the route sets the urgency and the approvals:"
+      - "routine-upgrade: version moves, no advisory, no licence change. Normal release."
+      - "security-vulnerability: an advisory affects a version in use. Urgency from exploitability in THIS deployment, not from the CVSS score alone."
+      - "end-of-life: the dependency or runtime stops receiving fixes. Planned as work with a date, not deferred until it becomes an incident."
+      - "licence-compliance: licence or terms changed. Legal and governance input before engineering effort."
+      - "new-capability: leaves this workflow entirely for technology-selection, where the human decision is taken."
+    inputs:
+      - Advisory, changelog or end-of-life notice
+      - Current manifest and lockfile
+      - Approved technology configuration
+    outputs:
+      - Route
+      - Urgency with its reason
+      - Whether the change leaves this workflow
+    produces:
+      - DEPA
+    exit_criteria:
+      - Exactly one route is chosen and recorded
+      - Urgency is justified by exploitability or by a date, not by score alone
+    definition_of_done:
+      - artifact_exists(DEPA)
+      - required_fields_present(DEPA)
+    emits:
+      - DEPENDENCY_ADVISORY
+  - id: IMPACT
+    name: Impact analysis
+    owner: backend-developer
+    participants:
+      - dependency-reviewer
+    skills:
+      - code-review
+    risk: MEDIUM
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - A route is chosen
+      - The route is not new-capability
+    actions:
+      - Establish what actually changes, rather than reading the changelog and hoping.
+      - "Behaviour changes matter more than API changes: a new default timeout breaks nothing at compile time."
+    inputs:
+      - Current and target versions
+      - Changelog and release notes
+      - Usage sites in the codebase
+    outputs:
+      - Affected call sites
+      - Breaking changes
+      - Behaviour changes
+      - Transitive effects
+    exit_criteria:
+      - Every affected call site identified
+      - Breaking and behaviour changes listed separately
+    definition_of_done:
+      - artifact_status(DEPA, in-review)
+  - id: SECURITY
+    name: Security, licence and lifecycle assessment
+    owner: dependency-reviewer
+    participants:
+      - security-reviewer
+    skills:
+      - security-review
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Impact analysis is complete
+    actions:
+      - Assess vulnerability, licence, maintenance signal and transitive effect.
+      - For the security route, state exploitability in this deployment and whether the advisory is reachable at all.
+      - For the end-of-life route, state the support end date and the last safe upgrade window.
+    inputs:
+      - Manifest and lockfile diff
+      - Advisory data
+      - Licence terms
+      - Lifecycle dates
+    outputs:
+      - Vulnerability status
+      - Licence compatibility
+      - Maintenance signal
+      - End-of-life position
+    exit_criteria:
+      - No known critical vulnerability without a mitigation or an approved exception
+      - Licence compatible with the project's obligations
+      - Where support ends, the date and the upgrade window are recorded
+    definition_of_done:
+      - agent_verdict(security-reviewer, pass)
+      - artifact_status(DEPA, approved)
+      - cycle_accepted(CYCLE-SEC)
+      - cycle_rollup_reported(CYCLE-SEC)
+      - no_open_rework(CYCLE-SEC)
+    agent_gate:
+      reviewer: security-reviewer
+      blocking: true
+      recorded_in: the dependency assessment
+      purpose: exploitability in this deployment, licence compatibility and lifecycle position. Not a CVSS score restated.
+    human_gate:
+      approver: security owner
+      recorded_in: project-decision-log
+      policy_ref: AP-04
+      decision:
+        - accept
+        - require exception record
+        - reject
+      approver_role: security-owner
+    department_cycle: CYCLE-SEC
+    cycle_role: completes
+  - id: COMPAT
+    name: Compatibility verification
+    owner: backend-developer
+    skills:
+      - backend-development
+      - test-automation
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The assessment permits proceeding
+    actions:
+      - Adapt call sites and cover behaviour differences with tests rather than assuming them benign.
+    inputs:
+      - Impact analysis
+      - Existing test suite
+    outputs:
+      - Adapted call sites
+      - Tests covering changed behaviour
+    exit_criteria:
+      - Full suite passes
+      - Behaviour differences covered by tests
+    definition_of_done:
+      - tests_pass(unit)
+      - tests_pass(integration)
+    coupled_artifacts:
+      - api-contract
+  - id: MR
+    name: Merge request
+    owner: backend-developer
+    skills:
+      - gitlab-workflow
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - Compatibility is verified
+    actions:
+      - Put the route, the urgency and the assessment in the description, so the reviewer sees the reasoning.
+    inputs:
+      - Verified change
+    outputs:
+      - Merge request with the impact and assessment
+    produces:
+      - REVIEW
+    exit_criteria:
+      - Routed reviewers per RR-05 returned verdicts
+    definition_of_done:
+      - agent_verdict(dependency-reviewer, pass)
+      - no_unresolved_findings(high)
+      - human_approval_recorded(AP-09)
+    agent_gate:
+      reviewer: dependency-reviewer and security-reviewer per RR-05
+      blocking: true
+      recorded_in: the merge request
+      purpose: supply-chain risk and the behaviour differences the compiler cannot see.
+    human_gate:
+      approver: a human other than the author
+      recorded_in: gitlab-merge-request-approval
+      policy_ref: AP-09
+      approver_role: merge-approver
+  - id: RELEASE
+    name: Release
+    owner: release-manager
+    skills:
+      - release-management
+    risk: HIGH
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - The change is merged
+    actions:
+      - Release through the route the urgency justifies, and state the behaviour change in the notes.
+    inputs:
+      - Merged change
+      - Assessment
+      - Urgency
+    outputs:
+      - Release note entry stating the dependency change and any behaviour difference
+    produces:
+      - REL
+    exit_criteria:
+      - Released through the route the urgency justifies
+    definition_of_done:
+      - artifact_exists(REL)
+      - human_approval_recorded(AP-01)
+    human_gate:
+      approver: named release approver
+      recorded_in: gitlab-release
+      policy_ref: AP-01
+      approver_role: release-approver

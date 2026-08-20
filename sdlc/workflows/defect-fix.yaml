@@ -1,0 +1,257 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-DEFECT
+name: Defect fix
+version: 2.0.0
+description: Correcting behaviour that already exists and is wrong. Requirements and architecture are inputs, not outputs; a change that alters either is not a defect fix.
+applies_when:
+  - A defect is raised from QA, production, an incident or a customer report.
+skip_when:
+  - The behaviour was never specified; that is a new requirement, not a defect.
+team_pattern: single-agent
+entry_conditions:
+  - A defect record exists with a reproduction.
+exit_conditions:
+  - The original reproduction no longer reproduces, verified by someone other than the fixer.
+  - A regression test exists that fails without the fix.
+definition_of_done:
+  - artifact_status(DEF, closed)
+  - reproduction_fails_before_fix()
+  - every_linked(DEF, TEST)
+  - agent_verdict(code-reviewer, pass)
+  - agent_verdict(test-reviewer, pass)
+  - no_unresolved_findings(high)
+  - pipeline_passed(required)
+  - human_approval_recorded(AP-09)
+  - required_fields_present(DEF)
+  - human_identity_recorded(AP-09)
+failure_paths:
+  - when: The defect cannot be reproduced
+    goto: TRIAGE
+    note: Closed with evidence of the attempt, not silently.
+  - when: The root cause is a design flaw
+    goto: TRIAGE
+    note: Escalate to WF-FEATURE; do not patch around an architectural defect.
+stages:
+  - id: TRIAGE
+    name: Triage
+    owner: qa-lead
+    participants:
+      - development-lead
+    skills:
+      - root-cause-analysis
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - A defect record exists
+      - A reproduction or an explicit statement that none exists
+    actions:
+      - Reproduce it, or record what was tried and why it could not be reproduced.
+      - Assign severity from the project's definitions, not from how loud the report was.
+    inputs:
+      - Defect record
+      - Reproduction
+      - Affected version
+    outputs:
+      - Severity
+      - Reproduction confirmation
+      - Suspected area
+      - Routing decision
+    produces:
+      - DEF
+    exit_criteria:
+      - Reproduced, or explicitly recorded as not reproducible
+      - Severity assigned
+    definition_of_done:
+      - artifact_exists(DEF)
+      - artifact_status(DEF, open)
+      - required_fields_present(DEF)
+  - id: CAUSE
+    name: Cause analysis
+    owner: backend-developer
+    skills:
+      - root-cause-analysis
+      - code-review
+    risk: MEDIUM
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - The defect is reproducible
+    actions:
+      - Distinguish the cause from the trigger.
+      - Check whether other code shares the same defect.
+    inputs:
+      - Reproduction
+      - Code
+      - Recent changes
+    outputs:
+      - Cause statement
+      - Blast radius
+      - Other occurrences of the same defect
+    exit_criteria:
+      - The cause explains the observed behaviour
+      - Related occurrences identified
+    definition_of_done:
+      - artifact_status(DEF, in-review)
+  - id: TEST
+    name: Regression test first
+    owner: qa-engineer
+    skills:
+      - test-automation
+    risk: MEDIUM
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - A cause statement exists
+      - No fix has been written yet
+    actions:
+      - Write the test that captures the defect, and run it against the unfixed code to watch it fail.
+      - "Writing it first is the point: a test written after the fix proves only that the fix compiles."
+    inputs:
+      - Reproduction
+      - Cause statement
+    outputs:
+      - A failing test that captures the defect
+    produces:
+      - TEST
+    exit_criteria:
+      - The test fails against the unfixed code
+    definition_of_done:
+      - reproduction_fails_before_fix()
+      - every_linked(DEF, TEST)
+      - required_fields_present(TEST)
+  - id: FIX
+    name: Fix
+    owner: backend-developer
+    skills:
+      - backend-development
+      - git-workflow
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - A failing regression test exists
+      - The cause is understood
+    actions:
+      - Fix the cause, not the symptom.
+      - Keep the change scoped to the defect; unrelated improvements become debt items.
+    inputs:
+      - Cause statement
+      - Failing regression test
+    outputs:
+      - Fix on a defect branch
+      - Merge request
+    exit_criteria:
+      - The regression test passes
+      - No other test regressed
+      - Scope limited to the defect
+    definition_of_done:
+      - tests_pass(unit)
+      - tests_pass(integration)
+      - cycle_accepted(CYCLE-DEV)
+      - cycle_rollup_reported(CYCLE-DEV)
+      - no_open_rework(CYCLE-DEV)
+    department_cycle: CYCLE-DEV
+    cycle_role: completes
+  - id: REVIEW
+    name: Review
+    owner: code-reviewer
+    participants:
+      - security-reviewer
+      - test-reviewer
+    skills:
+      - code-review
+    risk: MEDIUM
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - A merge request exists
+      - CI has run
+    actions:
+      - Verify the fix addresses the cause rather than the symptom.
+    inputs:
+      - Merge request
+      - Defect record
+    outputs:
+      - Verdicts
+      - Findings
+    produces:
+      - REVIEW
+    exit_criteria:
+      - The fix addresses the cause
+      - No unresolved HIGH finding
+    definition_of_done:
+      - agent_verdict(code-reviewer, pass)
+      - agent_verdict(test-reviewer, pass)
+      - no_unresolved_findings(high)
+      - human_approval_recorded(AP-09)
+    agent_gate:
+      reviewer: routed reviewers per policies/review-routing.json
+      blocking: true
+      recorded_in: the merge request
+      purpose: "defect detection: does the fix address the cause rather than the symptom, and does the regression test actually pin it."
+    human_gate:
+      approver: a human other than the author
+      recorded_in: gitlab-merge-request-approval
+      policy_ref: AP-09
+      approver_role: merge-approver
+  - id: VERIFY
+    name: Verification
+    owner: qa-engineer
+    risk: MEDIUM
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - The fix is merged
+    actions:
+      - Verify against the ORIGINAL reproduction, not the developer's description of it.
+    inputs:
+      - Merged fix
+      - Original reproduction
+    outputs:
+      - Verification record
+    exit_criteria:
+      - Verified against the original reproduction by someone other than the fixer
+    definition_of_done:
+      - artifact_status(DEF, closed)
+      - cycle_accepted(CYCLE-QA)
+      - cycle_rollup_reported(CYCLE-QA)
+      - no_open_rework(CYCLE-QA)
+    department_cycle: CYCLE-QA
+    emits:
+      - DEFECT_FIXED
+      - DEFECT_REOPENED
+    cycle_role: completes
+  - id: RELEASE
+    name: Release
+    owner: release-manager
+    skills:
+      - release-management
+    risk: HIGH
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - Verification passed
+      - Severity determines the route
+    actions:
+      - Release through the route the severity justifies. Expedited is not the same as skipped.
+    inputs:
+      - Verified fix
+      - Severity
+    outputs:
+      - Release or hotfix plan
+      - Release notes entry
+    produces:
+      - REL
+    exit_criteria:
+      - Released through the route the severity justifies
+    definition_of_done:
+      - artifact_exists(REL)
+      - human_approval_recorded(AP-01)
+    human_gate:
+      approver: named release approver
+      recorded_in: gitlab-release
+      policy_ref: AP-01
+      approver_role: release-approver

@@ -1,0 +1,130 @@
+# The agent model
+
+## Agent, skill, reviewer or policy?
+
+Most requests for "a new agent" are not agents.
+
+| The need | The right shape |
+| --- | --- |
+| A durable role with its own authority, inputs, outputs and accountability | **Agent** |
+| A capability several roles use | **Skill** |
+| An independent check on another role's output | **Reviewer agent**, read-only |
+| A rule that must hold regardless of what the model decides | **Hook** |
+| A statement of who may do what | **Policy** |
+
+An agent is justified only when a genuine role boundary exists. If two candidate
+agents would have the same authority, the same inputs and the same outputs, they
+are one agent with two tasks.
+
+## The role contract
+
+Every agent file carries the same fifteen sections, in the same order.
+`scripts/validate_plugin.py` fails if any is missing or out of order, which is
+how the structure survives thirty contributors.
+
+| Section | What it establishes |
+| --- | --- |
+| Role contract | Department, reporting line, owner, version, status, risk, tools, write scope, model, evaluation suite, spawn permission |
+| Purpose | Why the role exists, in one paragraph |
+| Responsibilities | What it must do |
+| Not your responsibility | What it must hand off — the section that prevents role creep |
+| Authority | What it may decide and what it may block |
+| Allowed actions | The operational envelope |
+| Forbidden actions | Hard limits, including every human-approval item that applies |
+| Required inputs | What must exist before it can work |
+| Expected outputs | What it produces, concretely |
+| Skills | Preloaded capabilities |
+| Model policy | Default and escalation, referencing `policies/model-policy.json` |
+| Escalation | Where each kind of blockage goes |
+| Review requirements | Who checks its output |
+| Handoff | Who receives what |
+| Definition of done | The completion test |
+
+"You are a backend developer" is not a role definition. It states a persona and
+nothing else: no authority, no limits, no inputs, no completion criterion.
+
+## Seniority
+
+There is no `senior-backend-developer`. Seniority is a property of the **task**,
+expressed through model and effort escalation in `policies/model-policy.json`:
+
+| Task | Model | Effort |
+| --- | --- | --- |
+| Mechanical change from a complete specification | sonnet | low |
+| Ordinary story implementation | sonnet | medium |
+| Complex or novel implementation, HIGH-risk area | opus | high |
+
+The role contract, the authority and the review requirements are identical in all
+three cases, which is exactly why a separate agent would add no information.
+
+## Risk classes
+
+Defined in `policies/risk-classification.json`. Risk drives model floor, tool
+ceiling, review depth, evaluation depth and whether a human is required.
+
+| Class | Meaning | Consequences |
+| --- | --- | --- |
+| LOW | Advisory or cosmetic; a wrong result is obvious and cheap | Single automated review, smoke evaluation |
+| MEDIUM | Changes behaviour inside a reviewed merge request, reversible | Peer plus routed specialist review, standard evaluation |
+| HIGH | Shapes system-wide properties, security, data or production | Independent same-discipline review, full suite with adversarial cases |
+| CRITICAL | Can compromise the ability to detect or prevent harm | Two independent reviewers, named human owner, read-only tool ceiling |
+
+CRITICAL agents may not hold write tools. `tests/test_repository.py` enforces it.
+
+## Least privilege
+
+Tool profiles in `policies/tool-permissions.json`:
+
+| Profile | Tools | Used for |
+| --- | --- | --- |
+| `analysis-readonly` | Read, Grep, Glob, WebFetch, WebSearch | Reviewers who need external references |
+| `review-readonly` | Read, Grep, Glob, Bash | Reviewers who need to run diffs and analysers |
+| `author` | Read, Grep, Glob, Edit, Write | Roles that produce documents, never execute |
+| `implementer` | Read, Grep, Glob, Edit, Write, Bash | Roles that change code and run tests |
+| `orchestrator` | Read, Grep, Glob, Bash, Agent | Pure coordination |
+| `lead` | orchestrator plus Edit, Write | Coordination that also authors planning artifacts |
+
+Tool lists cannot express *where* a role may write, so `policies/write-scope.json`
+adds that, enforced by `hooks/scripts/guard_write.py`:
+
+- **allow mode** for authoring roles: a QA engineer writes tests and nothing else.
+- **deny mode** for implementers: a developer writes code but not architecture,
+  not the project configuration, and not this plugin.
+
+Two design consequences worth stating:
+
+- **`release-manager` has no `Bash`.** Release authority must not imply execution
+  authority. It plans, assembles evidence and asks a human; it cannot deploy.
+- **Reviewers have no `Write`.** Independence that depends on the model choosing
+  not to edit is not independence.
+
+## Ownership and lifecycle
+
+Every agent has an owner, a version, a risk class, a review frequency and an
+evaluation suite, in `policies/agent-registry.json`. Nothing is ownerless.
+
+Lifecycle, from `policies/agent-lifecycle.json`:
+
+```
+draft → development → evaluation → security-review → pilot → approved → production → deprecated
+```
+
+`security-review` is mandatory for HIGH and CRITICAL. The transitions into
+`pilot`, `approved` and `production` all require a human decision. **A markdown
+file existing does not make an agent production-ready** — everything in this
+repository is currently at `pilot`.
+
+## Spawn authority
+
+`may_spawn` in the registry, enforced by `hooks/scripts/guard_spawn.py`:
+
+- The main session is human-driven and unconstrained; only agents are limited.
+- A role with no `may_spawn` entries cannot delegate and must escalate.
+- No agent may spawn a CRITICAL role. That always requires a human.
+- Self-spawning is denied: recursive self-delegation hides work rather than
+  dividing it.
+
+The guard sees the caller's agent type and the requested type, nothing more. It
+cannot verify intent, and it does not see teammate spawning that happens outside
+the `Agent` tool. It is a guardrail, not an authorization system, and
+`docs/limitations.md` says so plainly.

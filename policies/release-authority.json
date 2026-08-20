@@ -1,0 +1,46 @@
+{
+  "version": "1",
+  "description": "Three distinct acts, deliberately held by three different parties. Collapsing any two of them removes the separation of duties that makes a release reversible and attributable.",
+  "acts": {
+    "release_approval": {
+      "what": "The CONTENT of the release is accepted: this change set, this migration plan, this rollback plan, these gate verdicts.",
+      "who": "release-manager assembles and recommends; a named human accepts.",
+      "artifact_state": "REL moves draft -> in-review -> approved",
+      "policy_ref": "AP-01",
+      "does_not_grant": "Permission to deploy. An approved release may sit unapproved for production for a change window, a dependency, or a decision."
+    },
+    "deployment_authorization": {
+      "what": "Production deployment of this approved release is PERMITTED, now.",
+      "who": "The named release approver in .ai-engineering/project.yaml under approval.release_approver. A human, always.",
+      "artifact_state": "REL moves approved -> authorized",
+      "policy_ref": "AP-01",
+      "does_not_grant": "The ability to perform the deployment. Authorization and execution are different hands."
+    },
+    "deployment_execution": {
+      "what": "Running the deployment.",
+      "who": "devops-engineer, or CI acting on the authorization.",
+      "artifact_state": "REL moves authorized -> done after verification",
+      "precondition": "REL is in state 'authorized'. Executing against an 'approved' release that was never authorized is the failure this split exists to prevent."
+    },
+    "verification": {
+      "what": "Confirming the deployed system behaves as the release said it would.",
+      "who": "release-manager with sre. Never the party that executed the deployment alone.",
+      "artifact_state": "REL moves authorized -> done, or -> rolled-back"
+    }
+  },
+  "separation_rules": [
+    "release-manager recommends and verifies. It has no Bash and cannot deploy.",
+    "The human who authorizes is not the agent that assembled the release.",
+    "The party that executes the deployment does not also declare it verified.",
+    "A rollback is itself an authorized act: it needs the same human authorization as the deployment."
+  ],
+  "state_machine": {
+    "draft": ["in-review"],
+    "in-review": ["approved", "draft"],
+    "approved": ["authorized", "in-review"],
+    "authorized": ["done", "rolled-back"],
+    "done": ["rolled-back"],
+    "rolled-back": []
+  },
+  "why_this_matters": "In 0.2.0 approval and authorization were one act, so a release approved on Monday carried standing permission to deploy on Friday against a changed production. Separating them makes the authorization decision current."
+}

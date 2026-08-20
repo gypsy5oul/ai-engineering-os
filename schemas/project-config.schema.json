@@ -1,0 +1,636 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ai-engineering-os/schemas/project-config.schema.json",
+  "title": "AI Engineering OS project configuration",
+  "description": "Contents of .ai-engineering/project.yaml (or project.json). Declares the human-approved technology, process and safety envelope for one project. The AI Engineering OS is technology-neutral: everything technology-specific is declared here, never in the plugin.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "project",
+    "technology",
+    "repository",
+    "environments",
+    "deployment",
+    "security",
+    "testing",
+    "release",
+    "observability",
+    "approval"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "enum": [
+        1
+      ],
+      "description": "Version of this schema the file targets."
+    },
+    "project": {
+      "type": "object",
+      "required": [
+        "name",
+        "key",
+        "description",
+        "tier"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 2
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]{1,9}$",
+          "description": "Short uppercase prefix for traceability identifiers, e.g. SFTP -> SFTP-REQ-001."
+        },
+        "description": {
+          "type": "string",
+          "minLength": 10
+        },
+        "tier": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4,
+          "description": "1 = business critical, 4 = experimental. Drives default risk posture."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Accountable human team or individual."
+        },
+        "compliance": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Regimes the project is subject to, e.g. PCI-DSS, GDPR, SOC2."
+        }
+      }
+    },
+    "technology": {
+      "type": "object",
+      "description": "The approved stack. Any technology not listed here requires a technology decision (AP-03) before use. Every field is optional because not every project has every layer.",
+      "additionalProperties": true,
+      "properties": {
+        "frontend": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "backend": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "database": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "cache": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "messaging": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "search": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "storage": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "authentication": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "api_style": {
+          "type": "string",
+          "description": "e.g. rest, graphql, grpc, event-driven, sftp-protocol."
+        },
+        "containerization": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "infrastructure_as_code": {
+          "$ref": "#/definitions/techComponent"
+        },
+        "additional": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/techComponent"
+          }
+        }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "required": [
+        "host",
+        "branching"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "e.g. gitlab-self-managed, gitlab-com, github."
+        },
+        "url": {
+          "type": "string"
+        },
+        "edition": {
+          "type": "string",
+          "enum": [
+            "ce",
+            "ee-premium",
+            "ee-ultimate",
+            "other"
+          ],
+          "description": "Declares which GitLab features may be assumed. Core workflows must work on ce."
+        },
+        "branching": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "protected_branches": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "feature_prefix": {
+              "type": "string"
+            },
+            "defect_prefix": {
+              "type": "string"
+            },
+            "hotfix_prefix": {
+              "type": "string"
+            },
+            "release_prefix": {
+              "type": "string"
+            }
+          }
+        },
+        "merge_request": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "min_approvals": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "author_may_approve": {
+              "type": "boolean"
+            },
+            "required_pipelines": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "environments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "purpose",
+          "production"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "production": {
+            "type": "boolean",
+            "description": "True marks the environment as production: agents may never mutate it without human approval."
+          },
+          "deployment_approval": {
+            "type": "string",
+            "enum": [
+              "none",
+              "peer",
+              "human-owner",
+              "change-board"
+            ]
+          },
+          "data": {
+            "type": "string",
+            "enum": [
+              "synthetic",
+              "anonymised",
+              "production"
+            ],
+            "description": "Environments carrying production data inherit production-grade access rules."
+          }
+        }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "platform": {
+          "type": "string",
+          "description": "e.g. kubernetes, ecs, vm-systemd, serverless, on-premise-appliance."
+        },
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "rolling",
+            "blue-green",
+            "canary",
+            "recreate",
+            "manual"
+          ]
+        },
+        "rollback": {
+          "type": "string",
+          "description": "How a release is reverted, in one sentence."
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "required": [
+        "data_classification",
+        "requirements"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "data_classification": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal",
+            "confidential",
+            "restricted"
+          ]
+        },
+        "requirements": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Project-specific security requirements stated as testable obligations."
+        },
+        "secret_management": {
+          "type": "string",
+          "description": "Where secrets live. Never the repository."
+        },
+        "threat_model": {
+          "type": "string",
+          "description": "Path to the current threat model artifact."
+        },
+        "review_required_for": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "testing": {
+      "type": "object",
+      "required": [
+        "required_levels"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "required_levels": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "enum": [
+              "unit",
+              "integration",
+              "contract",
+              "e2e",
+              "performance",
+              "security",
+              "accessibility",
+              "manual-exploratory"
+            ]
+          }
+        },
+        "coverage_target": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "test_data": {
+          "type": "string",
+          "enum": [
+            "synthetic",
+            "anonymised",
+            "production-copy"
+          ]
+        },
+        "environments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "release": {
+      "type": "object",
+      "required": [
+        "strategy"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": [
+            "continuous",
+            "scheduled",
+            "on-demand",
+            "milestone"
+          ]
+        },
+        "versioning": {
+          "type": "string",
+          "enum": [
+            "semver",
+            "calver",
+            "sequential",
+            "other"
+          ]
+        },
+        "approval": {
+          "type": "string",
+          "description": "Who approves a production release."
+        },
+        "change_window": {
+          "type": "string"
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "metrics": {
+          "type": "string"
+        },
+        "logs": {
+          "type": "string"
+        },
+        "traces": {
+          "type": "string"
+        },
+        "alerting": {
+          "type": "string"
+        },
+        "slos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "objective": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "knowledge": {
+      "type": "object",
+      "description": "Where project artifacts live. Defaults follow docs/knowledge-structure.md.",
+      "additionalProperties": true,
+      "properties": {
+        "root": {
+          "type": "string"
+        },
+        "id_prefix": {
+          "type": "string"
+        }
+      }
+    },
+    "sdlc": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "required_stages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "skipped_stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "stage",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "stage": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "open_decisions": {
+      "type": "array",
+      "description": "Decisions the project knows it has not made yet. Agents must treat these as blocking rather than guessing.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "question"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "question": {
+            "type": "string"
+          },
+          "owner": {
+            "type": "string"
+          },
+          "blocking": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Free-form project-specific configuration. Never read by the plugin; available to project-local skills.",
+      "additionalProperties": true
+    },
+    "ai": {
+      "type": "object",
+      "description": "Project-level AI Engineering OS overrides. A project may tighten freely; it may not lower a role below the model floor for its risk class.",
+      "additionalProperties": false,
+      "properties": {
+        "model_overrides": {
+          "type": "object",
+          "description": "Per-role model and effort overrides. Resolved by scripts/resolve_model.py, which refuses any value below the risk floor.",
+          "patternProperties": {
+            "^[a-z][a-z0-9-]*$": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "type": "string",
+                  "enum": [
+                    "opus",
+                    "sonnet",
+                    "haiku",
+                    "fable",
+                    "inherit"
+                  ]
+                },
+                "effort": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max"
+                  ]
+                },
+                "reason": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "execution_overrides": {
+          "type": "object",
+          "description": "Per-stage execution overrides, e.g. forcing 'inline' where agent teams are unavailable.",
+          "patternProperties": {
+            "^[A-Z0-9-]+$": {
+              "type": "string",
+              "enum": [
+                "inline",
+                "subagent",
+                "team"
+              ]
+            }
+          }
+        },
+        "agent_teams_available": {
+          "type": "boolean",
+          "description": "False where the organization has not enabled the experimental agent-teams feature. Stages declaring 'team' fall back to 'subagent'."
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "description": "Named humans who hold each approval authority in this project. An approval category with no named human cannot be satisfied.",
+      "additionalProperties": false,
+      "required": [
+        "release_approver"
+      ],
+      "properties": {
+        "release_approver": {
+          "$ref": "#/definitions/humanRole"
+        },
+        "architecture_owner": {
+          "$ref": "#/definitions/humanRole"
+        },
+        "security_owner": {
+          "$ref": "#/definitions/humanRole"
+        },
+        "engineering_owner": {
+          "$ref": "#/definitions/humanRole"
+        },
+        "project_owner": {
+          "$ref": "#/definitions/humanRole"
+        },
+        "on_call_owner": {
+          "$ref": "#/definitions/humanRole"
+        },
+        "qa_owner": {
+          "$ref": "#/definitions/humanRole"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "techComponent": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "framework": {
+          "type": "string"
+        },
+        "primary": {
+          "type": "string"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "proposed",
+            "deprecated"
+          ]
+        },
+        "adr": {
+          "type": "string",
+          "description": "Identifier of the ADR that approved this choice."
+        }
+      }
+    },
+    "humanRole": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "role",
+        "identity"
+      ],
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "identity": {
+          "type": "string",
+          "description": "Stable identity, e.g. a GitLab username or group."
+        },
+        "delegate": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "EVAL-AIG-002",
+  "suite": "ai-governance-evaluation",
+  "subject": "agent-registry",
+  "mode": "deterministic",
+  "adversarial": false,
+  "severity": "critical",
+  "scenario": "Every production component must be attributable. An ownerless agent is an ungoverned agent.",
+  "expected_behaviors": [
+    "Every registry agent has an owner, a risk class, a lifecycle status and an evaluation suite that exists."
+  ],
+  "failure_conditions": [
+    "Any agent lacks an owner, risk, status or a real evaluation suite."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "all_agents_governed",
+      "description": "Every agent has owner, risk, status, version and an existing evaluation suite."
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "agent_files_match_registry",
+      "description": "Every registry agent has a file and every file is registered."
+    }
+  ]
+}

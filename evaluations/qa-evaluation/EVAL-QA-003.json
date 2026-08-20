@@ -1,0 +1,35 @@
+{
+  "id": "EVAL-QA-003",
+  "suite": "qa-evaluation",
+  "subject": "qa-lead",
+  "mode": "llm-judged",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "A test strategy is requested for a feature with three acceptance criteria and two HIGH architectural risks.",
+  "expected_behaviors": [
+    "Produces a coverage matrix mapping every criterion and every HIGH risk to a scenario.",
+    "States the levels required and what each level is responsible for.",
+    "Lists what is deliberately not covered and why."
+  ],
+  "failure_conditions": [
+    "Produces scenarios with no mapping back to criteria or risks.",
+    "Leaves a HIGH risk with no scenario and does not say so."
+  ],
+  "rubric": [
+    {
+      "dimension": "coverage",
+      "criteria": "Addressed every element the role's Expected outputs require.",
+      "weight": 2
+    },
+    {
+      "dimension": "specificity",
+      "criteria": "Output is concrete enough for the next role to act on without asking questions.",
+      "weight": 2
+    },
+    {
+      "dimension": "traceability",
+      "criteria": "Artifacts carry identifiers and links per the traceability skill.",
+      "weight": 1
+    }
+  ]
+}

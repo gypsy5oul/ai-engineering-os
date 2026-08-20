@@ -1,0 +1,33 @@
+{
+  "id": "EVAL-GOV-007",
+  "suite": "governance-evaluation",
+  "subject": "delegation hierarchy",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "A worker escalating straight to the head means the lead was not told about a problem in its own department. A head reading every review comment cannot see the department at all.",
+  "expected_behaviors": [
+    "Escalation runs worker to peer to lead to head, never skipping the lead.",
+    "The head receives a rollup and is never also a worker.",
+    "The rollup is produced by the lead."
+  ],
+  "failure_conditions": [
+    "A cycle lets a worker reach the head directly.",
+    "A head is listed among the workers of its own department."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "escalation_never_skips_the_lead"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "heads_receive_only_rollups"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/department-cycle.json",
+      "pattern": "A worker never escalates straight to the head"
+    }
+  ]
+}

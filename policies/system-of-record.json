@@ -1,0 +1,61 @@
+{
+  "version": "1",
+  "description": "What is authoritative, and what is merely a mechanism. Agent teams are execution machinery; they are not where the truth about a change lives.",
+  "systems_of_record": {
+    "gitlab": {
+      "authoritative_for": [
+        "code and its history",
+        "merge requests and human approvals",
+        "pipeline results",
+        "releases and tags",
+        "issues and milestones"
+      ],
+      "durability": "permanent, attributable, outside any session",
+      "why": "A decision that exists only in a transcript did not happen. Approval, review and release history must survive the session, the machine and the engineer."
+    },
+    "project_repository_artifacts": {
+      "authoritative_for": [
+        "requirements, architecture, ADRs, designs, stories",
+        "test plans and reports",
+        "threat models and security exceptions",
+        "release, incident and RCA records",
+        "the project configuration in .ai-engineering/"
+      ],
+      "durability": "permanent, versioned with the code they describe",
+      "why": "Artifacts version alongside the code, so the state of the system and the reasoning behind it stay in step."
+    }
+  },
+  "execution_mechanisms": {
+    "agent_team_task_list": {
+      "authoritative_for": [],
+      "durability": "local. The task directory under ~/.claude/tasks/ persists on disk and a resumed session keeps its tasks, subject to cleanupPeriodDays retention; it is never uploaded. The team config directory is removed at session end and in-process teammates are not restored.",
+      "correct_use": "Coordinating who is doing what right now, within one session.",
+      "incorrect_use": [
+        "Recording that a stage is complete",
+        "Recording an approval",
+        "Carrying state between sessions",
+        "Being the answer to 'what is the status of this change'"
+      ],
+      "why": "Authoritative for nothing is a policy choice, not a consequence of the storage: the task list does persist locally across a resume. It is excluded because agent teams are experimental, task status is known to lag, /resume does not restore in-process teammates, and the team config is runtime state Claude Code overwrites. Business correctness must not depend on it."
+    },
+    "session_transcript": {
+      "authoritative_for": [],
+      "durability": "local and per-session",
+      "correct_use": "Working record.",
+      "incorrect_use": ["Evidence of approval", "Audit trail"]
+    },
+    "local_audit_log": {
+      "authoritative_for": [],
+      "durability": "local, per-machine, not tamper-evident",
+      "correct_use": "Evidence for the engineer who ran the session, and for debugging a guard.",
+      "incorrect_use": ["Organizational audit trail"]
+    }
+  },
+  "rules": [
+    "Every stage's outputs land in a system of record before the stage is complete.",
+    "A stage is complete when its artifacts exist and its definition of done holds, not when a task list says so.",
+    "If the team dissolves mid-change, the change must be resumable from GitLab and the repository alone. If it is not, the stage did not record enough.",
+    "Any workflow that would break if agent teams were disabled tomorrow is wrongly designed. Teams are an accelerator, not a dependency."
+  ],
+  "resumability_test": "Delete the session and the task list. Can another engineer, from the repository and GitLab alone, say what stage the change is in, what is missing, and who owes what? If not, the artifact contract is incomplete."
+}

@@ -1,0 +1,173 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-ONBOARDING
+name: Project onboarding
+version: 2.0.0
+description: Bringing a project under the AI Engineering OS. The output is a human-approved configuration, not a set of assumptions. Observation is not decision.
+applies_when:
+  - A project has no .ai-engineering/project.yaml.
+  - An existing configuration has gone stale.
+team_pattern: single-agent
+entry_conditions:
+  - A human is available to answer technology and process questions.
+exit_conditions:
+  - The configuration exists, validates against the schema and has been approved by a human.
+  - Remaining unknowns are recorded in open_decisions rather than guessed.
+definition_of_done:
+  - config_valid()
+  - human_approval_recorded(AP-03)
+  - no_blocking_open_decisions(unowned)
+  - skip_recorded(UX)
+  - human_identity_recorded(AP-03)
+failure_paths:
+  - when: The human cannot answer a technology question
+    goto: DECIDE
+    note: Record it in open_decisions with blocking true. Engineering stops on that layer only, not on the project.
+stages:
+  - id: DISCOVER
+    name: Repository discovery
+    owner: engineering-director
+    skills:
+      - project-onboarding
+    risk: LOW
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - A repository exists, or the human confirms it is greenfield
+    actions:
+      - Report findings as observations, clearly separated from decisions.
+      - Finding a manifest tells you a technology is present. It does not tell you it is approved.
+    inputs:
+      - The repository
+      - Existing build, CI and deployment files
+    outputs:
+      - Observed technology
+      - Observed branch model
+      - Observed test setup
+      - Observed deployment mechanism
+    exit_criteria:
+      - Findings are stated as observations, separated from decisions
+    definition_of_done:
+      - config_valid()
+  - id: ASK
+    name: Human decision capture
+    owner: engineering-director
+    skills:
+      - project-onboarding
+      - technology-selection
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - Discovery findings exist
+      - A human is available
+    actions:
+      - Put every decision to a human, grouped so they answer in a few passes rather than thirty.
+      - Ask 'is this approved', not 'is this present'.
+      - Every unanswered question becomes a DEC artifact with options, impact and an owner. An agent blocked later names DEC-nnn once and stops, rather than re-asking the same question each session.
+    inputs:
+      - Discovery findings
+    outputs:
+      - Answers on stack, environments, branch model, security, testing, observability, release model
+      - Open decisions recorded as DEC artifacts
+    exit_criteria:
+      - Every question is answered or recorded as an open decision with an owner
+    definition_of_done:
+      - no_blocking_open_decisions(unowned)
+      - artifact_exists(DEC)
+      - required_fields_present(DEC)
+      - cycle_accepted(CYCLE-PROD)
+      - cycle_rollup_reported(CYCLE-PROD)
+      - no_open_rework(CYCLE-PROD)
+    human_gate:
+      approver: project owner
+      recorded_in: project-decision-log
+      policy_ref: AP-03
+      decision:
+        - approve stack
+        - defer with an owner
+      approver_role: project-owner
+    produces:
+      - DEC
+    artifacts:
+      - docs/decisions/
+    department_cycle: CYCLE-PROD
+    emits:
+      - DECISION_OPENED
+    cycle_role: completes
+  - id: DECIDE
+    name: Configuration authoring
+    owner: engineering-director
+    skills:
+      - project-onboarding
+    risk: HIGH
+    complexity: complex
+    execution: inline
+    entry_criteria:
+      - Answers exist, or the unanswered items have owners
+    actions:
+      - Write the configuration from the template. Never fill a field by inference to make validation pass.
+    inputs:
+      - Answers
+      - Discovery findings
+    outputs:
+      - The project configuration
+      - Project security overrides where the project tightens defaults
+      - Project CLAUDE.md
+    exit_criteria:
+      - Configuration validates against the schema
+      - No layer is populated by inference alone
+    definition_of_done:
+      - config_valid()
+      - human_approval_recorded(AP-03)
+      - human_identity_recorded(AP-03)
+    human_gate:
+      approver: project owner
+      recorded_in: project-decision-log
+      policy_ref: AP-03
+      approver_role: project-owner
+    emits:
+      - DECISION_RESOLVED
+  - id: STRUCTURE
+    name: Knowledge structure
+    owner: docs-writer
+    skills:
+      - traceability
+    risk: LOW
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - The configuration is approved
+    actions:
+      - Create the knowledge directories and record the identifier convention.
+    inputs:
+      - Approved configuration
+    outputs:
+      - Knowledge directories
+      - Artifact index
+      - Identifier prefix in use
+    exit_criteria:
+      - The structure exists and the identifier convention is documented
+    definition_of_done:
+      - config_valid()
+  - id: VERIFY
+    name: Verification
+    owner: engineering-director
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The configuration and structure exist
+    actions:
+      - "Report three lists: configured, open, and what the agents will refuse to do until each open item closes."
+    inputs:
+      - Configuration
+      - Repository
+    outputs:
+      - Onboarding report naming every blocking open decision and its consequence
+    exit_criteria:
+      - The report names every blocking open decision
+    definition_of_done:
+      - config_valid()
+      - no_blocking_open_decisions(unowned)

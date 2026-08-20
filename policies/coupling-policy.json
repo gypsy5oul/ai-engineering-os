@@ -1,0 +1,50 @@
+{
+  "version": "1",
+  "description": "Two workers must not independently change a shared surface, even when they are editing different files. File disjointness is necessary and not sufficient.",
+  "rationale": "A backend agent editing the API implementation and a frontend agent editing the client both change the API contract. Their files never collide; the contract does. The result is a merge that compiles and a system that does not work.",
+  "coupled_surfaces": [
+    {
+      "surface": "api-contract",
+      "manifestations": ["OpenAPI or proto definitions", "GraphQL schema", "handler signatures", "client call sites", "contract tests"],
+      "owner_role": "solution-architect",
+      "rule": "The contract is agreed and recorded before either side implements. Implementers consume it; they do not amend it.",
+      "artifact": "ARCH"
+    },
+    {
+      "surface": "database-schema",
+      "manifestations": ["migration files", "ORM models", "raw queries", "seed and fixture data"],
+      "owner_role": "data-engineer",
+      "rule": "One owner per migration sequence. Two parallel migrations against one table are sequenced, never parallelised.",
+      "artifact": "ARCH"
+    },
+    {
+      "surface": "deployment-manifest",
+      "manifestations": ["Kubernetes manifests or charts", "infrastructure as code", "environment configuration", "pipeline definitions"],
+      "owner_role": "devops-engineer",
+      "rule": "One owner per environment surface. Application changes request configuration; they do not write it."
+    },
+    {
+      "surface": "event-schema",
+      "manifestations": ["event definitions", "producers", "consumers", "schema registry entries"],
+      "owner_role": "solution-architect",
+      "rule": "Producer and consumer changes are sequenced around a compatible intermediate state, never landed together."
+    },
+    {
+      "surface": "shared-configuration",
+      "manifestations": ["feature flags", "shared constants", "service discovery entries"],
+      "owner_role": "development-lead",
+      "rule": "One writer per key. A flag read by two services is owned by one of them."
+    }
+  ],
+  "the_pattern": [
+    "1. The surface owner produces or amends the contract, and it is reviewed.",
+    "2. The contract reaches 'approved'.",
+    "3. Only then do implementers work in parallel, each consuming the contract.",
+    "4. An implementer that finds the contract wrong raises it with the owner. It does not amend it."
+  ],
+  "enforcement": {
+    "declared": "Each workflow stage lists the coupled_artifacts it may touch.",
+    "checked": "scripts/validate_plugin.py fails when two stages that may run in parallel declare the same coupled surface.",
+    "not_enforceable_mechanically": "Nothing stops two agents reasoning about the same contract in prose. The control is that the contract artifact has one owner and a review gate, not that the files are disjoint."
+  }
+}

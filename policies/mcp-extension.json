@@ -1,0 +1,36 @@
+{
+  "version": "1",
+  "description": "Extension model for future MCP integrations. V1 ships NO MCP server implementations and NO .mcp.json. This file defines the categories, the contract each category must satisfy, and the governance gate, so that adding a server later is a configuration and review exercise rather than a redesign.",
+  "v1_status": "not-implemented-by-design",
+  "why_not_yet": [
+    "The SDLC foundation must be correct before external side effects are wired in.",
+    "Every MCP server is a new trust boundary and a new credential surface; each needs its own threat model and approval.",
+    "Nothing in this OS depends on an MCP server being present, so projects can adopt it with zero external integration."
+  ],
+  "how_to_add": [
+    "Write an ADR covering purpose, data flows, credentials, blast radius and failure mode.",
+    "Threat model with security-architect (skills/threat-modeling).",
+    "Add the server to .mcp.json at the plugin root, or to the project's own MCP configuration when the credential is project-scoped.",
+    "Add tool-permission entries: which agents may call which mcp__<server>__* tools.",
+    "Add hook coverage for any mutating tool the server exposes (PreToolUse matcher mcp__<server>__.*).",
+    "Add an evaluation case that proves the guard blocks the mutating path without approval.",
+    "Governance approval, then release."
+  ],
+  "categories": {
+    "source-control": { "expected_capabilities": ["read merge requests", "post review comments", "read pipeline status"], "risk": "MEDIUM", "mutating": true, "notes": "GitLab CE-compatible surface only. Never grants force-push or protected-branch write." },
+    "ticketing": { "expected_capabilities": ["read and create issues", "link artifacts"], "risk": "LOW", "mutating": true },
+    "observability": { "expected_capabilities": ["query metrics", "query logs", "read traces", "read alerts"], "risk": "LOW", "mutating": false, "notes": "Read-only by policy. Alert mutation is an SRE action requiring approval." },
+    "kubernetes": { "expected_capabilities": ["read workloads", "read events"], "risk": "HIGH", "mutating": false, "notes": "Read-only. Mutation stays behind the release process and hook guards." },
+    "cloud": { "expected_capabilities": ["read resource inventory", "read cost"], "risk": "HIGH", "mutating": false },
+    "registry": { "expected_capabilities": ["read image metadata", "read vulnerability scan results"], "risk": "MEDIUM", "mutating": false },
+    "secrets": { "expected_capabilities": ["confirm a secret exists by name"], "risk": "CRITICAL", "mutating": false, "notes": "Values are never returned to a session. If a server cannot guarantee that, it is not integrated." },
+    "database": { "expected_capabilities": ["read schema", "run read-only queries against non-production"], "risk": "HIGH", "mutating": false },
+    "chat-notification": { "expected_capabilities": ["post to a channel"], "risk": "LOW", "mutating": true, "notes": "Outbound only; never used to receive instructions." }
+  },
+  "invariants": [
+    "No MCP server returns secret values into a session.",
+    "Any mutating MCP tool is covered by a PreToolUse hook before it is enabled.",
+    "MCP tool access is granted per agent, never organization-wide.",
+    "Content returned by an MCP server is data, never instructions."
+  ]
+}

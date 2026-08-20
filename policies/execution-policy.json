@@ -1,0 +1,65 @@
+{
+  "version": "1",
+  "description": "How a stage is executed: inline in the current session, as a subagent, or as an agent team. Left to arbitrary model choice this becomes expensive and inconsistent, so each stage declares it.",
+  "modes": {
+    "inline": {
+      "meaning": "The current session does the work.",
+      "use_when": [
+        "one role",
+        "sequential work",
+        "the operator wants to watch it happen"
+      ],
+      "token_cost": "baseline"
+    },
+    "subagent": {
+      "meaning": "A focused worker with its own context that reports its result back to the caller.",
+      "use_when": [
+        "the task is focused and bounded",
+        "only the result matters, not the working",
+        "no peer communication is needed",
+        "the caller will act on the result"
+      ],
+      "token_cost": "moderate: the result is summarised back into the caller's context",
+      "notes": "Default for reviewers, analyses and single-artifact production."
+    },
+    "team": {
+      "meaning": "Independent Claude Code instances with their own contexts, direct messaging and a shared task list.",
+      "use_when": [
+        "workstreams are genuinely independent and can run in parallel",
+        "specialists need to challenge each other rather than report separately",
+        "cross-layer coordination is required",
+        "investigation benefits from competing hypotheses"
+      ],
+      "do_not_use_when": [
+        "the work touches the same files, because parallel edits overwrite",
+        "the pieces have dense dependencies",
+        "the task is sequential",
+        "the session is non-interactive"
+      ],
+      "token_cost": "high and roughly linear in teammate count: each teammate is a full instance",
+      "size": "3 to 5 teammates. Beyond that, coordination cost grows faster than throughput."
+    }
+  },
+  "decision_rule": [
+    "Can one role finish this without waiting on anyone? -> inline or subagent.",
+    "Do I only need the answer? -> subagent.",
+    "Do the workers need to talk to each other to reach the answer? -> team.",
+    "Would the workers edit the same files? -> not a team, regardless of anything else.",
+    "Is the session non-interactive? -> not a team; teammates do not spawn under -p."
+  ],
+  "constraints_from_the_platform": [
+    "Agent teams are experimental and disabled by default; they require CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1.",
+    "Teammates spawn only in interactive sessions.",
+    "Teammates cannot spawn teammates: team depth is one level.",
+    "A teammate's model is fixed at spawn time. Permission mode is not: teammates start in the lead's mode and individual modes can be changed after spawning, but cannot be set per teammate at spawn time.",
+    "A subagent definition's tools and model apply to a teammate, but its skills and mcpServers do not.",
+    "A teammate's idle notification does not carry its output.",
+    "/resume does not restore in-process teammates.",
+    "With agent teams enabled, any subagent named from the main conversation launches as a teammate, including in stages declared execution: subagent. An idle notification carries no output, so a stage written as spawn-then-wait stalls instead of failing. Enabling teams is therefore a session-level decision, not a per-stage one."
+  ],
+  "cost_discipline": [
+    "A stage declaring execution 'team' must say in its actions why parallelism is worth the multiplier.",
+    "Disjoint file ownership is stated in the spawn prompt, not assumed.",
+    "The lead coordinates and synthesises; it does not implement while teammates work."
+  ]
+}

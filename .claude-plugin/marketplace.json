@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-marketplace.json",
+  "name": "ai-engineering",
+  "description": "Private marketplace for the organization's AI Engineering OS.",
+  "owner": {
+    "name": "AI Engineering Platform Team",
+    "email": "ai-platform@example.com",
+    "url": "https://gitlab.example.com/ai-engineering"
+  },
+  "plugins": [
+    {
+      "name": "ai-engineering-os",
+      "description": "Governed AI engineering organization for Claude Code: SDLC agents, skills, safety hooks, agent-team patterns, evaluation and governance.",
+      "version": "0.9.0",
+      "category": "engineering",
+      "tags": [
+        "sdlc",
+        "governance",
+        "agents",
+        "security",
+        "qa"
+      ],
+      "author": {
+        "name": "AI Engineering Platform Team"
+      },
+      "source": {
+        "source": "url",
+        "url": "https://gitlab.example.com/ai-engineering/ai-engineering-os.git",
+        "ref": "ai-engineering-os--v0.9.0"
+      }
+    }
+  ]
+}

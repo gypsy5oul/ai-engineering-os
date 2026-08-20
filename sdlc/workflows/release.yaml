@@ -1,0 +1,307 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-RELEASE
+name: Release
+version: 2.0.0
+description: Turning merged changes into a deliberate production event. The rollback plan is produced before approval is sought, not after something goes wrong.
+applies_when:
+  - Merged changes are to be delivered to production.
+team_pattern: release-validation-team
+entry_conditions:
+  - All changes in scope are merged with their gates satisfied.
+exit_conditions:
+  - The release is deployed and verified, or rolled back and recorded.
+definition_of_done:
+  - artifact_status(REL, done)
+  - rollback_plan_or_acknowledged()
+  - agent_verdict(qa-lead, pass)
+  - agent_verdict(security-reviewer, pass)
+  - human_approval_recorded(AP-01)
+  - no_unresolved_findings(high)
+  - release_authorized()
+  - human_identity_recorded(AP-01)
+failure_paths:
+  - when: A gate verdict is missing
+    goto: ASSEMBLE
+  - when: Staging validation fails
+    goto: ASSEMBLE
+  - when: Production verification fails
+    goto: ROLLBACK
+stages:
+  - id: ASSEMBLE
+    name: Change assembly and analysis
+    owner: release-manager
+    skills:
+      - release-management
+      - traceability
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Every change in scope is merged
+    actions:
+      - "Find the interactions individual review cannot see: two safe changes touching one contract."
+      - A change missing a QA or security verdict blocks the release; do not reconcile later.
+    inputs:
+      - Merged merge requests
+      - Gate verdicts
+      - Migration plans
+    outputs:
+      - Release contents
+      - Dependency order
+      - Risk assessment
+      - Missing gates
+    produces:
+      - REL
+    exit_criteria:
+      - Every change in scope has a recorded QA and security verdict
+    definition_of_done:
+      - artifact_exists(REL)
+      - agent_verdict(qa-lead, pass)
+      - agent_verdict(security-reviewer, pass)
+    emits:
+      - RELEASE_PLANNED
+  - id: PLAN
+    name: Migration, rollback and validation planning
+    owner: release-manager
+    participants:
+      - data-engineer
+      - devops-engineer
+      - sre
+    skills:
+      - release-management
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Release contents are assembled and ordered
+    actions:
+      - Produce the rollback plan with its trigger conditions BEFORE approval is sought.
+      - State what rollback cannot recover, which is usually data written in the new format.
+    inputs:
+      - Release contents
+      - Deployment mechanics
+      - Data migrations
+    outputs:
+      - Migration plan
+      - Rollback plan with trigger conditions
+      - Staging validation plan
+      - Production verification plan
+    exit_criteria:
+      - A rollback plan exists, or irreversibility is acknowledged in writing by a human
+    definition_of_done:
+      - rollback_plan_or_acknowledged()
+  - id: STAGING
+    name: Staging validation
+    owner: qa-lead
+    participants:
+      - qa-engineer
+      - performance-reviewer
+      - test-reviewer
+    skills:
+      - test-automation
+      - performance-engineering
+    risk: HIGH
+    complexity: routine
+    execution: team
+    entry_criteria:
+      - A validation plan exists
+      - A release candidate is deployed to staging
+    actions:
+      - Execute the validation plan with evidence.
+      - A team is used because QA, security and operability validate different things against the same candidate.
+    inputs:
+      - Release candidate
+      - Validation plan
+    outputs:
+      - Validation results with evidence
+    produces:
+      - TESTREPORT
+    exit_criteria:
+      - The validation plan executed and passed, or deviations accepted by a named human
+    definition_of_done:
+      - tests_pass(e2e)
+      - agent_verdict(test-reviewer, pass)
+      - no_unresolved_findings(high)
+      - cycle_accepted(CYCLE-QA)
+      - cycle_rollup_reported(CYCLE-QA)
+      - no_open_rework(CYCLE-QA)
+    agent_gate:
+      reviewer: test-reviewer
+      blocking: true
+      recorded_in: the release artifact
+      purpose: "coverage of the validation plan: was every planned check executed, with evidence."
+    team_requirement: TEAM_PREFERRED
+    degraded_mode:
+      fallback: subagent
+      guarantees_lost:
+        - QA, security and operability validate sequentially, so a candidate that satisfies one discipline and troubles another is more likely to pass.
+      requires_human_acknowledgement: false
+    department_cycle: CYCLE-QA
+    cycle_role: completes
+  - id: APPROVE
+    name: Production approval
+    owner: release-manager
+    risk: CRITICAL
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - Staging validation passed
+      - Every gate has a verdict
+      - A rollback plan exists
+    actions:
+      - Present the evidence package and ask. Approval is recorded, never assumed from silence.
+      - This approves the CONTENT. It does not authorize deployment; AUTHORIZE is a separate act taken at deployment time.
+    inputs:
+      - "Evidence package: contents, verdicts, plans, validation results"
+    outputs:
+      - Recorded human approval or rejection
+    exit_criteria:
+      - A named human approved the content with the evidence in front of them
+      - The release artifact is in state 'approved'
+    definition_of_done:
+      - human_approval_recorded(AP-01)
+    human_gate:
+      approver: named release approver
+      recorded_in: gitlab-release
+      policy_ref: AP-01
+      decision:
+        - approve
+        - approve-with-conditions
+        - reject
+      approver_role: release-approver
+    emits:
+      - RELEASE_APPROVED
+  - id: AUTHORIZE
+    name: Production deployment authorization
+    owner: release-manager
+    risk: CRITICAL
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The release artifact is in state 'approved'
+      - The change window, if declared, is open
+    actions:
+      - Authorize deployment of this approved release, now. A standing authorization from a decision taken days ago is what this stage exists to prevent.
+    inputs:
+      - Approved release artifact
+      - Current production state
+    outputs:
+      - Deployment authorization recorded against the release
+    exit_criteria:
+      - The release artifact is in state 'authorized'
+    definition_of_done:
+      - release_authorized()
+      - human_approval_recorded(AP-01)
+      - human_identity_recorded(AP-01)
+    human_gate:
+      approver: named release approver
+      approver_role: release-approver
+      policy_ref: AP-01
+      recorded_in: gitlab-release
+      decision:
+        - authorize
+        - hold
+        - withdraw approval
+    emits:
+      - DEPLOYMENT_AUTHORIZED
+  - id: DEPLOY
+    name: Deployment
+    owner: devops-engineer
+    skills:
+      - ci-cd
+    risk: CRITICAL
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The release artifact is in state 'authorized'
+    actions:
+      - Deploy the artifact that was tested. Never rebuild for production.
+    inputs:
+      - Approved release
+    outputs:
+      - Deployment record
+    exit_criteria:
+      - Deployed with health gating
+      - Rollback still available
+    definition_of_done:
+      - release_authorized()
+      - human_approval_recorded(AP-01)
+      - cycle_accepted(CYCLE-DEVOPS)
+      - cycle_rollup_reported(CYCLE-DEVOPS)
+      - no_open_rework(CYCLE-DEVOPS)
+    human_gate:
+      approver: named release approver
+      recorded_in: gitlab-release
+      policy_ref: AP-01
+      approver_role: release-approver
+    coupled_artifacts:
+      - deployment-manifest
+    department_cycle: CYCLE-DEVOPS
+    emits:
+      - DEPLOYMENT_FAILED
+      - DEPLOYMENT_STARTED
+    cycle_role: completes
+  - id: VERIFY
+    name: Post-deployment verification
+    owner: release-manager
+    participants:
+      - sre
+    skills:
+      - observability
+    risk: HIGH
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The release is deployed
+    actions:
+      - Execute the verification plan and record the result. The party that executed the deployment does not declare it verified alone.
+    inputs:
+      - Production verification plan
+    outputs:
+      - Verification record
+    exit_criteria:
+      - Verification executed and recorded within the stated window
+    definition_of_done:
+      - artifact_status(REL, done)
+      - no_unresolved_findings(high)
+      - cycle_accepted(CYCLE-SRE)
+      - cycle_rollup_reported(CYCLE-SRE)
+      - no_open_rework(CYCLE-SRE)
+    department_cycle: CYCLE-SRE
+    emits:
+      - DEPLOYMENT_COMPLETED
+    cycle_role: completes
+  - id: ROLLBACK
+    name: Rollback
+    owner: release-manager
+    participants:
+      - incident-commander
+      - devops-engineer
+    risk: CRITICAL
+    complexity: complex
+    execution: inline
+    entry_criteria:
+      - A rollback trigger condition fired
+    actions:
+      - Execute the rollback plan; route the cause to WF-DEFECT or WF-INCIDENT.
+    inputs:
+      - Rollback plan
+      - The trigger condition that fired
+    outputs:
+      - Rollback record
+      - Incident where customer impact occurred
+    exit_criteria:
+      - Previous version verified running
+      - Cause routed to WF-DEFECT or WF-INCIDENT
+    definition_of_done:
+      - artifact_status(REL, rolled-back)
+      - human_approval_recorded(AP-01)
+    human_gate:
+      approver: named release approver
+      recorded_in: gitlab-release
+      policy_ref: AP-01
+      approver_role: release-approver
+    optional_when:
+      - No trigger condition fired.

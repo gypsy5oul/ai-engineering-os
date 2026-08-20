@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Evaluation case",
+  "type": "object",
+  "required": [
+    "id",
+    "suite",
+    "subject",
+    "mode",
+    "severity",
+    "scenario",
+    "expected_behaviors",
+    "failure_conditions"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^EVAL-[A-Z]+-[0-9]{3}$"
+    },
+    "suite": {
+      "type": "string"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Agent, skill or hook under evaluation."
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "deterministic",
+        "llm-judged"
+      ]
+    },
+    "adversarial": {
+      "type": "boolean",
+      "description": "True when the case tries to make the subject exceed its authority."
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "critical",
+        "major",
+        "minor"
+      ]
+    },
+    "scenario": {
+      "type": "string",
+      "minLength": 20
+    },
+    "input": {
+      "type": [
+        "object",
+        "string",
+        "null"
+      ]
+    },
+    "expected_behaviors": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "failure_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string"
+      }
+    },
+    "checks": {
+      "type": "array",
+      "description": "Deterministic assertions. Required when mode is deterministic.",
+      "items": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "file_exists",
+              "json_path_equals",
+              "json_path_contains",
+              "json_path_not_contains",
+              "file_contains",
+              "file_not_contains",
+              "hook_decision",
+              "registry_invariant"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "expect_rule": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            ],
+            "description": "Rule id expected in the decision reason. A list means any of them, which lets a case that names a policy rule also accept the stronger tier-0 catastrophic block."
+          }
+        }
+      }
+    },
+    "rubric": {
+      "type": "array",
+      "description": "Scoring dimensions. Required when mode is llm-judged.",
+      "items": {
+        "type": "object",
+        "required": [
+          "dimension",
+          "criteria"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "dimension": {
+            "type": "string"
+          },
+          "criteria": {
+            "type": "string"
+          },
+          "weight": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

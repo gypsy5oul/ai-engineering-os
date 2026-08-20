@@ -1,0 +1,106 @@
+{
+  "version": "1",
+  "description": "Named least-privilege tool profiles. Every agent definition MUST declare a tools list identical to one profile. Enforced by scripts/validate_plugin.py.",
+  "principles": [
+    "An agent receives only the tools its role contract requires.",
+    "Tool lists cannot express operational risk (a Bash-capable agent can still run a deploy). Operational risk is constrained by hooks/ and by the approval policy, not by tool lists alone.",
+    "Reviewers and governance roles never receive Write or Edit. Independence is structural, not advisory."
+  ],
+  "profiles": {
+    "analysis-readonly": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "WebFetch",
+        "WebSearch"
+      ],
+      "intent": "Reads the repository and public references. Cannot execute commands or modify files.",
+      "used_by_risk": [
+        "LOW",
+        "MEDIUM",
+        "HIGH"
+      ]
+    },
+    "review-readonly": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash"
+      ],
+      "intent": "Reads the repository and runs read-only inspection commands (git diff, test runs, scanners). Cannot modify files.",
+      "notes": "Bash is required to inspect diffs and run analysers. Write access is deliberately withheld so a reviewer can never author the code it approves."
+    },
+    "implementer": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Bash"
+      ],
+      "intent": "Modifies source and tests, runs builds/tests/linters, uses git for feature branches and merge requests.",
+      "notes": "Protected-branch, destructive and production operations are blocked or escalated by hooks regardless of this profile."
+    },
+    "orchestrator": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent"
+      ],
+      "intent": "Plans work, delegates to subagents or agent-team teammates. Does not write code itself.",
+      "notes": "Agent tool use is further constrained by policies/role-hierarchy.json enforced in hooks/scripts/guard_spawn.py. Claude Code removes AskUserQuestion from every subagent even when the tools field lists it, so a role that runs as a subagent cannot prompt the human directly. Escalation is a return value: the role ends its turn with an OPEN DECISION block that the main session puts to the human. See docs/approvals.md."
+    },
+    "author": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write"
+      ],
+      "intent": "Produces documents and artifacts (requirements, architecture, plans, runbooks). No command execution.",
+      "notes": "Withholding Bash keeps document-producing roles out of the execution path entirely."
+    },
+    "delegating-author": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Agent"
+      ],
+      "intent": "A department lead that authors its own planning artifacts and delegates work to its department, without executing commands.",
+      "notes": "The author profile with Agent added. Three roles were granted may_spawn in policies/agent-registry.json while holding the author profile, which has no Agent tool: the guard would have permitted a delegation the role had no way to attempt. Withholding Bash keeps these roles out of the execution path, which is why they do not take the lead profile."
+    },
+    "operator-readonly": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "WebFetch"
+      ],
+      "intent": "Investigates running systems and telemetry read-only. Cannot modify repository files.",
+      "notes": "Production mutation always requires human approval via the approval policy and is blocked by hooks."
+    },
+    "lead": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Edit",
+        "Write",
+        "Agent"
+      ],
+      "intent": "Coordinates work and authors the planning artifacts the coordination produces (stage plans, stories, incident records).",
+      "notes": "Write access is narrowed to planning paths by policies/write-scope.json. A lead that could write source would become the whole team; the scope, not the tool list, is what prevents that. Claude Code removes AskUserQuestion from every subagent even when the tools field lists it, so a role that runs as a subagent cannot prompt the human directly. Escalation is a return value: the role ends its turn with an OPEN DECISION block that the main session puts to the human. See docs/approvals.md."
+    }
+  }
+}

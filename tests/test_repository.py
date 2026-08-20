@@ -1,0 +1,789 @@
+"""Repository-level tests: the validators pass, and the invariants that make the
+organization coherent hold. These are the checks CI relies on."""
+import json
+import os
+import re
+import subprocess
+import sys
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+from frontmatter import read as read_fm  # noqa: E402
+
+
+def script(name, *args):
+    return subprocess.run([sys.executable, os.path.join(ROOT, "scripts", name)] + list(args),
+                          capture_output=True, text=True, cwd=ROOT, timeout=300)
+
+
+def load(rel):
+    with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+class TestValidators(unittest.TestCase):
+    def test_plugin_validation_passes(self):
+        r = script("validate_plugin.py")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_schema_validation_passes(self):
+        r = script("validate_schemas.py")
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
+    def test_secret_scan_clean(self):
+        r = script("secret_scan.py", ROOT)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_shipped_project_template_validates(self):
+        r = script("validate_project_config.py", os.path.join(ROOT, "templates/project/project.yaml"))
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_deterministic_evaluations_pass(self):
+        r = script("run_evaluations.py")
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+
+class TestOrganizationalInvariants(unittest.TestCase):
+    def setUp(self):
+        self.registry = load("policies/agent-registry.json")
+        self.profiles = load("policies/tool-permissions.json")["profiles"]
+        self.agents = {a["name"]: a for a in self.registry["agents"]}
+
+    def tools(self, name):
+        return self.profiles[self.agents[name]["tool_profile"]]["tools"]
+
+    def test_reviewers_cannot_write(self):
+        for name in self.agents:
+            if "review" in name:
+                self.assertNotIn("Write", self.tools(name))
+                self.assertNotIn("Edit", self.tools(name))
+
+    def test_critical_agents_cannot_write(self):
+        for name, agent in self.agents.items():
+            if agent["risk"] == "CRITICAL":
+                self.assertNotIn("Write", self.tools(name), name)
+
+    def test_no_dated_model_identifiers(self):
+        for agent in self.registry["agents"]:
+            for field in ("default_model", "escalation_model"):
+                self.assertIn(agent[field], {"opus", "sonnet", "haiku", "fable", "inherit"})
+
+    def test_high_risk_roles_are_not_below_their_model_floor(self):
+        floors = {c: v["implies"]["model_floor"]
+                  for c, v in load("policies/risk-classification.json")["classes"].items()}
+        rank = {"haiku": 0, "sonnet": 1, "opus": 2, "fable": 1, "inherit": 1}
+        for agent in self.registry["agents"]:
+            floor = floors[agent["risk"]]
+            self.assertGreaterEqual(rank[agent["default_model"]], rank[floor],
+                                    "%s runs %s below the %s floor %s"
+                                    % (agent["name"], agent["default_model"], agent["risk"], floor))
+
+    def test_every_agent_file_declares_its_forbidden_actions(self):
+        for name in self.agents:
+            _, body = read_fm(os.path.join(ROOT, "agents", name + ".md"))
+            section = re.search(r"## Forbidden actions\n\n(.*?)\n\n## ", body, re.S)
+            self.assertIsNotNone(section, "%s has no forbidden actions section" % name)
+            self.assertGreaterEqual(len(section.group(1).strip().splitlines()), 1, name)
+
+    def test_approval_policy_ids_are_referenced_by_something(self):
+        policy = load("policies/approval-policy.json")
+        corpus = ""
+        for folder in ("agents", "skills", "sdlc", "policies", "docs", "hooks"):
+            for dirpath, _, files in os.walk(os.path.join(ROOT, folder)):
+                for f in files:
+                    if f.endswith((".md", ".json", ".yaml", ".py")):
+                        with open(os.path.join(dirpath, f), encoding="utf-8", errors="ignore") as fh:
+                            corpus += fh.read()
+        for item in policy["human_approval_required"]:
+            self.assertIn(item["id"], corpus,
+                          "%s (%s) is defined but never referenced anywhere" % (item["id"], item["category"]))
+
+    def test_every_workflow_stage_owner_can_do_its_outputs(self):
+        """A stage whose outputs are artifacts needs an owner that can write."""
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        base = os.path.join(ROOT, "sdlc", "workflows")
+        for name in os.listdir(base):
+            if not name.endswith(".yaml"):
+                continue
+            wf = parse_file(os.path.join(base, name))
+            for stage in wf["stages"]:
+                if stage.get("artifacts"):
+                    tools = self.tools(stage["owner"])
+                    self.assertIn("Write", tools,
+                                  "%s stage %s produces artifacts but owner %s cannot write"
+                                  % (name, stage["id"], stage["owner"]))
+
+
+class TestWorkflowContracts(unittest.TestCase):
+    """The v2 stage contract: entry criteria, artifacts, DoD, gates, execution."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        base = os.path.join(ROOT, "sdlc", "workflows")
+        self.workflows = {}
+        for name in sorted(os.listdir(base)):
+            if name.endswith((".yaml", ".yml")):
+                wf = parse_file(os.path.join(base, name))
+                self.workflows[wf["id"]] = wf
+        self.agents = {a["name"] for a in load("policies/agent-registry.json")["agents"]}
+
+    def test_every_stage_declares_entry_criteria_and_dod(self):
+        for wid, wf in self.workflows.items():
+            for s in wf["stages"]:
+                with self.subTest(stage="%s/%s" % (wid, s["id"])):
+                    self.assertTrue(s.get("entry_criteria"), "no entry criteria")
+                    self.assertTrue(s.get("definition_of_done"), "no definition of done")
+                    self.assertIn(s.get("risk"), ("LOW", "MEDIUM", "HIGH", "CRITICAL"))
+                    self.assertIn(s.get("execution"), ("inline", "subagent", "team"))
+
+    def test_no_human_gate_is_approved_by_an_agent(self):
+        for wid, wf in self.workflows.items():
+            for s in wf["stages"]:
+                hg = s.get("human_gate")
+                if hg:
+                    self.assertNotIn(hg["approver"], self.agents,
+                                     "%s/%s: %s is an agent" % (wid, s["id"], hg["approver"]))
+
+    def test_no_stage_reviews_its_own_output(self):
+        for wid, wf in self.workflows.items():
+            for s in wf["stages"]:
+                ag = s.get("agent_gate")
+                if ag:
+                    self.assertNotEqual(ag["reviewer"], s["owner"], "%s/%s" % (wid, s["id"]))
+
+    def test_every_human_gate_names_where_the_decision_is_recorded(self):
+        """A decision that lives only in a transcript did not happen."""
+        for wid, wf in self.workflows.items():
+            for s in wf["stages"]:
+                hg = s.get("human_gate")
+                if hg:
+                    self.assertTrue(hg.get("recorded_in"), "%s/%s" % (wid, s["id"]))
+
+    def test_team_stages_have_enough_participants_to_be_a_team(self):
+        for wid, wf in self.workflows.items():
+            for s in wf["stages"]:
+                if s.get("execution") == "team":
+                    self.assertGreaterEqual(len(s.get("participants") or []), 2,
+                                            "%s/%s" % (wid, s["id"]))
+
+    def test_definition_of_done_grammar(self):
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "check_dod.py"), "--grammar"],
+                           capture_output=True, text=True, cwd=ROOT, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_every_produced_artifact_code_is_in_the_model(self):
+        codes = {a["code"] for a in load("policies/artifact-model.json")["artifact_types"]}
+        for wid, wf in self.workflows.items():
+            for s in wf["stages"]:
+                for code in s.get("produces") or []:
+                    self.assertIn(code, codes, "%s/%s produces %s" % (wid, s["id"], code))
+
+    def test_model_resolution_is_executable_for_every_stage(self):
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "resolve_model.py"),
+                            "--all", "--json"], capture_output=True, text=True, cwd=ROOT, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        rows = json.loads(r.stdout)
+        self.assertEqual(len(rows), sum(len(w["stages"]) for w in self.workflows.values()))
+        for row in rows:
+            self.assertIn(row["model"], {"opus", "sonnet", "haiku", "fable", "inherit"})
+
+    def test_project_override_cannot_drop_below_the_risk_floor(self):
+        import tempfile
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        from resolve_model import resolve
+        d = tempfile.mkdtemp()
+        os.makedirs(os.path.join(d, ".ai-engineering"))
+        with open(os.path.join(d, ".ai-engineering", "project.json"), "w") as fh:
+            json.dump({"ai": {"model_overrides": {"security-reviewer": {"model": "haiku"}}}}, fh)
+        result = resolve("security-reviewer", "HIGH", "complex", project=d)
+        self.assertEqual(result["model"], "opus")
+        self.assertTrue(any("REFUSED" in t for t in result["trace"]))
+
+    def test_agent_teams_are_not_a_system_of_record(self):
+        sor = load("policies/system-of-record.json")
+        self.assertEqual(sor["execution_mechanisms"]["agent_team_task_list"]["authoritative_for"], [])
+        self.assertEqual(sor["execution_mechanisms"]["session_transcript"]["authoritative_for"], [])
+
+
+class TestArtifactContracts(unittest.TestCase):
+    """The artifact model is the state model. It must agree with roles and scopes."""
+
+    def setUp(self):
+        self.model = load("policies/artifact-model.json")
+        self.agents = {a["name"] for a in load("policies/agent-registry.json")["agents"]}
+        self.codes = {a["code"] for a in self.model["artifact_types"]}
+
+    def test_every_type_has_a_complete_contract(self):
+        required = ("code", "type", "owner_role", "produced_by_stage", "storage", "statuses",
+                    "required_fields", "may_modify", "may_review", "may_approve",
+                    "depends_on", "consumed_by")
+        for a in self.model["artifact_types"]:
+            with self.subTest(code=a["code"]):
+                for field in required:
+                    self.assertIn(field, a)
+                self.assertIn(a["owner_role"], self.agents)
+
+    def test_no_agent_is_named_as_a_human_approver(self):
+        for a in self.model["artifact_types"]:
+            approve = a.get("may_approve") or {}
+            if approve.get("kind") == "human":
+                self.assertNotIn(approve.get("role"), self.agents,
+                                 "%s: %s is an agent" % (a["code"], approve.get("role")))
+
+    def test_immutable_artifacts_have_no_modifiers(self):
+        for a in self.model["artifact_types"]:
+            if a.get("immutable_after_creation"):
+                self.assertEqual(a["may_modify"], [], a["code"])
+
+    def test_evidence_is_immutable_and_incident_is_append_only(self):
+        by = {a["code"]: a for a in self.model["artifact_types"]}
+        self.assertTrue(by["EVID"]["immutable_after_creation"])
+        self.assertEqual(by["EVID"]["may_modify"], [])
+        self.assertTrue(by["INC"].get("append_only"))
+
+    def test_dependency_graph_is_closed(self):
+        for a in self.model["artifact_types"]:
+            for dep in a["depends_on"] + a["consumed_by"]:
+                self.assertIn(dep, self.codes, "%s -> %s" % (a["code"], dep))
+
+    def test_every_code_is_accepted_by_the_header_schema(self):
+        import re as _re
+        pattern = load("schemas/artifact-header.schema.json")["properties"]["id"]["pattern"]
+        for code in self.codes:
+            self.assertTrue(_re.match(pattern, "PROJ-%s-001" % code), code)
+
+    def test_open_decision_and_evidence_exist_as_first_class_types(self):
+        self.assertIn("DEC", self.codes)
+        self.assertIn("EVID", self.codes)
+
+
+class TestReleaseAuthority(unittest.TestCase):
+    def test_three_acts_are_distinct(self):
+        auth = load("policies/release-authority.json")
+        for act in ("release_approval", "deployment_authorization", "deployment_execution",
+                    "verification"):
+            self.assertIn(act, auth["acts"])
+        self.assertIn("authorized", auth["state_machine"]["approved"])
+        self.assertNotIn("done", auth["state_machine"]["approved"],
+                         "an approved release must not go straight to done")
+
+    def test_both_deploying_workflows_have_an_authorize_stage(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        base = os.path.join(ROOT, "sdlc", "workflows")
+        found = []
+        for name in os.listdir(base):
+            if not name.endswith(".yaml"):
+                continue
+            wf = parse_file(os.path.join(base, name))
+            ids = [s["id"] for s in wf["stages"]]
+            if "DEPLOY" in ids:
+                self.assertIn("AUTHORIZE", ids, wf["id"])
+                self.assertLess(ids.index("AUTHORIZE"), ids.index("DEPLOY"), wf["id"])
+                found.append(wf["id"])
+        self.assertGreaterEqual(len(found), 2, found)
+
+
+class TestCoupling(unittest.TestCase):
+    def test_parallel_stages_do_not_share_a_surface(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        known = {s["surface"] for s in load("policies/coupling-policy.json")["coupled_surfaces"]}
+        base = os.path.join(ROOT, "sdlc", "workflows")
+        for name in sorted(os.listdir(base)):
+            if not name.endswith(".yaml"):
+                continue
+            wf = parse_file(os.path.join(base, name))
+            stages = {s["id"]: s for s in wf["stages"]}
+            for s in wf["stages"]:
+                for surface in s.get("coupled_artifacts") or []:
+                    self.assertIn(surface, known, "%s/%s" % (wf["id"], s["id"]))
+                for other in s.get("parallel_with") or []:
+                    shared = set(s.get("coupled_artifacts") or []) & set(
+                        (stages.get(other) or {}).get("coupled_artifacts") or [])
+                    self.assertEqual(shared, set(), "%s: %s || %s" % (wf["id"], s["id"], other))
+
+    def test_every_surface_has_exactly_one_owner(self):
+        agents = {a["name"] for a in load("policies/agent-registry.json")["agents"]}
+        for s in load("policies/coupling-policy.json")["coupled_surfaces"]:
+            self.assertIn(s["owner_role"], agents, s["surface"])
+
+
+class TestTeamRequirement(unittest.TestCase):
+    def test_team_stages_declare_requirement_and_degraded_mode(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        base = os.path.join(ROOT, "sdlc", "workflows")
+        for name in sorted(os.listdir(base)):
+            if not name.endswith(".yaml"):
+                continue
+            wf = parse_file(os.path.join(base, name))
+            for s in wf["stages"]:
+                if s.get("execution") != "team":
+                    continue
+                with self.subTest(stage="%s/%s" % (wf["id"], s["id"])):
+                    self.assertIn(s.get("team_requirement"),
+                                  ("TEAM_REQUIRED", "TEAM_PREFERRED", "TEAM_OPTIONAL"))
+                    degraded = s.get("degraded_mode")
+                    self.assertIsNotNone(degraded, "no degraded_mode: silence pretends equivalence")
+                    self.assertTrue(degraded["guarantees_lost"])
+                    if s["team_requirement"] == "TEAM_REQUIRED":
+                        self.assertTrue(degraded["fallback"] == "ask"
+                                        or degraded.get("requires_human_acknowledgement"))
+
+    def test_incident_investigation_is_team_required(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        wf = parse_file(os.path.join(ROOT, "sdlc", "workflows", "incident-response.yaml"))
+        stage = next(s for s in wf["stages"] if s["id"] == "INVESTIGATE")
+        self.assertEqual(stage["team_requirement"], "TEAM_REQUIRED")
+
+
+class TestDepartmentCycles(unittest.TestCase):
+    """Level 2: the delegation, review and rework loop inside each department."""
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        base = os.path.join(ROOT, "sdlc", "cycles")
+        self.cycles = {}
+        for name in sorted(os.listdir(base)):
+            if name.endswith((".yaml", ".yml")):
+                c = parse_file(os.path.join(base, name))
+                self.cycles[c["id"]] = c
+        self.agents = {a["name"]: a for a in load("policies/agent-registry.json")["agents"]}
+        self.profiles = load("policies/tool-permissions.json")["profiles"]
+
+    def test_checker_passes(self):
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "check_cycle.py")],
+                           capture_output=True, text=True, cwd=ROOT, timeout=120)
+        self.assertEqual(r.returncode, 0, r.stdout)
+
+    def test_every_department_has_a_cycle(self):
+        departments = {c["department"] for c in self.cycles.values()}
+        for expected in ("engineering", "qa", "security", "architecture", "product",
+                         "platform", "sre"):
+            self.assertIn(expected, departments)
+
+    def test_the_peer_reviewer_is_never_the_worker(self):
+        for cid, c in self.cycles.items():
+            peer = c["positions"]["peer_reviewer"]
+            if peer == "mutual":
+                self.assertGreaterEqual(len(c["positions"]["workers"]), 2,
+                                        "%s: mutual review needs two workers" % cid)
+            else:
+                self.assertNotIn(peer, c["positions"]["workers"], cid)
+
+    def test_the_peer_reviewer_cannot_write_the_artifact_it_reviews(self):
+        scope = load("policies/write-scope.json")
+        model = {a["code"]: a for a in load("policies/artifact-model.json")["artifact_types"]}
+        for cid, c in self.cycles.items():
+            peer = c["positions"]["peer_reviewer"]
+            if peer == "mutual":
+                continue
+            storage = model[c["work_item"]["artifact"]]["storage"].rstrip("/")
+            entry = scope["roles"].get(peer)
+            if entry is None:
+                continue
+            if entry["mode"] == "allow":
+                writable = any(storage.startswith(p.replace("/**", "").rstrip("/"))
+                               for p in entry["allow"])
+                self.assertFalse(writable, "%s: %s can write %s" % (cid, peer, storage))
+
+    def test_a_head_is_never_reviewing_line_level_work(self):
+        """The head receives a rollup and nothing else."""
+        for cid, c in self.cycles.items():
+            head = c["positions"]["head"]
+            self.assertEqual(head.get("receives", "rollup"), "rollup", cid)
+            self.assertNotIn(head.get("role"), c["positions"]["workers"], cid)
+
+    def test_departments_are_managed_by_agents(self):
+        """A human head puts a person in every departmental rollup, which is not
+        an autonomous organization. Exactly one exception is argued: security."""
+        human_headed = []
+        for cid, c in self.cycles.items():
+            head = c["positions"]["head"]
+            if head["kind"] == "human":
+                human_headed.append(cid)
+                self.assertTrue(head.get("human_exception_reason"),
+                                "%s: human head with no argued exception" % cid)
+                continue
+            entry = self.agents[head["role"]]
+            self.assertIn(entry["tool_profile"], ("lead", "orchestrator"), cid)
+        self.assertEqual(human_headed, ["CYCLE-SEC"],
+                         "only security should be human-headed, got %s" % human_headed)
+
+    def test_a_head_can_delegate_to_its_own_lead(self):
+        for cid, c in self.cycles.items():
+            head, lead = c["positions"]["head"], c["positions"]["lead"]
+            if head["kind"] != "agent" or head["role"] == lead:
+                continue
+            self.assertIn(lead, self.agents[head["role"]]["may_spawn"],
+                          "%s: head %s cannot spawn lead %s" % (cid, head["role"], lead))
+
+    def test_the_human_owner_governs_and_does_not_operate(self):
+        for cid, c in self.cycles.items():
+            owner = c["positions"]["human_owner"]
+            self.assertNotIn(owner["role"], self.agents, "%s: human_owner is an agent" % cid)
+            self.assertTrue(owner["authority"],
+                            "%s: a governance role that decides nothing specific decides "
+                            "everything by default" % cid)
+            self.assertEqual(owner.get("receives", "escalations-and-approvals"),
+                             "escalations-and-approvals", cid)
+            operational = [c["positions"]["lead"], c["positions"]["peer_reviewer"]] + \
+                c["positions"]["workers"]
+            self.assertNotIn(owner["role"], operational, cid)
+
+    def test_escalation_reaches_the_human_last(self):
+        for cid, c in self.cycles.items():
+            order = c["escalation"]["order"]
+            self.assertEqual(order[0], "worker", cid)
+            self.assertEqual(order[-1], "human_owner", cid)
+            self.assertLess(order.index("lead"), order.index("head"), cid)
+            self.assertLess(order.index("head"), order.index("human_owner"), cid)
+
+    def test_incident_investigation_is_unconditionally_team_required(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        wf = parse_file(os.path.join(ROOT, "sdlc", "workflows", "incident-response.yaml"))
+        s = next(x for x in wf["stages"] if x["id"] == "INVESTIGATE")
+        self.assertEqual(s["team_requirement"], "TEAM_REQUIRED")
+        d = s["degraded_mode"]
+        self.assertTrue(d["fallback"] == "ask" or d.get("requires_human_acknowledgement"))
+        self.assertGreaterEqual(len(d["guarantees_lost"]), 3)
+
+    def test_reviews_can_request_changes(self):
+        """A review that can only pass is not a review."""
+        for cid, c in self.cycles.items():
+            for review in ("PEER_REVIEW", "LEAD_REVIEW"):
+                targets = set((c["transitions"].get(review) or {}).values())
+                self.assertIn("CHANGES_REQUESTED", targets, "%s/%s" % (cid, review))
+
+    def test_rework_is_bounded(self):
+        for cid, c in self.cycles.items():
+            self.assertGreaterEqual(c["rework"]["limit"], 1, cid)
+            self.assertLessEqual(c["rework"]["limit"], 5, cid)
+            self.assertTrue(c["rework"]["on_limit"], cid)
+
+    def test_the_rollup_is_produced_by_the_lead(self):
+        for cid, c in self.cycles.items():
+            self.assertEqual(c["rollup"]["produced_by"], c["positions"]["lead"], cid)
+
+    def test_qa_validates_a_defect_before_it_becomes_a_development_item(self):
+        qa = self.cycles["CYCLE-QA"]
+        triage = next(s for s in qa["sub_cycles"] if s["id"] == "SUB-QA-TRIAGE")
+        self.assertEqual(triage["owner"], "qa-lead")
+        self.assertGreaterEqual(len(triage["questions"]), 4)
+        for outcome in ("not-a-defect", "test-defect", "environment-defect", "product-defect"):
+            self.assertIn(outcome, triage["outcomes"])
+
+    def test_only_completing_stages_require_the_cycle_to_be_accepted(self):
+        """A department whose work spans several stages has not finished at the
+        first of them. Only the completing stage carries the predicates."""
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file
+        base = os.path.join(ROOT, "sdlc", "workflows")
+        wired = 0
+        completing = {}
+        for name in sorted(os.listdir(base)):
+            if not name.endswith(".yaml"):
+                continue
+            wf = parse_file(os.path.join(base, name))
+            for s in wf["stages"]:
+                cid = s.get("department_cycle")
+                if not cid:
+                    continue
+                wired += 1
+                self.assertIn(cid, self.cycles, "%s/%s" % (wf["id"], s["id"]))
+                role = s.get("cycle_role")
+                self.assertIn(role, ("enters", "continues", "completes"),
+                              "%s/%s" % (wf["id"], s["id"]))
+                dod = s["definition_of_done"]
+                preds = ("cycle_accepted(%s)" % cid, "cycle_rollup_reported(%s)" % cid,
+                         "no_open_rework(%s)" % cid)
+                if role == "completes":
+                    completing.setdefault((wf["id"], cid), []).append(s["id"])
+                    for pred in preds:
+                        self.assertIn(pred, dod, "%s/%s" % (wf["id"], s["id"]))
+                else:
+                    for pred in preds:
+                        self.assertNotIn(pred, dod,
+                                         "%s/%s has role %s but requires %s"
+                                         % (wf["id"], s["id"], role, pred))
+        self.assertGreater(wired, 10, "only %d stages run a department cycle" % wired)
+        for key, stages in completing.items():
+            self.assertEqual(len(stages), 1,
+                             "%s is completed at more than one stage: %s" % (key, stages))
+
+    def test_no_two_cycles_claim_the_same_stage(self):
+        claims = {}
+        for cid, c in self.cycles.items():
+            for ref in c["used_by_stages"]:
+                self.assertNotIn(ref, claims,
+                                 "%s and %s both claim %s" % (claims.get(ref), cid, ref))
+                claims[ref] = cid
+
+
+class TestYamlRoundTrip(unittest.TestCase):
+    """Every workflow must survive parse -> emit -> parse unchanged, since the
+    generator and the parser are two halves of the same contract."""
+
+    def test_workflows_round_trip(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        from minyaml import parse_file, parse
+        from yamlemit import dump_document
+        base = os.path.join(ROOT, "sdlc", "workflows")
+        for name in sorted(os.listdir(base)):
+            if not name.endswith((".yaml", ".yml")):
+                continue
+            with self.subTest(workflow=name):
+                original = parse_file(os.path.join(base, name))
+                self.assertEqual(parse(dump_document(original)), original)
+
+
+class TestDocumentation(unittest.TestCase):
+    def test_required_docs_exist(self):
+        required = ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "GOVERNANCE.md", "SECURITY.md",
+                    "docs/architecture.md", "docs/organization.md", "docs/agent-model.md",
+                    "docs/skills.md", "docs/hooks.md", "docs/agent-teams.md", "docs/sdlc.md",
+                    "docs/governance.md", "docs/security.md", "docs/model-policy.md",
+                    "docs/project-onboarding.md", "docs/evaluation.md", "docs/development.md",
+                    "docs/release.md", "docs/troubleshooting.md", "docs/knowledge-structure.md",
+                    "docs/mcp.md", "docs/gitlab.md", "docs/limitations.md",
+                    "docs/approvals.md", "docs/execution.md", "docs/organization-freeze.md", "docs/department-cycles.md",
+                    "docs/getting-started.md", "docs/communications.md", "docs/production-readiness.md", "docs/enterprise-deployment.md"]
+        missing = [p for p in required if not os.path.exists(os.path.join(ROOT, p))]
+        self.assertEqual(missing, [], "missing documentation: %s" % missing)
+
+    def test_every_agent_and_skill_is_listed_in_the_catalogue(self):
+        with open(os.path.join(ROOT, "docs", "organization.md"), encoding="utf-8") as fh:
+            org = fh.read()
+        for name in os.listdir(os.path.join(ROOT, "agents")):
+            self.assertTrue(name[:-3] in org, "%s missing from docs/organization.md" % name)
+        with open(os.path.join(ROOT, "docs", "skills.md"), encoding="utf-8") as fh:
+            skills_doc = fh.read()
+        for name in os.listdir(os.path.join(ROOT, "skills")):
+            if os.path.isdir(os.path.join(ROOT, "skills", name)):
+                self.assertTrue(name in skills_doc, "%s missing from docs/skills.md" % name)
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+class TestSessionContextHook(unittest.TestCase):
+    """The SessionStart hook reconciles the project's team expectation with reality.
+
+    It also must never fail silently: it swallows exceptions by design, so a bug
+    inside it produces no context at all rather than an error. Only a test that
+    asserts output catches that.
+    """
+
+    def run_hook(self, expected=None, env_enabled=False):
+        import tempfile
+        with tempfile.TemporaryDirectory() as proj:
+            if expected is not None:
+                os.makedirs(os.path.join(proj, ".ai-engineering"))
+                with open(os.path.join(proj, ".ai-engineering", "project.yaml"), "w") as fh:
+                    fh.write("project:\n  name: demo\nai:\n  agent_teams_available: %s\n"
+                             % str(expected).lower())
+            env = dict(os.environ)
+            env["CLAUDE_PLUGIN_ROOT"] = ROOT
+            env.pop("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", None)
+            if env_enabled:
+                env["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
+            proc = subprocess.run(
+                [sys.executable, os.path.join(ROOT, "hooks", "scripts", "session_context.py")],
+                input="{}", capture_output=True, text=True, cwd=proj, env=env, timeout=60)
+            self.assertTrue(proc.stdout.strip(),
+                            "the hook produced no context at all: %s" % proc.stderr[-400:])
+            return json.loads(proc.stdout)["additionalContext"]
+
+    def test_it_always_produces_context(self):
+        for expected in (None, True, False):
+            for enabled in (True, False):
+                with self.subTest(expected=expected, enabled=enabled):
+                    self.assertIn("AI Engineering OS is active",
+                                  self.run_hook(expected, enabled))
+
+    def test_teams_enabled_against_a_project_that_does_not_expect_them_is_flagged(self):
+        text = self.run_hook(expected=False, env_enabled=True)
+        self.assertIn("ENABLED", text)
+        self.assertIn("stalls", text)
+
+    def test_a_project_expecting_teams_without_the_variable_is_told_to_degrade(self):
+        text = self.run_hook(expected=True, env_enabled=False)
+        self.assertIn("degraded_mode", text)
+
+    def test_teams_off_and_not_expected_says_nothing(self):
+        self.assertNotIn("Agent team", self.run_hook(expected=False, env_enabled=False))
+
+    def test_the_project_flag_is_read_by_code_not_only_by_prose(self):
+        """Regression: ai.agent_teams_available was declared in the template and
+        consumed nowhere, so the fallback contract could not hold."""
+        hits = subprocess.run(["grep", "-rl", "agent_teams_available",
+                               os.path.join(ROOT, "hooks"), os.path.join(ROOT, "scripts")],
+                              capture_output=True, text=True).stdout.split()
+        self.assertTrue(hits, "no hook or script reads ai.agent_teams_available")
+
+
+class TestHookPolicyDocumentation(unittest.TestCase):
+    """A rule nobody documented is a rule nobody can review."""
+
+    def setUp(self):
+        self.rules = load("policies/hook-policy.json")["rules"]
+        with open(os.path.join(ROOT, "docs", "hooks.md"), encoding="utf-8") as fh:
+            self.doc = fh.read()
+
+    def test_the_documented_rule_count_matches_the_policy(self):
+        match = re.search(r"(\d+) rules in `policies/hook-policy\.json`", self.doc)
+        self.assertIsNotNone(match, "docs/hooks.md no longer states a rule count")
+        self.assertEqual(int(match.group(1)), len(self.rules))
+
+    def test_every_rule_id_appears_in_the_category_table(self):
+        # The table uses ranges (SH-01…SH-05), so expand them before comparing.
+        documented = set()
+        for prefix, lo, hi in re.findall(r"([A-Z]+)-(\d+)…[A-Z]*-?(\d+)", self.doc):
+            documented |= {"%s-%02d" % (prefix, n) for n in range(int(lo), int(hi) + 1)}
+        documented |= set(re.findall(r"\b[A-Z]{2,3}-\d{2}\b", self.doc))
+        missing = sorted(r["id"] for r in self.rules if r["id"] not in documented)
+        self.assertEqual(missing, [], "undocumented rules: %s" % missing)
+
+    def test_every_rule_declares_an_action_the_semantics_define(self):
+        allowed = set(load("policies/hook-policy.json")["action_semantics"])
+        for rule in self.rules:
+            with self.subTest(rule=rule["id"]):
+                self.assertIn(rule["action"], allowed)
+
+
+class TestWirePermissionDecisions(unittest.TestCase):
+    """Every decision a guard emits must be one Claude Code actually accepts.
+
+    Regression for the worst defect this repository has had. The guards emitted
+    `permissionDecision: "escalate"` -- a word from the organization's vocabulary
+    that is not in the platform's schema. Claude Code discards a decision it
+    cannot parse and the tool call PROCEEDS, so all 25 escalate-tier rules, the
+    credential and control-plane tiers of guard_write, and the guard-failure
+    handler were inert. Every existing test passed, because they all asserted the
+    guard's own output rather than what the platform does with it.
+    """
+
+    #  Claude Code's PreToolUse schema. Verified against the CLI's own zod enum.
+    PLATFORM = ("allow", "deny", "ask", "defer")
+
+    def test_the_translation_table_targets_only_platform_values(self):
+        sys.path.insert(0, os.path.join(ROOT, "hooks", "lib"))
+        import hooklib
+        for org, wire in hooklib.WIRE_DECISION.items():
+            with self.subTest(org=org):
+                self.assertIn(wire, self.PLATFORM,
+                              "%r maps to %r, which Claude Code would discard" % (org, wire))
+
+    def test_no_guard_ever_emits_a_value_off_the_schema(self):
+        """Drive every guard across both tiers and inspect the actual JSON."""
+        cases = [
+            ("guard_bash", {"tool_name": "Bash", "tool_input": {"command": "rm -rf /"}}),
+            ("guard_bash", {"tool_name": "Bash", "tool_input": {"command": "terraform destroy"}}),
+            ("guard_bash", {"tool_name": "Bash", "tool_input": {"command": "git push origin main"}}),
+            ("guard_write", {"tool_name": "Write", "agent_type": "qa-engineer",
+                             "tool_input": {"file_path": "/home/u/.ssh/id_rsa", "content": "x"}}),
+            ("guard_write", {"tool_name": "Write", "agent_type": "qa-engineer",
+                             "tool_input": {"file_path": "src/app.py", "content": "x"}}),
+            ("guard_spawn", {"tool_name": "Agent", "agent_type": "backend-developer",
+                             "tool_input": {"subagent_type": "engineering-director"}}),
+        ]
+        seen = set()
+        for guard, payload in cases:
+            proc = subprocess.run(
+                [sys.executable, os.path.join(ROOT, "hooks", "scripts", guard + ".py")],
+                input=json.dumps(payload), capture_output=True, text=True, timeout=30)
+            out = (proc.stdout or "").strip()
+            if not out:
+                continue
+            decision = json.loads(out).get("hookSpecificOutput", {}).get("permissionDecision")
+            if decision is None:
+                continue
+            seen.add(decision)
+            with self.subTest(guard=guard, cmd=str(payload["tool_input"])[:60]):
+                self.assertIn(decision, self.PLATFORM,
+                              "%s emitted %r, which Claude Code discards -- the call proceeds"
+                              % (guard, decision))
+        self.assertTrue({"deny", "ask"} <= seen,
+                        "the cases must exercise both tiers; saw %s" % sorted(seen))
+
+    def test_escalate_never_reaches_the_wire(self):
+        for path in ("hooks/scripts/guard_bash.py", "hooks/scripts/guard_write.py",
+                     "hooks/scripts/guard_spawn.py", "hooks/lib/hooklib.py"):
+            with open(os.path.join(ROOT, path), encoding="utf-8") as fh:
+                body = fh.read()
+            for line in body.splitlines():
+                if '"permissionDecision"' in line and "escalate" in line:
+                    self.fail("%s emits escalate directly: %s" % (path, line.strip()))
+
+
+class TestCycleAcceptance(unittest.TestCase):
+    """Every cycle declares check_dod.py as the thing that determines acceptance.
+
+    That was a claim about a mode the script did not have: acceptance was whatever
+    the department lead wrote into the rollup, and no validator noticed because
+    cycle acceptance conditions were never even grammar-checked.
+    """
+
+    def cycles(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import check_dod
+        return check_dod.cycles()
+
+    def test_every_cycle_names_a_mechanism_that_exists(self):
+        proc = script("check_dod.py", "--help")
+        self.assertIn("--cycle", proc.stdout)
+        for cid, cyc in self.cycles().items():
+            with self.subTest(cycle=cid):
+                determined = (cyc.get("acceptance") or {}).get("determined_by", "")
+                self.assertIn("check_dod", determined)
+                self.assertTrue((cyc.get("acceptance") or {}).get("conditions"),
+                                "%s declares no acceptance conditions to determine" % cid)
+
+    def test_every_cycle_can_actually_be_evaluated(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as project:
+            for cid in self.cycles():
+                with self.subTest(cycle=cid):
+                    proc = script("check_dod.py", "--cycle", cid, "--project", project)
+                    self.assertNotIn("unknown cycle", proc.stdout)
+                    self.assertNotEqual(proc.returncode, 2,
+                                        "%s could not be evaluated: %s" % (cid, proc.stdout))
+                    # An empty project satisfies nothing, so acceptance must be refused.
+                    self.assertIn("NOT ACCEPTED", proc.stdout)
+
+    def test_unmet_evidence_is_not_reported_as_success(self):
+        """Exit 0 means done. Evidence that has not been supplied is not done."""
+        import tempfile
+        with tempfile.TemporaryDirectory() as project:
+            proc = script("check_dod.py", "--workflow", "WF-FEATURE", "--stage", "CI",
+                          "--project", project)
+            self.assertIn("REQUIRES-EVIDENCE", proc.stdout)
+            self.assertNotEqual(proc.returncode, 0,
+                                "a stage with unmet evidence exited 0, which reads as done")
+
+    def test_cycle_acceptance_conditions_are_grammar_checked(self):
+        """Regression: a typo in a cycle condition used to pass every validator."""
+        import shutil, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            dst = os.path.join(tmp, "p")
+            shutil.copytree(ROOT, dst, ignore=shutil.ignore_patterns(".git"))
+            path = os.path.join(dst, "sdlc", "cycles", "dev.yaml")
+            with open(path, encoding="utf-8") as fh:
+                body = fh.read()
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(body.replace("agent_verdict(code-reviewer, pass)",
+                                      "no_such_predicate(code-reviewer, pass)"))
+            proc = subprocess.run([sys.executable, os.path.join(dst, "scripts", "check_dod.py"),
+                                   "--grammar"], capture_output=True, text=True, cwd=dst, timeout=120)
+            self.assertIn("unknown predicate no_such_predicate", proc.stdout)
+            self.assertNotEqual(proc.returncode, 0)
+

@@ -1,0 +1,335 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-INCIDENT
+name: Incident response and RCA
+version: 2.0.0
+description: Restoring service under uncertainty while preserving the evidence needed to explain it afterwards. Mitigation and fix are different things and are kept separate deliberately.
+applies_when:
+  - Production behaviour is degraded, unavailable or incorrect.
+team_pattern: incident-response-team
+entry_conditions:
+  - An alert fired or a credible report was received.
+exit_conditions:
+  - Service verified recovered.
+  - RCA published with typed, owned follow-up items.
+definition_of_done:
+  - artifact_status(INC, closed)
+  - artifact_status(RCA, approved)
+  - every_linked(RCA, DEF)
+  - human_approval_recorded(AP-01)
+  - no_blocking_open_decisions(rca-actions)
+  - evidence_sealed()
+  - human_identity_recorded(AP-01)
+failure_paths:
+  - when: Mitigation makes things worse
+    goto: MITIGATE
+    note: Revert the mitigation first; the rollback is part of every mitigation proposal.
+  - when: The cause is a security compromise
+    goto: TRIAGE
+    note: Bring in the human security owner immediately; evidence preservation takes priority over speed.
+  - when: Agent teams are unavailable and the incident is novel
+    goto: INVESTIGATE
+    note: "TEAM_REQUIRED: escalate to a human, or run the declared degraded mode with the loss acknowledged."
+stages:
+  - id: DETECT
+    name: Detection
+    owner: sre
+    skills:
+      - observability
+    risk: HIGH
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - An alert fired or a report arrived
+    actions:
+      - State the symptom in one sentence, in user-visible terms.
+    inputs:
+      - Alert or report
+    outputs:
+      - Initial signal summary
+      - Affected surface
+    produces:
+      - INC
+    exit_criteria:
+      - The observable symptom is stated in one sentence
+    definition_of_done:
+      - artifact_exists(INC)
+  - id: TRIAGE
+    name: Triage and severity
+    owner: incident-commander
+    skills:
+      - incident-management
+    risk: HIGH
+    complexity: complex
+    execution: inline
+    entry_criteria:
+      - A symptom statement exists
+    actions:
+      - Declare severity from the project's definitions.
+      - Notify the human on-call owner. An agent never runs an incident alone.
+    inputs:
+      - Signals
+      - Recent deployments
+      - Runbooks
+    outputs:
+      - Declared severity
+      - Incident record opened
+      - Notified humans
+    exit_criteria:
+      - Severity declared with rationale
+      - Human owner notified
+    definition_of_done:
+      - artifact_status(INC, open)
+      - human_approval_recorded(none)
+    human_gate:
+      approver: on-call human owner
+      recorded_in: in-session-escalation
+      decision:
+        - acknowledge
+        - escalate severity
+      approver_role: on-call-owner
+    emits:
+      - INCIDENT_CREATED
+      - INCIDENT_SEVERITY_CHANGED
+  - id: EVIDENCE
+    name: Evidence preservation
+    owner: sre
+    participants:
+      - incident-commander
+    risk: HIGH
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - Severity is declared
+      - No remediation has been performed yet
+    actions:
+      - Collect and seal the evidence BEFORE any destructive remediation. A pod restart, a log rotation or a queue purge that happens first destroys the answer.
+      - "Collect: logs, timestamps, deployment versions, configuration snapshots, metrics, traces, and the investigation commands themselves."
+      - For a suspected security compromise this stage is mandatory and blocking, and the human security owner is engaged before mitigation is proposed.
+    inputs:
+      - Incident record
+      - Affected surface
+      - Telemetry access
+    outputs:
+      - Sealed evidence record
+    produces:
+      - EVID
+    artifacts:
+      - docs/incidents/evidence/
+    exit_criteria:
+      - An evidence record exists and is sealed
+      - The collection happened before any remediation
+    definition_of_done:
+      - evidence_sealed()
+      - artifact_exists(EVID)
+      - required_fields_present(EVID)
+    skills:
+      - observability
+      - incident-management
+    department_cycle: CYCLE-SRE
+    cycle_role: enters
+  - id: INVESTIGATE
+    name: Investigation
+    owner: incident-commander
+    participants:
+      - sre
+      - backend-developer
+      - data-engineer
+      - devops-engineer
+      - security-reviewer
+    skills:
+      - observability
+      - root-cause-analysis
+    risk: HIGH
+    complexity: novel
+    execution: team
+    entry_criteria:
+      - Severity is declared
+      - The human owner is engaged
+    actions:
+      - Run hypotheses in parallel; each investigator states what evidence would refute its own theory.
+      - A team is used because sequential investigation anchors on the first plausible theory.
+      - TEAM_REQUIRED, unconditionally. A novel incident and a suspected security compromise both run through this stage, and one agent producing four viewpoints is not four independent agents.
+      - "Without teams: escalate to a human to run parallel investigation, or proceed in the declared degraded mode with the human acknowledging what is lost."
+    inputs:
+      - Telemetry
+      - Change history
+      - Runbooks
+    outputs:
+      - Hypotheses tested in parallel
+      - Evidence
+      - Working theory with confidence
+    exit_criteria:
+      - At least one hypothesis is supported by evidence
+      - Rejected hypotheses recorded
+    definition_of_done:
+      - artifact_status(INC, open)
+    team_requirement: TEAM_REQUIRED
+    degraded_mode:
+      fallback: escalate
+      guarantees_lost:
+        - Competing hypotheses cannot be tested in parallel, so investigation anchors on the first plausible theory. This is the single largest cause of long incidents.
+        - Nobody is positioned to refute anyone else's theory.
+        - Investigation becomes serial, extending time to mitigation.
+        - For a suspected security compromise, a single investigator is also a single point of failure for noticing that the evidence itself has been tampered with.
+      requires_human_acknowledgement: true
+    department_cycle: CYCLE-SRE
+    cycle_role: continues
+  - id: MITIGATE
+    name: Mitigation
+    owner: incident-commander
+    skills:
+      - incident-management
+    risk: CRITICAL
+    complexity: novel
+    execution: inline
+    entry_criteria:
+      - A working theory is supported by evidence
+      - Evidence has been collected and sealed (EVIDENCE stage complete)
+      - A mitigation proposal states its blast radius and its own rollback
+    actions:
+      - Propose; a human executes or authorises. Mitigation restores service and is not the fix.
+      - "Preserve evidence: no rotation, deletion or reset that removes what the RCA will need."
+    inputs:
+      - Working theory
+      - Rollback options
+    outputs:
+      - Mitigation proposal
+      - Human approval
+      - Applied mitigation
+    exit_criteria:
+      - Mitigation applied by an authorised human
+      - Effect measured
+    definition_of_done:
+      - human_approval_recorded(AP-01)
+      - artifact_status(INC, mitigated)
+      - evidence_sealed()
+    human_gate:
+      approver: on-call human owner
+      recorded_in: in-session-escalation
+      policy_ref: AP-01
+      decision:
+        - approve
+        - reject
+        - choose alternative
+      approver_role: on-call-owner
+    emits:
+      - INCIDENT_MITIGATED
+  - id: RECOVER
+    name: Recovery and validation
+    owner: incident-commander
+    participants:
+      - sre
+      - qa-engineer
+    risk: HIGH
+    complexity: complex
+    execution: inline
+    entry_criteria:
+      - A mitigation has been applied and its effect measured
+    actions:
+      - Declare recovery from verified user-visible behaviour, not from a graph returning to normal.
+    inputs:
+      - Post-mitigation telemetry
+      - Validation checks
+    outputs:
+      - Recovery statement with supporting evidence
+    exit_criteria:
+      - Service verified against user-visible behaviour
+    definition_of_done:
+      - artifact_status(INC, recovered)
+    emits:
+      - INCIDENT_RESOLVED
+  - id: RCA
+    name: Root cause analysis
+    owner: rca-analyst
+    skills:
+      - root-cause-analysis
+    risk: HIGH
+    complexity: novel
+    execution: subagent
+    entry_criteria:
+      - Service is recovered
+      - The incident record and evidence are handed over
+      - The analyst did not run the incident
+    actions:
+      - Reconstruct the timeline from evidence, separating observed from inferred.
+      - Reject 'human error' and find the systemic cause behind it.
+      - Produce corrective actions with an owner, a type and an acceptance criterion.
+    inputs:
+      - Incident record
+      - Telemetry
+      - Change history
+      - Prior RCAs
+    outputs:
+      - Timeline
+      - Root cause
+      - Contributing factors
+      - Detection gaps
+      - Corrective and preventive actions
+    produces:
+      - RCA
+    artifacts:
+      - docs/rcas/
+    exit_criteria:
+      - Every timeline entry has a source
+      - Root cause is systemic
+      - Every action has an owner, a type and an acceptance criterion
+    definition_of_done:
+      - artifact_exists(RCA)
+      - artifact_status(RCA, approved)
+      - every_linked(RCA, INC)
+      - agent_verdict(engineering-director, pass)
+      - human_approval_recorded(none)
+      - required_fields_present(RCA)
+      - evidence_sealed()
+      - cycle_accepted(CYCLE-SRE)
+      - cycle_rollup_reported(CYCLE-SRE)
+      - no_open_rework(CYCLE-SRE)
+    agent_gate:
+      reviewer: engineering-director
+      blocking: true
+      recorded_in: the RCA artifact
+      purpose: "evidence sufficiency and causal soundness: is every timeline entry sourced, and is the root cause systemic rather than a person."
+    human_gate:
+      approver: engineering owner
+      recorded_in: project-decision-log
+      decision:
+        - accept
+        - require rework
+      approver_role: engineering-owner
+    emits:
+      - RCA_COMPLETED
+    department_cycle: CYCLE-SRE
+    cycle_role: completes
+  - id: FEEDBACK
+    name: Corrective action intake
+    owner: engineering-director
+    participants:
+      - product-manager
+      - development-lead
+      - qa-lead
+      - sre
+    skills:
+      - traceability
+    risk: MEDIUM
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - The RCA is approved
+    actions:
+      - Type every follow-up item and put it in a real backlog.
+      - A repeat of a prior RCA's cause is escalated as a process failure, not filed as a new action.
+    inputs:
+      - RCA follow-up items
+    outputs:
+      - "Typed work items: defect, technical debt, architecture change, new requirement, monitoring improvement, automation"
+    produces:
+      - DEBT
+    exit_criteria:
+      - Every item exists in the backlog with an owner
+      - Repeat causes escalated
+    definition_of_done:
+      - every_linked(RCA, DEF)
+      - artifact_status(INC, closed)
+      - required_fields_present(DEBT)

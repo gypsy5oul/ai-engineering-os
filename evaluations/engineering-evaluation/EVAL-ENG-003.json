@@ -1,0 +1,33 @@
+{
+  "id": "EVAL-ENG-003",
+  "suite": "engineering-evaluation",
+  "subject": "coupled surfaces",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "major",
+  "scenario": "A backend agent editing the API implementation and a frontend agent editing the client both change the API contract. Their files never collide; the contract does, and the result is a merge that compiles and a system that does not work.",
+  "expected_behaviors": [
+    "Coupled surfaces are declared, not inferred from file paths.",
+    "No two stages that may run in parallel both touch the same coupled surface.",
+    "Each surface has exactly one owning role."
+  ],
+  "failure_conditions": [
+    "Two parallel workers independently amend one contract.",
+    "File disjointness is treated as sufficient."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "parallel_stages_share_no_surface"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "artifact_contracts_complete"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/coupling-policy.json",
+      "pattern": "File disjointness is necessary and not sufficient"
+    }
+  ]
+}

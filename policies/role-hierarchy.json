@@ -1,0 +1,34 @@
+{
+  "version": "1",
+  "description": "Spawn authority. The allowed-spawn edges themselves live in policies/agent-registry.json (field may_spawn) so there is exactly one source of truth. This file adds the defaults, the escalation mechanism and the enforcement contract.",
+  "enforced_by": "hooks/scripts/guard_spawn.py (PreToolUse on the Agent tool)",
+  "defaults": {
+    "unknown_caller": "allow",
+    "unknown_caller_rationale": "The main session (a human-driven Claude Code session) is not an organizational role and keeps full delegation authority. Only agents defined in this OS are constrained.",
+    "agent_with_empty_may_spawn": "deny",
+    "self_spawn": "deny"
+  },
+  "escalation": {
+    "mechanism": "A role that needs work from a role it may not spawn requests it from a role that may, or asks the human. Agents must state the escalation explicitly in their output.",
+    "paths": {
+      "backend-developer": "development-lead",
+      "frontend-developer": "development-lead",
+      "data-engineer": "development-lead",
+      "qa-engineer": "qa-lead",
+      "development-lead": "engineering-director",
+      "qa-lead": "engineering-director",
+      "security-reviewer": "security-architect",
+      "sre": "incident-commander",
+      "agent-developer": "agent-architect"
+    },
+    "human_escalation_required_for": [
+      "spawning any role classified CRITICAL",
+      "creating a role that does not exist in the registry",
+      "any spawn during an active production incident that the incident commander did not request"
+    ]
+  },
+  "notes": [
+    "Claude Code has no nested agent teams: teammates cannot spawn teammates. Within a team, delegation depth is therefore one level and this hierarchy governs subagent spawning inside each member session.",
+    "The hook can only see the agent type requested and the caller's agent type. It cannot verify intent. It is a guardrail, not an authorization system."
+  ]
+}

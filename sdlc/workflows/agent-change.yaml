@@ -1,0 +1,218 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-AGENT-CHANGE
+name: AI Engineering OS change
+version: 2.0.0
+description: Changing the organization itself. The OS is governed by the same discipline it imposes, and risk determines the depth of review.
+applies_when:
+  - An agent, skill, hook, policy, schema, permission, model policy or evaluation in this repository changes.
+team_pattern: single-agent
+entry_conditions:
+  - A capability gap, defect or governance finding has been stated.
+exit_conditions:
+  - The change is merged, versioned and released, with a migration note where behaviour changed.
+definition_of_done:
+  - agent_verdict(agent-evaluator, pass)
+  - agent_verdict(security-reviewer, pass)
+  - agent_verdict(ai-governance, pass)
+  - no_unresolved_findings(major)
+  - tests_pass(unit)
+  - human_approval_recorded(AP-10)
+  - human_identity_recorded(AP-10)
+failure_paths:
+  - when: Evaluation fails a critical case
+    goto: IMPLEMENT
+  - when: Governance blocks
+    goto: DESIGN
+  - when: The platform cannot support the design
+    goto: DESIGN
+    note: Document the limitation instead of implementing a fiction.
+stages:
+  - id: DESIGN
+    name: Organizational design
+    owner: agent-architect
+    skills:
+      - agent-development
+      - ai-governance
+      - adr-management
+    risk: HIGH
+    complexity: novel
+    execution: subagent
+    entry_criteria:
+      - A gap, defect or governance finding is stated
+      - Current Claude Code documentation has been checked
+    actions:
+      - Decide whether this is an agent, a skill, a reviewer, a policy or nothing. Most are not agents.
+      - Verify the capability against current platform documentation rather than memory.
+    inputs:
+      - The gap or finding
+      - Current registry and policies
+      - Current Claude Code documentation
+    outputs:
+      - Decision
+      - ADR
+      - Risk classification
+    produces:
+      - ADR
+    exit_criteria:
+      - The decision does not duplicate an existing role
+      - Platform capability verified against current documentation
+    definition_of_done:
+      - artifact_exists(ADR)
+      - artifact_status(ADR, accepted)
+      - required_fields_present(ADR)
+      - cycle_accepted(CYCLE-ARCH)
+      - cycle_rollup_reported(CYCLE-ARCH)
+      - no_open_rework(CYCLE-ARCH)
+    department_cycle: CYCLE-ARCH
+    cycle_role: completes
+  - id: IMPLEMENT
+    name: Implementation
+    owner: agent-developer
+    skills:
+      - agent-development
+      - code-review
+    risk: HIGH
+    complexity: complex
+    execution: inline
+    entry_criteria:
+      - A design decision and its risk classification exist
+    actions:
+      - Implement against the canonical structure.
+      - "Every hook rule gets two tests: one that it blocks, one that it does not block the ordinary case that resembles it."
+    inputs:
+      - The design
+      - Canonical role-contract structure
+    outputs:
+      - Component files
+      - Registry and policy updates
+      - Tests for every hook rule
+      - Evaluation cases
+    exit_criteria:
+      - Validation passes
+      - Test suite passes
+      - Registry and files agree
+    definition_of_done:
+      - tests_pass(unit)
+      - no_unresolved_findings(major)
+  - id: EVALUATE
+    name: Evaluation
+    owner: agent-evaluator
+    skills:
+      - agent-evaluation
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Implementation passes static validation
+      - The affected suites exist
+    actions:
+      - Run the deterministic cases and assess whether the suite covers the component's forbidden actions.
+      - This stage produces the verdict; it is not gated by itself. The gate it satisfies belongs to IMPLEMENT and to the merge request.
+    inputs:
+      - Changed components
+      - Evaluation suites
+    outputs:
+      - Evaluation report
+      - Coverage assessment
+      - Promotion verdict
+    exit_criteria:
+      - No failing critical or major case
+      - Forbidden actions have adversarial coverage
+    definition_of_done:
+      - agent_verdict(agent-evaluator, pass)
+  - id: SECURITY
+    name: Security review
+    owner: security-reviewer
+    skills:
+      - security-review
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - The change touches a permission, hook, policy or model policy
+    actions:
+      - Check least privilege and whether any new path to secrets or production mutation was created.
+      - This stage produces the verdict; it is not gated by itself. The gate it satisfies belongs to IMPLEMENT and to the merge request.
+    inputs:
+      - Permission, tool and hook changes
+    outputs:
+      - Security verdict
+    exit_criteria:
+      - Least privilege upheld
+      - No new path to secrets or production mutation
+    definition_of_done:
+      - agent_verdict(security-reviewer, pass)
+      - cycle_accepted(CYCLE-SEC)
+      - cycle_rollup_reported(CYCLE-SEC)
+      - no_open_rework(CYCLE-SEC)
+    optional_when:
+      - The change touches no permission, hook, policy or model policy.
+    department_cycle: CYCLE-SEC
+    cycle_role: completes
+  - id: GOVERN
+    name: Governance review
+    owner: ai-governance
+    skills:
+      - ai-governance
+    risk: CRITICAL
+    complexity: novel
+    execution: subagent
+    entry_criteria:
+      - Evaluation and, where applicable, security verdicts exist
+    actions:
+      - Ask first whether the change removes or weakens a check. If it does, the compensating control is in the same change.
+      - Governance produces findings and a recommendation. It never approves.
+      - Governance produces the recommendation; the human gate below is the decision.
+    inputs:
+      - The change
+      - Evaluation report
+      - Security verdict
+    outputs:
+      - Governance finding list
+      - Promotion recommendation
+    exit_criteria:
+      - Every finding has a remedy or an accepted rationale
+    definition_of_done:
+      - agent_verdict(ai-governance, pass)
+      - human_approval_recorded(AP-10)
+    human_gate:
+      approver: AI governance owner
+      recorded_in: gitlab-merge-request-approval
+      policy_ref: AP-10
+      decision:
+        - approve
+        - reject
+      approver_role: ai-governance-owner
+  - id: RELEASE
+    name: Version and release
+    owner: agent-developer
+    skills:
+      - release-management
+      - git-workflow
+    risk: HIGH
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - Governance approval is recorded
+    actions:
+      - Bump the version to match the nature of the change. A guard becoming stricter is a major change.
+      - "Write the migration note: what changed, who is affected, what they must do."
+    inputs:
+      - Approved change
+    outputs:
+      - Version bump
+      - Changelog entry
+      - Migration note where organizational behaviour changed
+      - Tag
+    exit_criteria:
+      - Semantic version reflects the nature of the change
+      - Migration note present for behaviour changes
+    definition_of_done:
+      - human_approval_recorded(AP-10)
+    human_gate:
+      approver: plugin maintainer
+      recorded_in: gitlab-release
+      policy_ref: AP-10
+      approver_role: plugin-maintainer

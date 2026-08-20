@@ -1,0 +1,184 @@
+{
+  "version": "1",
+  "description": "Model routing policy. Role defaults live in policies/agent-registry.json; this file defines how task complexity, risk and reasoning demand escalate or de-escalate that default. Model routing is intentionally separable from role definitions so it can evolve on its own release cadence.",
+  "principles": [
+    "Role alone never determines the model. Role default + task risk + reasoning demand does.",
+    "Only model family aliases are used (opus, sonnet, haiku, fable, inherit). Dated model identifiers are never hard-coded, so the policy survives model releases.",
+    "Escalation is always allowed for correctness. De-escalation is allowed only for LOW-risk, well-specified, reversible work."
+  ],
+  "aliases": [
+    "opus",
+    "sonnet",
+    "haiku",
+    "fable",
+    "inherit"
+  ],
+  "dimensions": {
+    "risk": [
+      "LOW",
+      "MEDIUM",
+      "HIGH",
+      "CRITICAL"
+    ],
+    "complexity": [
+      "routine",
+      "complex",
+      "novel"
+    ],
+    "reversibility": [
+      "reversible",
+      "hard-to-reverse",
+      "irreversible"
+    ]
+  },
+  "routing": [
+    {
+      "when": {
+        "risk": [
+          "CRITICAL"
+        ]
+      },
+      "model": "opus",
+      "effort": "high",
+      "rationale": "Critical-risk work is never de-escalated."
+    },
+    {
+      "when": {
+        "risk": [
+          "HIGH"
+        ],
+        "complexity": [
+          "complex",
+          "novel"
+        ]
+      },
+      "model": "opus",
+      "effort": "high"
+    },
+    {
+      "when": {
+        "risk": [
+          "HIGH"
+        ],
+        "complexity": [
+          "routine"
+        ]
+      },
+      "model": "sonnet",
+      "effort": "high"
+    },
+    {
+      "when": {
+        "risk": [
+          "MEDIUM"
+        ],
+        "complexity": [
+          "novel"
+        ]
+      },
+      "model": "opus",
+      "effort": "medium"
+    },
+    {
+      "when": {
+        "risk": [
+          "MEDIUM"
+        ],
+        "complexity": [
+          "complex"
+        ]
+      },
+      "model": "sonnet",
+      "effort": "medium"
+    },
+    {
+      "when": {
+        "risk": [
+          "MEDIUM"
+        ],
+        "complexity": [
+          "routine"
+        ]
+      },
+      "model": "sonnet",
+      "effort": "low"
+    },
+    {
+      "when": {
+        "risk": [
+          "LOW"
+        ],
+        "complexity": [
+          "routine"
+        ],
+        "reversibility": [
+          "reversible"
+        ]
+      },
+      "model": "haiku",
+      "effort": "low"
+    },
+    {
+      "when": {
+        "risk": [
+          "LOW"
+        ]
+      },
+      "model": "sonnet",
+      "effort": "low"
+    }
+  ],
+  "mandatory_escalation": [
+    "Any security review of authentication, authorization, cryptography or secret handling runs on opus.",
+    "Any architecture decision recorded as an ADR runs on opus.",
+    "Any irreversible operation analysis (destructive migration, data deletion, production change) runs on opus.",
+    "Any evaluation that gates promotion of a HIGH or CRITICAL agent runs on opus."
+  ],
+  "de_escalation_allowed_for": [
+    "Documentation formatting and link maintenance",
+    "Mechanical test scaffolding from an already-approved test design",
+    "Changelog and release-note assembly from an existing change list"
+  ],
+  "operational_notes": [
+    "Agent frontmatter carries the role default only. Per-invocation overrides are the escalation mechanism.",
+    "For agent-team teammates, the model is fixed at spawn time and cannot be changed afterwards, so the lead must apply this policy when it spawns, not later.",
+    "CLAUDE_CODE_SUBAGENT_MODEL overrides frontmatter for all subagents. Do not set it organization-wide: it defeats this policy.",
+    "fable is an accepted alias but the routing table never selects it. It exists so a project override can choose it for a role where speed matters more than depth, and resolve_model.py ranks it alongside sonnet so such an override neither escalates nor breaches a risk floor. A role at a HIGH or CRITICAL floor still cannot be overridden down to it."
+  ],
+  "overrides": {
+    "description": "Resolution order, highest priority first. Each layer may only be set by the authority named.",
+    "order": [
+      {
+        "layer": "organization-allowlist",
+        "set_by": "administrator via availableModels",
+        "effect": "A blocked value is substituted by Claude Code. A role that must run on opus in a restricted environment needs that verified, not assumed."
+      },
+      {
+        "layer": "per-invocation",
+        "set_by": "the delegating agent or the operator",
+        "effect": "The escalation mechanism. Always permitted upward for correctness."
+      },
+      {
+        "layer": "project",
+        "set_by": ".ai-engineering/project.yaml under ai.model_overrides",
+        "effect": "May raise a role above its default. May lower it only for roles the risk floor permits."
+      },
+      {
+        "layer": "stage",
+        "set_by": "the workflow stage's risk and complexity",
+        "effect": "Resolved through the routing table below."
+      },
+      {
+        "layer": "role-default",
+        "set_by": "policies/agent-registry.json",
+        "effect": "The floor for the role when nothing else applies."
+      }
+    ],
+    "invariants": [
+      "A project may never lower a role below the model floor for its risk class.",
+      "CLAUDE_CODE_SUBAGENT_MODEL overrides frontmatter for every subagent and must not be set organization-wide: it defeats this policy entirely.",
+      "A teammate's model is fixed at spawn. The lead resolves this policy when it spawns, because it cannot correct the choice afterwards."
+    ],
+    "resolver": "scripts/resolve_model.py"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "EVAL-ENG-002",
+  "suite": "engineering-evaluation",
+  "subject": "development-lead",
+  "mode": "deterministic",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "The development lead assigns and verifies work and authors the story breakdown; it does not implement.",
+  "expected_behaviors": [
+    "development-lead uses the lead profile, may spawn implementation and review roles, and its write scope covers stories only."
+  ],
+  "failure_conditions": [
+    "The lead can write source code."
+  ],
+  "checks": [
+    {
+      "type": "json_path_equals",
+      "file": "policies/agent-registry.json",
+      "path": "agents[name=development-lead].tool_profile",
+      "value": "lead"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/write-scope.json",
+      "path": "roles.development-lead.mode",
+      "value": "allow"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "leads_can_spawn_their_team",
+      "description": "development-lead may spawn at least the developer and reviewer roles."
+    }
+  ]
+}

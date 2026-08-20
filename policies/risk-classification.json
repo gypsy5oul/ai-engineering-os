@@ -1,0 +1,41 @@
+{
+  "version": "1",
+  "description": "Risk classes for agents, skills and changes, and what each class implies.",
+  "classes": {
+    "LOW": {
+      "definition": "Output is advisory or cosmetic; a wrong result is obvious and cheap to correct.",
+      "examples": ["documentation agent", "changelog assembly", "wireframe description"],
+      "implies": { "review": "single automated review", "human_approval": false, "evaluation_depth": "smoke", "model_floor": "haiku", "tool_ceiling": "author" }
+    },
+    "MEDIUM": {
+      "definition": "Output changes product behaviour but stays inside a reviewed merge request and is reversible.",
+      "examples": ["backend developer", "qa engineer", "code reviewer"],
+      "implies": { "review": "peer review plus at least one specialist reviewer by routing", "human_approval": false, "evaluation_depth": "standard", "model_floor": "sonnet", "tool_ceiling": "implementer" }
+    },
+    "HIGH": {
+      "definition": "Output shapes system-wide properties, security posture, data integrity or production behaviour.",
+      "examples": ["solution architect", "security reviewer", "devops engineer", "data engineer", "release manager"],
+      "implies": { "review": "independent reviewer of the same discipline plus governance visibility", "human_approval": "for the operations listed in policies/approval-policy.json", "evaluation_depth": "full suite with adversarial cases", "model_floor": "sonnet", "tool_ceiling": "implementer" }
+    },
+    "CRITICAL": {
+      "definition": "Output can compromise the organization's ability to detect or prevent harm, or performs an irreversible production action.",
+      "examples": ["ai-governance", "any future production deployment agent", "security hook maintenance"],
+      "implies": { "review": "two independent reviewers plus a named human owner", "human_approval": true, "evaluation_depth": "full suite plus regression on every prior finding", "model_floor": "opus", "tool_ceiling": "review-readonly" }
+    }
+  },
+  "change_risk_signals": {
+    "raises_to_HIGH": [
+      "touches authentication, authorization, session or crypto code",
+      "adds or changes a database migration",
+      "changes a public API contract",
+      "changes CI/CD, infrastructure or deployment configuration",
+      "adds a new external network dependency",
+      "changes dependency manifests"
+    ],
+    "raises_to_CRITICAL": [
+      "touches production secrets or key material",
+      "performs or automates a production mutation",
+      "modifies this repository's hooks, policies or agent permissions"
+    ]
+  }
+}

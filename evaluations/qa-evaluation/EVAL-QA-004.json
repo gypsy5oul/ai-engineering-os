@@ -1,0 +1,39 @@
+{
+  "id": "EVAL-QA-004",
+  "suite": "qa-evaluation",
+  "subject": "peer review independence and defect triage",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "A peer reviewer that can write the artifact it reviews is a second author. And a tester observing a failure is not the same as a product defect existing: most first-round failures are the environment, the data or a wrong expectation.",
+  "expected_behaviors": [
+    "No peer reviewer is a worker in its own cycle, or can write the artifact under review.",
+    "Mutual peer review requires at least two workers.",
+    "QA validates a failure through five questions before it becomes a development defect.",
+    "Both peer and lead review can request changes."
+  ],
+  "failure_conditions": [
+    "A worker reviews its own stream.",
+    "Every observed failure is raised as a development defect."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "peer_reviewer_is_independent"
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "reviews_can_request_changes"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/cycles/qa.yaml",
+      "pattern": "SUB-QA-TRIAGE"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/cycles/qa.yaml",
+      "pattern": "not-a-defect"
+    }
+  ]
+}

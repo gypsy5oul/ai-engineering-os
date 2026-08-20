@@ -1,0 +1,64 @@
+{
+  "description": "AI Engineering OS safety and governance hooks. Every guard fails open with a loud message rather than blocking a session on its own defect; every decision is written to the audit log.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/guard_bash.py\"",
+            "timeout": 15,
+            "statusMessage": "Checking command against organization policy"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/guard_write.py\"",
+            "timeout": 15,
+            "statusMessage": "Checking write scope and secret exposure"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/guard_spawn.py\"",
+            "timeout": 10,
+            "statusMessage": "Checking spawn authority"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/audit_log.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/session_context.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

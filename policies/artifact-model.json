@@ -1,0 +1,1417 @@
+{
+  "version": "2",
+  "description": "Formal artifact contracts. Every type declares who creates it, who may modify it, who may review it, who may approve it, where it is stored, what it depends on and what consumes it. This is the state model of the organization; the workflows only move between states.",
+  "required_fields": {
+    "id": "PROJECT-KEY-CODE-NNN, sequential per type, never reused, never renumbered",
+    "type": "one of the artifact types below",
+    "title": "human-readable",
+    "status": "from the type's status list",
+    "owner": "role that owns the artifact",
+    "version": "integer, incremented on every material change",
+    "created_at": "YYYY-MM-DD",
+    "updated_at": "YYYY-MM-DD",
+    "source": "where this came from: a requester, an artifact id, an incident, an advisory",
+    "reviewers": "agent verdicts: who reviewed, what verdict, when",
+    "approvals": "human approvals: who, what policy reference, where it is recorded",
+    "dependencies": "artifact ids this one cannot be completed without",
+    "links": "traceability edges, per schemas/artifact-header.schema.json"
+  },
+  "invariants": [
+    "reviewers and approvals are separate fields and never merge. An agent verdict is not an approval.",
+    "An artifact with no source was invented. That is a finding, not a style issue.",
+    "version increments on material change; updated_at moves with it.",
+    "A superseded artifact is never edited. A new one supersedes it.",
+    "An artifact whose dependencies are unmet cannot reach 'approved'."
+  ],
+  "artifact_types": [
+    {
+      "code": "DEC",
+      "type": "open-decision",
+      "workflow": "WF-ONBOARDING",
+      "produced_by_stage": "ASK",
+      "owner_role": "engineering-director",
+      "may_modify": [
+        "engineering-director",
+        "product-manager",
+        "solution-architect"
+      ],
+      "may_review": [
+        "ai-governance"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "the owner named on the decision"
+      },
+      "storage": "docs/decisions/",
+      "statuses": [
+        "open",
+        "answered",
+        "withdrawn",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "question",
+        "options",
+        "impact",
+        "blocks",
+        "decided_option",
+        "decided_at"
+      ],
+      "links_required": [],
+      "depends_on": [],
+      "consumed_by": [
+        "REQ",
+        "NFR",
+        "ARCH",
+        "ADR",
+        "FEAS"
+      ],
+      "immutable_after_creation": false,
+      "notes": "First-class artifact so an unmade decision is a tracked object rather than a question an agent keeps re-asking. An agent blocked by DEC-001 says so once, by id, and stops.",
+      "append_only": false
+    },
+    {
+      "code": "EVID",
+      "type": "evidence",
+      "workflow": "WF-INCIDENT",
+      "produced_by_stage": "TRIAGE",
+      "owner_role": "incident-commander",
+      "may_modify": [],
+      "may_review": [
+        "rca-analyst",
+        "security-reviewer"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/incidents/evidence/",
+      "statuses": [
+        "collected",
+        "sealed"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "collected_at",
+        "collector",
+        "logs",
+        "timestamps",
+        "deployment_versions",
+        "configuration_snapshots",
+        "metrics",
+        "traces",
+        "investigation_commands",
+        "hash"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "INC"
+      ],
+      "consumed_by": [
+        "RCA"
+      ],
+      "immutable_after_creation": true,
+      "notes": "Collected BEFORE any destructive remediation on a security incident. Sealed and never edited: an evidence record that can be rewritten is not evidence.",
+      "append_only": false
+    },
+    {
+      "code": "REQ",
+      "type": "requirement",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "REQ",
+      "owner_role": "requirements-analyst",
+      "may_modify": [
+        "requirements-analyst",
+        "product-manager"
+      ],
+      "may_review": [
+        "qa-lead",
+        "solution-architect"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "requester"
+      },
+      "storage": "docs/requirements/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "business_objective",
+        "acceptance_criteria",
+        "out_of_scope",
+        "assumptions",
+        "risks"
+      ],
+      "links_required": [
+        "source"
+      ],
+      "depends_on": [
+        "DEC"
+      ],
+      "consumed_by": [
+        "ARCH",
+        "STORY",
+        "TP",
+        "TEST"
+      ],
+      "immutable_after_creation": false,
+      "notes": "An acceptance criterion that cannot fail a test is not an acceptance criterion.",
+      "append_only": false
+    },
+    {
+      "code": "NFR",
+      "type": "nfr",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "REQ",
+      "owner_role": "requirements-analyst",
+      "may_modify": [
+        "requirements-analyst"
+      ],
+      "may_review": [
+        "qa-lead",
+        "sre",
+        "solution-architect"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "requester"
+      },
+      "storage": "docs/requirements/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "dimension",
+        "target",
+        "measurement_window",
+        "open_question"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "DEC"
+      ],
+      "consumed_by": [
+        "ARCH",
+        "TP"
+      ],
+      "immutable_after_creation": false,
+      "notes": "Quantified, or carrying a blocking DEC. Never a plausible default.",
+      "append_only": false
+    },
+    {
+      "code": "FEAS",
+      "type": "feasibility",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "FEAS",
+      "owner_role": "solution-architect",
+      "may_modify": [
+        "solution-architect"
+      ],
+      "may_review": [
+        "architecture-reviewer"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "engineering owner"
+      },
+      "storage": "docs/architecture/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "verdict",
+        "conditions",
+        "technology_gaps"
+      ],
+      "links_required": [
+        "requirements"
+      ],
+      "depends_on": [
+        "REQ",
+        "NFR"
+      ],
+      "consumed_by": [
+        "ARCH",
+        "ADR"
+      ],
+      "immutable_after_creation": false,
+      "notes": "",
+      "append_only": false
+    },
+    {
+      "code": "ARCH",
+      "type": "architecture",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "ARCH",
+      "owner_role": "solution-architect",
+      "may_modify": [
+        "solution-architect"
+      ],
+      "may_review": [
+        "architecture-reviewer",
+        "security-architect",
+        "sre"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "architecture owner"
+      },
+      "storage": "docs/architecture/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "components",
+        "boundaries",
+        "failure_modes",
+        "nfr_treatment",
+        "risks"
+      ],
+      "links_required": [
+        "requirements"
+      ],
+      "depends_on": [
+        "REQ",
+        "NFR",
+        "FEAS"
+      ],
+      "consumed_by": [
+        "STORY",
+        "TP",
+        "REL"
+      ],
+      "immutable_after_creation": false,
+      "notes": "",
+      "append_only": false
+    },
+    {
+      "code": "ADR",
+      "type": "adr",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "ARCH",
+      "owner_role": "solution-architect",
+      "may_modify": [
+        "solution-architect",
+        "agent-architect"
+      ],
+      "may_review": [
+        "architecture-reviewer"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "architecture owner"
+      },
+      "storage": "docs/adrs/",
+      "statuses": [
+        "proposed",
+        "accepted",
+        "superseded",
+        "rejected"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "context",
+        "options_considered",
+        "decision",
+        "consequences",
+        "compliance",
+        "supersedes"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "ARCH",
+        "DEC"
+      ],
+      "consumed_by": [
+        "ARCH",
+        "STORY"
+      ],
+      "immutable_after_creation": false,
+      "notes": "Superseded, never edited. The history is the value.",
+      "append_only": false
+    },
+    {
+      "code": "SEC",
+      "type": "security",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "ARCH",
+      "owner_role": "security-architect",
+      "may_modify": [
+        "security-architect"
+      ],
+      "may_review": [
+        "security-reviewer"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "security head"
+      },
+      "storage": "docs/security/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "assets",
+        "trust_boundaries",
+        "threats",
+        "controls",
+        "residual_risk",
+        "expiry"
+      ],
+      "links_required": [
+        "architecture"
+      ],
+      "depends_on": [
+        "ARCH"
+      ],
+      "consumed_by": [
+        "TP",
+        "REVIEW",
+        "REL"
+      ],
+      "immutable_after_creation": false,
+      "notes": "An exception without an expiry is a policy change in disguise.",
+      "append_only": false
+    },
+    {
+      "code": "DES",
+      "type": "design",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "UX",
+      "owner_role": "ux-designer",
+      "may_modify": [
+        "ux-designer"
+      ],
+      "may_review": [
+        "product-manager",
+        "frontend-developer"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/design/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "personas",
+        "journeys",
+        "states",
+        "accessibility_criteria",
+        "frontend_contract"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "REQ"
+      ],
+      "consumed_by": [
+        "STORY",
+        "TP"
+      ],
+      "immutable_after_creation": false,
+      "notes": "",
+      "append_only": false
+    },
+    {
+      "code": "EPIC",
+      "type": "epic",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "STORY",
+      "owner_role": "development-lead",
+      "may_modify": [
+        "development-lead"
+      ],
+      "may_review": [
+        "product-manager"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/stories/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "done"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "scope"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "ARCH",
+        "REQ"
+      ],
+      "consumed_by": [
+        "STORY"
+      ],
+      "immutable_after_creation": false,
+      "notes": "",
+      "append_only": false
+    },
+    {
+      "code": "STORY",
+      "type": "story",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "STORY",
+      "owner_role": "development-lead",
+      "may_modify": [
+        "development-lead"
+      ],
+      "may_review": [
+        "qa-lead"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/stories/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "done"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "business_context",
+        "technical_context",
+        "acceptance_criteria",
+        "owned_paths",
+        "test_expectations",
+        "definition_of_done"
+      ],
+      "links_required": [
+        "requirements",
+        "architecture"
+      ],
+      "depends_on": [
+        "REQ",
+        "ARCH",
+        "DES"
+      ],
+      "consumed_by": [
+        "TEST",
+        "REVIEW",
+        "REL"
+      ],
+      "immutable_after_creation": false,
+      "notes": "owned_paths is what keeps parallel work from overwriting itself.",
+      "append_only": false
+    },
+    {
+      "code": "TP",
+      "type": "test-plan",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "QADESIGN",
+      "owner_role": "qa-lead",
+      "may_modify": [
+        "qa-lead"
+      ],
+      "may_review": [
+        "test-reviewer",
+        "solution-architect"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/test-plans/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "levels",
+        "scenarios",
+        "coverage_matrix",
+        "exit_criteria",
+        "not_covered"
+      ],
+      "links_required": [
+        "requirements",
+        "stories"
+      ],
+      "depends_on": [
+        "REQ",
+        "NFR",
+        "ARCH",
+        "STORY"
+      ],
+      "consumed_by": [
+        "TEST",
+        "TESTREPORT"
+      ],
+      "immutable_after_creation": false,
+      "notes": "",
+      "append_only": false
+    },
+    {
+      "code": "TEST",
+      "type": "test-case",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "QADESIGN",
+      "owner_role": "qa-engineer",
+      "may_modify": [
+        "qa-engineer"
+      ],
+      "may_review": [
+        "test-reviewer"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "tests/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "done"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "level",
+        "scenario_ref",
+        "automated"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "TP",
+        "STORY"
+      ],
+      "consumed_by": [
+        "TESTREPORT"
+      ],
+      "immutable_after_creation": false,
+      "notes": "",
+      "append_only": false
+    },
+    {
+      "code": "REVIEW",
+      "type": "review",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "REVIEW",
+      "owner_role": "code-reviewer",
+      "may_modify": [
+        "code-reviewer"
+      ],
+      "may_review": [
+        "routed specialist reviewers"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "a human other than the author"
+      },
+      "storage": "the merge request",
+      "statuses": [
+        "open",
+        "in-review",
+        "closed"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "routed_rules",
+        "findings",
+        "verdicts"
+      ],
+      "links_required": [
+        "stories",
+        "merge_requests"
+      ],
+      "depends_on": [
+        "STORY",
+        "SEC"
+      ],
+      "consumed_by": [
+        "REL"
+      ],
+      "immutable_after_creation": false,
+      "notes": "Carries agent verdicts AND the human merge approval, in separate fields.",
+      "append_only": false
+    },
+    {
+      "code": "TESTREPORT",
+      "type": "test-report",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "QA",
+      "owner_role": "qa-lead",
+      "may_modify": [
+        "qa-lead",
+        "qa-engineer"
+      ],
+      "may_review": [
+        "test-reviewer"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "QA owner"
+      },
+      "storage": "docs/qa/",
+      "statuses": [
+        "open",
+        "in-review",
+        "closed"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "executed",
+        "evidence",
+        "defects_raised",
+        "residual_risk"
+      ],
+      "links_required": [
+        "test_plans"
+      ],
+      "depends_on": [
+        "TP",
+        "TEST"
+      ],
+      "consumed_by": [
+        "REL"
+      ],
+      "immutable_after_creation": false,
+      "notes": "",
+      "append_only": false
+    },
+    {
+      "code": "REL",
+      "type": "release",
+      "workflow": "WF-RELEASE",
+      "produced_by_stage": "RELEASE",
+      "owner_role": "release-manager",
+      "may_modify": [
+        "release-manager"
+      ],
+      "may_review": [
+        "sre",
+        "security-reviewer",
+        "qa-lead"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "named release approver"
+      },
+      "storage": "docs/release/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "authorized",
+        "done",
+        "rolled-back"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "contents",
+        "migration_plan",
+        "rollback_plan",
+        "rollback_triggers",
+        "validation_plan",
+        "verification_plan",
+        "irreversible_steps"
+      ],
+      "links_required": [
+        "stories",
+        "merge_requests"
+      ],
+      "depends_on": [
+        "REVIEW",
+        "TESTREPORT",
+        "SEC",
+        "ARCH"
+      ],
+      "consumed_by": [
+        "INC"
+      ],
+      "immutable_after_creation": false,
+      "notes": "Three distinct states: approved (content accepted), authorized (production deployment permitted), done (deployed and verified). See policies/release-authority.json.",
+      "append_only": false
+    },
+    {
+      "code": "DEF",
+      "type": "defect",
+      "workflow": "WF-DEFECT",
+      "produced_by_stage": "TRIAGE",
+      "owner_role": "qa-engineer",
+      "may_modify": [
+        "qa-engineer",
+        "qa-lead"
+      ],
+      "may_review": [
+        "code-reviewer",
+        "development-lead"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/qa/",
+      "statuses": [
+        "open",
+        "in-review",
+        "closed",
+        "rejected"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "reproduction",
+        "severity",
+        "environment",
+        "expected",
+        "actual"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "REQ",
+        "TESTREPORT",
+        "RCA"
+      ],
+      "consumed_by": [
+        "TEST",
+        "REL"
+      ],
+      "immutable_after_creation": false,
+      "notes": "Reproducible from its record alone, or it is not a defect record.",
+      "append_only": false
+    },
+    {
+      "code": "INC",
+      "type": "incident",
+      "workflow": "WF-INCIDENT",
+      "produced_by_stage": "DETECT",
+      "owner_role": "incident-commander",
+      "may_modify": [
+        "incident-commander"
+      ],
+      "may_review": [
+        "rca-analyst"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "on-call human owner"
+      },
+      "storage": "docs/incidents/",
+      "statuses": [
+        "open",
+        "mitigated",
+        "recovered",
+        "closed"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "symptom",
+        "severity",
+        "timeline",
+        "hypotheses",
+        "production_actions",
+        "mitigation",
+        "recovery"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "REL"
+      ],
+      "consumed_by": [
+        "RCA",
+        "EVID"
+      ],
+      "immutable_after_creation": false,
+      "notes": "Appended to during the incident, never rewritten afterwards. It is evidence.",
+      "append_only": true
+    },
+    {
+      "code": "RCA",
+      "type": "rca",
+      "workflow": "WF-INCIDENT",
+      "produced_by_stage": "RCA",
+      "owner_role": "rca-analyst",
+      "may_modify": [
+        "rca-analyst"
+      ],
+      "may_review": [
+        "engineering-director"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "engineering owner"
+      },
+      "storage": "docs/rcas/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "timeline",
+        "trigger",
+        "root_cause",
+        "contributing_factors",
+        "detection_gaps",
+        "corrective_actions",
+        "preventive_actions"
+      ],
+      "links_required": [
+        "incidents"
+      ],
+      "depends_on": [
+        "INC",
+        "EVID"
+      ],
+      "consumed_by": [
+        "DEF",
+        "DEBT",
+        "REQ",
+        "ADR"
+      ],
+      "immutable_after_creation": false,
+      "notes": "'Human error' is not a root cause. Every action has an owner, a type and a criterion.",
+      "append_only": false
+    },
+    {
+      "code": "DEBT",
+      "type": "technical-debt",
+      "workflow": "WF-INCIDENT",
+      "produced_by_stage": "FEEDBACK",
+      "owner_role": "development-lead",
+      "may_modify": [
+        "development-lead"
+      ],
+      "may_review": [
+        "solution-architect"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/technical-debt/",
+      "statuses": [
+        "open",
+        "in-review",
+        "closed"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "description",
+        "accepted_by",
+        "repayment_trigger"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "RCA",
+        "REVIEW"
+      ],
+      "consumed_by": [
+        "REQ",
+        "STORY"
+      ],
+      "immutable_after_creation": false,
+      "notes": "Carries the trigger condition for repayment, not just the description.",
+      "append_only": false
+    },
+    {
+      "code": "DEPA",
+      "type": "dependency-assessment",
+      "workflow": "WF-DEPENDENCY",
+      "produced_by_stage": "CLASSIFY",
+      "owner_role": "dependency-reviewer",
+      "may_modify": [
+        "dependency-reviewer",
+        "backend-developer"
+      ],
+      "may_review": [
+        "security-reviewer"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "security owner"
+      },
+      "storage": "docs/security/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "route",
+        "urgency_basis",
+        "vulnerability_status",
+        "licence",
+        "maintenance_signal",
+        "transitive_effect",
+        "behaviour_changes"
+      ],
+      "links_required": [],
+      "depends_on": [],
+      "consumed_by": [
+        "REVIEW",
+        "REL"
+      ],
+      "immutable_after_creation": false,
+      "notes": "Urgency from exploitability in THIS deployment, or a support end date. Never CVSS alone.",
+      "append_only": false
+    }
+  ],
+  "dod_predicates": {
+    "artifact_exists": {
+      "args": [
+        "artifact_code"
+      ],
+      "checkable": "project",
+      "means": "An artifact of this type exists for the change."
+    },
+    "artifact_status": {
+      "args": [
+        "artifact_code",
+        "status"
+      ],
+      "checkable": "project",
+      "means": "The named artifact has reached this status."
+    },
+    "every_linked": {
+      "args": [
+        "from_code",
+        "to_code"
+      ],
+      "checkable": "project",
+      "means": "Every artifact of from_code links to at least one of to_code. This is how coverage gaps become visible."
+    },
+    "field_quantified": {
+      "args": [
+        "artifact_code",
+        "field"
+      ],
+      "checkable": "project",
+      "means": "The field holds a number or an explicit blocking open question, never a plausible default."
+    },
+    "agent_verdict": {
+      "args": [
+        "reviewer",
+        "verdict"
+      ],
+      "checkable": "project",
+      "means": "The named AI reviewer recorded this verdict. Never satisfies a human_gate."
+    },
+    "human_approval_recorded": {
+      "args": [
+        "policy_ref"
+      ],
+      "checkable": "gitlab",
+      "means": "A named human recorded this approval outside the session."
+    },
+    "no_unresolved_findings": {
+      "args": [
+        "severity"
+      ],
+      "checkable": "project",
+      "means": "No finding at or above this severity is open."
+    },
+    "pipeline_passed": {
+      "args": [
+        "pipeline"
+      ],
+      "checkable": "gitlab",
+      "means": "The named CI pipeline passed on the merge commit."
+    },
+    "tests_pass": {
+      "args": [
+        "level"
+      ],
+      "checkable": "project",
+      "means": "The named test level passed."
+    },
+    "reproduction_fails_before_fix": {
+      "args": [],
+      "checkable": "project",
+      "means": "The regression test was verified to fail against the unfixed code. Writing it first is the point."
+    },
+    "rollback_plan_or_acknowledged": {
+      "args": [],
+      "checkable": "project",
+      "means": "A rollback plan exists, or irreversibility is acknowledged in writing by a human."
+    },
+    "skip_recorded": {
+      "args": [
+        "stage"
+      ],
+      "checkable": "project",
+      "means": "A skipped stage carries a written reason. Skipping is normal; skipping silently is not."
+    },
+    "config_valid": {
+      "args": [],
+      "checkable": "repo",
+      "means": "The project configuration validates against schemas/project-config.schema.json."
+    },
+    "no_blocking_open_decisions": {
+      "args": [
+        "area"
+      ],
+      "checkable": "project",
+      "means": "No open_decision with blocking true remains for this area."
+    },
+    "decision_resolved": {
+      "args": [
+        "decision_id"
+      ],
+      "checkable": "project",
+      "means": "The named open decision is answered. An agent blocked by one names it by id and stops."
+    },
+    "no_open_blocking_decisions_for": {
+      "args": [
+        "artifact_code"
+      ],
+      "checkable": "project",
+      "means": "No open DEC blocks the production of this artifact type."
+    },
+    "evidence_sealed": {
+      "args": [],
+      "checkable": "project",
+      "means": "An EVID record exists and is sealed, collected before any destructive remediation."
+    },
+    "artifact_owned_by": {
+      "args": [
+        "artifact_code",
+        "role"
+      ],
+      "checkable": "project",
+      "means": "The artifact's owner field matches the role the contract assigns."
+    },
+    "required_fields_present": {
+      "args": [
+        "artifact_code"
+      ],
+      "checkable": "project",
+      "means": "Every field the artifact contract requires is present and non-empty."
+    },
+    "human_identity_recorded": {
+      "args": [
+        "policy_ref"
+      ],
+      "checkable": "project",
+      "means": "The approval carries an approver_id and an approver_role that is not an agent."
+    },
+    "release_authorized": {
+      "args": [],
+      "checkable": "project",
+      "means": "The release reached the 'authorized' state: content approval and deployment authorization are separate acts."
+    },
+    "cycle_accepted": {
+      "args": [
+        "cycle_id"
+      ],
+      "checkable": "project",
+      "means": "The department's internal execution cycle reached ACCEPTED: every work item passed self validation, peer review and lead review, and no rework or escalation is open."
+    },
+    "cycle_rollup_reported": {
+      "args": [
+        "cycle_id"
+      ],
+      "checkable": "project",
+      "means": "The lead produced the rollup for the head. A department that completed without reporting has not finished; the head cannot see whether the department is healthy."
+    },
+    "no_open_rework": {
+      "args": [
+        "cycle_id"
+      ],
+      "checkable": "project",
+      "means": "No work item sits in CHANGES_REQUESTED or has exceeded the rework limit."
+    }
+  },
+  "checkability": {
+    "repo": "Evaluated by this plugin's own validators.",
+    "project": "Evaluated against the project's artifacts by scripts/check_dod.py when run inside a project.",
+    "gitlab": "Evaluated against GitLab. Not evaluable from a session alone; the predicate records the requirement and names where the evidence lives."
+  },
+  "contract_fields": {
+    "owner_role": "The role that creates it. Exactly one.",
+    "may_modify": "Roles permitted to change it after creation. Empty means immutable to agents.",
+    "may_review": "Roles that may record an AGENT verdict on it.",
+    "may_approve": "The HUMAN role that may approve it, or kind 'none'. Never an agent.",
+    "storage": "Where it lives. Aligned with policies/write-scope.json.",
+    "required_fields": "Base contract plus type-specific fields.",
+    "depends_on": "Upstream artifact codes that must exist first.",
+    "consumed_by": "Downstream artifact codes that reference it.",
+    "immutable_after_creation": "True for evidence: appended to, never rewritten.",
+    "append_only": "True where the artifact grows but is never rewritten: the incident record gains timeline entries during the incident and is never edited afterwards."
+  }
+}

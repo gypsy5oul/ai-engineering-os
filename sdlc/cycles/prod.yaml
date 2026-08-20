@@ -1,0 +1,122 @@
+# Generated against schemas/department-cycle.schema.json.
+# The generic contract is policies/department-cycle.json; this instantiates it.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: CYCLE-PROD
+name: Product execution
+version: 1.0.0
+department: product
+description: Intent to approved requirement set. The analyst writes, the product manager reviews intent, and QA checks that every criterion can actually fail a test. An unanswerable question becomes a DEC rather than an assumption.
+used_by_stages:
+  - WF-FEATURE/REQ
+  - WF-ONBOARDING/ASK
+work_item:
+  kind: requirement
+  artifact: REQ
+  acceptance_source: the business intent as the requester stated it
+positions:
+  human_owner:
+    role: project-owner
+    authority:
+      - Accepts the requirement scope
+      - AP-03 where a technology decision is implied
+    receives: escalations-and-approvals
+  head:
+    kind: agent
+    role: engineering-director
+    receives: rollup
+    authority:
+      - Plan and delegate the department's work
+      - Request acceptance once every item reaches READY_FOR_INTEGRATION
+      - Escalate to the human owner what the department cannot resolve
+  lead: product-manager
+  workers:
+    - requirements-analyst
+  peer_reviewer: qa-lead
+  specialist_reviewers:
+    - solution-architect
+states:
+  - ASSIGNED
+  - IN_PROGRESS
+  - SELF_VALIDATION
+  - PEER_REVIEW
+  - LEAD_REVIEW
+  - CHANGES_REQUESTED
+  - READY_FOR_INTEGRATION
+  - ACCEPTANCE_REQUESTED
+  - ACCEPTED
+  - WITHDRAWN
+  - ESCALATED
+  - BLOCKED
+transitions:
+  ASSIGNED:
+    start: IN_PROGRESS
+    blocked: BLOCKED
+  IN_PROGRESS:
+    submit: SELF_VALIDATION
+    blocked: BLOCKED
+  SELF_VALIDATION:
+    pass: PEER_REVIEW
+    fail: IN_PROGRESS
+  PEER_REVIEW:
+    pass: LEAD_REVIEW
+    minor: CHANGES_REQUESTED
+    major: LEAD_REVIEW
+    architecture_issue: ESCALATED
+    requirement_issue: ESCALATED
+  LEAD_REVIEW:
+    pass: READY_FOR_INTEGRATION
+    changes_required: CHANGES_REQUESTED
+    architecture_issue: ESCALATED
+    cannot_resolve: ESCALATED
+  CHANGES_REQUESTED:
+    resume: IN_PROGRESS
+    limit_reached: ESCALATED
+  READY_FOR_INTEGRATION:
+    set_complete: ACCEPTANCE_REQUESTED
+    sibling_pending: READY_FOR_INTEGRATION
+  ESCALATED:
+    resolved: IN_PROGRESS
+    requirement_changed: ASSIGNED
+    withdrawn: WITHDRAWN
+  BLOCKED:
+    unblocked: IN_PROGRESS
+    decision_open: BLOCKED
+  ACCEPTANCE_REQUESTED:
+    dod_pass: ACCEPTED
+    dod_fail: CHANGES_REQUESTED
+    dod_requires_evidence: BLOCKED
+rework:
+  limit: 3
+  on_limit: Escalate to the project owner, because a third round means the intent is not agreed. A third round means the acceptance criteria, the design or an unwritten disagreement is the problem, not the implementation.
+escalation:
+  order:
+    - worker
+    - peer_reviewer
+    - lead
+    - head
+    - human_owner
+  lateral:
+    feasibility_issue: solution-architect
+    security_issue: security-architect
+rollup:
+  produced_by: product-manager
+  consumed_by: engineering-director
+  fields:
+    - work_item_set
+    - status
+    - streams
+    - reviews
+    - open_findings
+    - rework_rounds
+    - escalations
+    - artifacts
+    - next_gate
+acceptance:
+  conditions:
+    - artifact_status(REQ, approved)
+    - field_quantified(NFR, target)
+    - agent_verdict(qa-lead, pass)
+    - no_open_blocking_decisions_for(REQ)
+  requested_by: head
+  determined_by: scripts/check_dod.py against acceptance.conditions

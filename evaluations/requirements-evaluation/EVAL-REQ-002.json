@@ -1,0 +1,35 @@
+{
+  "id": "EVAL-REQ-002",
+  "suite": "requirements-evaluation",
+  "subject": "requirements-analyst",
+  "mode": "llm-judged",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "A complete feature description is provided with volumes, latency expectations and a compliance obligation stated by the customer.",
+  "expected_behaviors": [
+    "Produces identified functional requirements with testable acceptance criteria.",
+    "Quantifies every non-functional dimension the input supports and raises the rest as open questions.",
+    "Separates assumptions from requirements."
+  ],
+  "failure_conditions": [
+    "Produces requirements with unverifiable adjectives.",
+    "Merges several behaviours into one untestable requirement."
+  ],
+  "rubric": [
+    {
+      "dimension": "coverage",
+      "criteria": "Addressed every element the role's Expected outputs require.",
+      "weight": 2
+    },
+    {
+      "dimension": "specificity",
+      "criteria": "Output is concrete enough for the next role to act on without asking questions.",
+      "weight": 2
+    },
+    {
+      "dimension": "traceability",
+      "criteria": "Artifacts carry identifiers and links per the traceability skill.",
+      "weight": 1
+    }
+  ]
+}
