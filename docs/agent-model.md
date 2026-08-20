@@ -106,10 +106,10 @@ evaluation suite, in `policies/agent-registry.json`. Nothing is ownerless.
 Lifecycle, from `policies/agent-lifecycle.json`:
 
 ```
-draft → development → evaluation → security-review → pilot → approved → production → deprecated
+draft → development → evaluation → security-assessment → pilot → approved → production → deprecated
 ```
 
-`security-review` is mandatory for HIGH and CRITICAL. The transitions into
+`security-assessment` is mandatory for HIGH and CRITICAL. The transitions into
 `pilot`, `approved` and `production` all require a human decision. **A markdown
 file existing does not make an agent production-ready** — everything in this
 repository is currently at `pilot`.

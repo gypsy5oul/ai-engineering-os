@@ -25,10 +25,12 @@
       "spawning any role classified CRITICAL",
       "creating a role that does not exist in the registry",
       "any spawn during an active production incident that the incident commander did not request"
-    ]
+    ],
+    "sre": "engineering-director"
   },
   "notes": [
-    "Claude Code has no nested agent teams: teammates cannot spawn teammates. Within a team, delegation depth is therefore one level and this hierarchy governs subagent spawning inside each member session.",
-    "The hook can only see the agent type requested and the caller's agent type. It cannot verify intent. It is a guardrail, not an authorization system."
+    "Claude Code has no nested agent teams: a teammate cannot spawn another teammate. It can still spawn ordinary subagents, so depth inside a team member is governed by the platform's subagent nesting limit rather than being capped at one level. This hierarchy governs subagent spawning throughout.",
+    "The hook can only see the agent type requested and the caller's agent type. It cannot verify intent. It is a guardrail, not an authorization system.",
+    "sre escalates to engineering-director, which is its reporting line. During a declared incident the incident-commander directs the response, but that is a temporary command relationship for the duration of the incident, not a line of escalation. The two were previously stated differently in policies/role-hierarchy.json and agents/sre.md."
   ]
 }

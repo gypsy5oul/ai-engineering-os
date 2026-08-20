@@ -18,6 +18,20 @@ entry_conditions:
 exit_conditions:
   - The change is merged with tests passing and the risk assessment recorded.
   - Where the route was security or end-of-life, the urgency decision is recorded with the reason.
+cancellation:
+  terminal_status: cancelled
+  who: the human who owns the change, recorded like any other decision
+  requires:
+    - Every department cycle this change entered reaches a terminal state, ACCEPTED
+      or WITHDRAWN. A cycle left open is work the organization still believes is
+      running.
+    - The reason is written on the artifact that opened the change.
+    - Anything already deployed is either reverted or explicitly kept, and which one
+      is recorded.
+  note: >-
+    Cancelling is not failing. A change that is dropped for good reasons still has to
+    end tidily, and until this existed a workflow could only be finished by completing
+    it.
 definition_of_done:
   - artifact_exists(DEPA)
   - agent_verdict(dependency-reviewer, pass)
@@ -46,8 +60,8 @@ stages:
     name: Classification and routing
     owner: dependency-reviewer
     skills:
-      - security-review
-      - code-review
+      - security-assessment
+      - change-review
     risk: MEDIUM
     complexity: routine
     execution: inline
@@ -84,7 +98,7 @@ stages:
     participants:
       - dependency-reviewer
     skills:
-      - code-review
+      - change-review
     risk: MEDIUM
     complexity: complex
     execution: subagent
@@ -114,7 +128,7 @@ stages:
     participants:
       - security-reviewer
     skills:
-      - security-review
+      - security-assessment
     risk: HIGH
     complexity: complex
     execution: subagent

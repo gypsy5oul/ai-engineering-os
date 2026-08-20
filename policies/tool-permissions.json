@@ -78,6 +78,33 @@
       "intent": "A department lead that authors its own planning artifacts and delegates work to its department, without executing commands.",
       "notes": "The author profile with Agent added. Three roles were granted may_spawn in policies/agent-registry.json while holding the author profile, which has no Agent tool: the guard would have permitted a delegation the role had no way to attempt. Withholding Bash keeps these roles out of the execution path, which is why they do not take the lead profile."
     },
+    "researching-author": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "WebFetch",
+        "WebSearch"
+      ],
+      "intent": "Authors documents whose correctness depends on facts outside the repository: technology comparisons, threat and advisory information, current platform documentation.",
+      "notes": "Three roles were told to research and given no way to reach the web. agent-architect's core instruction is to verify against the current Claude Code documentation, which was impossible. Network access here is read-only and there is no Bash, so nothing fetched can be executed."
+    },
+    "delegating-researcher": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Edit",
+        "Write",
+        "Agent",
+        "WebFetch",
+        "WebSearch"
+      ],
+      "intent": "A department lead that authors documents, delegates to its department, and must verify facts outside the repository.",
+      "notes": "Held by security-architect, which both spawns its reviewers and depends on current advisory and vulnerability information. Still no Bash: authority to research and delegate is not authority to execute."
+    },
     "operator-readonly": {
       "tools": [
         "Read",

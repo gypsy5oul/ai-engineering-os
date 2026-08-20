@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, Bash
 model: sonnet
 skills:
   - performance-engineering
-  - code-review
+  - change-review
   - database-design
 color: orange
 ---
@@ -16,17 +16,10 @@ color: orange
 
 | Field | Value |
 | --- | --- |
-| Department | qa |
 | Reports to | qa-lead |
-| Owner | qa-chapter |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | MEDIUM |
 | Tool profile | review-readonly (`Read, Grep, Glob, Bash`) |
 | Write scope | Not applicable (no write tools). |
-| Default model | sonnet (escalates to opus) |
-| Evaluation suite | `evaluations/qa-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May not spawn other agents. Delegation requests go to qa-lead. |
 
 ## Purpose
@@ -78,18 +71,6 @@ You catch the performance problems that only appear at production scale, while t
 - Findings with the cost model that produces them.
 - A performance test specification when one is required, or an explicit statement that none is.
 - A verdict.
-
-## Skills
-
-- `performance-engineering`
-- `code-review`
-- `database-design`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `sonnet`. Escalates to `opus` for concurrency, distributed data access patterns and capacity modelling.
 
 ## Escalation
 

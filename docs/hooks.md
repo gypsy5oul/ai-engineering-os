@@ -14,7 +14,31 @@ model cannot argue with.
 | `PreToolUse` | `Write\|Edit\|NotebookEdit` | `guard_write.py` | Forbidden paths, role write scope, secret content |
 | `PreToolUse` | `Agent` | `guard_spawn.py` | Organizational spawn hierarchy |
 | `PostToolUse` | `Write\|Edit\|NotebookEdit` | `audit_log.py` | Records what actually changed |
+| `Stop` | — | `check_artifacts.py` | Artifacts written this session parse and validate |
+| `SubagentStop` | — | `check_artifacts.py` | The same check when a delegated task ends |
 | `SessionStart` | `startup\|resume\|clear\|compact\|fork` | `session_context.py` | Organization presence and project configuration status |
+
+## The one place the lifecycle is enforced
+
+Stage order, definitions of done and the department cycles are followed because
+the model reads them and chooses to. `docs/limitations.md` says so plainly. The
+`Stop` and `SubagentStop` hooks are the exception, and they were chosen for the
+one part of the contract that needs **no session state to check**.
+
+An artifact header either satisfies `schemas/artifact-header.schema.json` or it
+does not. The audit log already records which files a session wrote, so the hook
+needs no stage marker, no correlation id, and nothing the model has to maintain
+truthfully about itself. If a session wrote an artifact that will not parse, it
+is held open with the specific faults, because an artifact no predicate can read
+is work that does not count.
+
+Two deliberate limits:
+
+- **It blocks on a structural fact, never on judgement.** A hook that argued
+  about whether work was good would be a hook sessions learn to fight.
+- **It fails open.** `stop_hook_active` is honoured so it cannot loop, and any
+  internal error exits silently. This hook adds a check; it is not a safety
+  boundary, and a broken check must never trap a session.
 
 ## Four decisions
 

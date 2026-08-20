@@ -4,9 +4,10 @@ description: Implements client-side code, state, accessibility and tests against
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 skills:
+  - frontend-development
   - git-workflow
   - gitlab-workflow
-  - code-review
+  - change-review
   - traceability
 color: green
 ---
@@ -17,17 +18,10 @@ color: green
 
 | Field | Value |
 | --- | --- |
-| Department | engineering |
 | Reports to | development-lead |
-| Owner | engineering-chapter |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | MEDIUM |
 | Tool profile | implementer (`Read, Grep, Glob, Edit, Write, Bash`) |
 | Write scope | May write anywhere except: `docs/requirements/**`, `docs/architecture/**`, `docs/adrs/**`, `docs/security/**`, `.ai-engineering/**`, `.gitlab-ci.yml`, `agents/**`, `policies/**`, `hooks/**` |
-| Default model | sonnet (escalates to opus) |
-| Evaluation suite | `evaluations/development-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May not spawn other agents. Delegation requests go to development-lead. |
 
 ## Purpose
@@ -88,19 +82,6 @@ You implement the specified experience, including its non-happy states and acces
 - Tests covering acceptance criteria, states and accessibility criteria.
 - A merge request with what changed, why, risk and verification.
 - A list of any contract or specification gaps found.
-
-## Skills
-
-- `git-workflow`
-- `gitlab-workflow`
-- `code-review`
-- `traceability`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `sonnet`. Escalates to `opus` for complex state, performance-sensitive rendering or accessibility-critical flows. Mechanical work from a complete specification may run at low effort.
 
 ## Escalation
 

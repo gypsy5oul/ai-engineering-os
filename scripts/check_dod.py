@@ -125,6 +125,25 @@ def check_grammar():
 
 # ---------------------------------------------------------------- evaluation
 
+def scope_to_change(artifacts, change):
+    """Narrow a project's artifacts to one unit of work.
+
+    Predicates used to match every artifact in the project. That made a finished
+    run vacuously satisfy a new one, and made two concurrent runs starve each
+    other: one feature's IN_PROGRESS rollup failed cycle_accepted for every other
+    feature in flight. Scoping by change is what makes the predicates mean
+    "this work item" rather than "anything anyone has ever done here".
+    """
+    if not change:
+        return artifacts
+    return [a for a in artifacts if a.get("change") == change]
+
+
+def changes_present(artifacts):
+    """The distinct units of work visible in a set of artifacts."""
+    return sorted({a["change"] for a in artifacts if a.get("change")})
+
+
 def load_artifacts(project):
     """Read every artifact header under the project's knowledge root."""
     found = []
@@ -162,6 +181,36 @@ def evaluate(fn, args, artifacts, project):
         bad = [a["id"] for a in hits if a.get("status") != args[1]]
         return ("PASS" if not bad else "FAIL"), ("all %s are %s" % (args[0], args[1])
                                                  if not bad else "not %s: %s" % (args[1], ", ".join(bad)))
+
+    if fn == "corrective_actions_tracked":
+        # An incident's follow-up may legitimately be a defect, a debt item, a new
+        # requirement or an architecture decision. Demanding a defect specifically
+        # forced an RCA whose actions were all monitoring or process improvements
+        # to invent one.
+        KINDS = ("DEF", "DEBT", "REQ", "ADR")
+        src = by_code(artifacts, args[0])
+        if not src:
+            return "FAIL", "no %s artifact exists to link from" % args[0]
+        pats = [re.compile(r"^[A-Z][A-Z0-9]{1,9}-%s-" % k) for k in KINDS]
+        back = set()
+        for kind in KINDS:
+            for t_art in by_code(artifacts, kind):
+                for v in (t_art.get("links") or {}).values():
+                    for e in (v if isinstance(v, list) else [v]):
+                        back.add(str(e))
+        missing = []
+        for a in src:
+            edges = []
+            for v in (a.get("links") or {}).values():
+                edges += v if isinstance(v, list) else [v]
+            forward = any(pat.match(str(e)) for e in edges for pat in pats)
+            if not forward and a["id"] not in back:
+                missing.append(a["id"])
+        return ("PASS" if not missing else "FAIL"), (
+            "every %s tracks a corrective action (%s)" % (args[0], "/".join(KINDS))
+            if not missing else
+            "%d %s with no corrective action of any kind: %s"
+            % (len(missing), args[0], ", ".join(missing)))
 
     if fn == "every_linked":
         src = by_code(artifacts, args[0])
@@ -336,6 +385,14 @@ def evaluate(fn, args, artifacts, project):
         cycle_id = args[0]
         rollups = [(a, a["rollup"]) for a in artifacts
                    if isinstance(a.get("rollup"), dict) and a["rollup"].get("cycle") == cycle_id]
+        # An unscoped run that spans several units of work cannot answer the
+        # question that was asked. Refusing is the only honest result: silently
+        # mixing them is what let a stale rollup satisfy a new feature.
+        spanning = changes_present([a for a, _ in rollups])
+        if len(spanning) > 1:
+            return "FAIL", ("%d units of work carry a %s rollup (%s). Re-run with --change to say "
+                            "which one is being evaluated." % (len(spanning), cycle_id,
+                                                               ", ".join(spanning)))
         if not rollups:
             if fn == "cycle_rollup_reported":
                 return "FAIL", ("no rollup for %s. A department that completed without reporting has "
@@ -354,7 +411,14 @@ def evaluate(fn, args, artifacts, project):
         limit = _cycle_rework_limit(cycle_id)
         over = ["%s=%d" % (a["id"], r.get("rework_rounds", 0)) for a, r in rollups
                 if r.get("rework_rounds", 0) > limit]
-        open_esc = [a["id"] for a, r in rollups if r.get("escalations")]
+        def unresolved(entry):
+            # A bare string is an open escalation; a record is open until it is
+            # resolved. The list was previously read as open in its entirety, so
+            # recording an escalation at all blocked the stage forever.
+            return not (isinstance(entry, dict) and entry.get("resolved_at"))
+
+        open_esc = [a["id"] for a, r in rollups
+                    if any(unresolved(e) for e in (r.get("escalations") or []))]
         problems = over + ["%s has open escalations" % i for i in open_esc]
         return ("PASS" if not problems else "FAIL"), (
             "no open rework, limit %d" % limit if not problems else "; ".join(problems))
@@ -362,15 +426,33 @@ def evaluate(fn, args, artifacts, project):
     if fn in ("pipeline_passed",):
         return "REQUIRES-EVIDENCE", "pipeline status lives in GitLab, not in the repository"
 
-    if fn in ("tests_pass", "no_unresolved_findings", "reproduction_fails_before_fix",
-              "rollback_plan_or_acknowledged", "skip_recorded"):
+    if fn == "no_unresolved_findings":
+        # A granted security exception IS the resolution of the finding it covers.
+        # Without this, CYCLE-SEC contradicted itself: RELEASE_BLOCKED offers an
+        # exception_granted edge so a human can accept a standing risk under AP-04,
+        # and then the acceptance conditions could never be satisfied, so the
+        # exception led nowhere. Accepted risk is a decision, not an open finding.
+        accepted = []
+        for a in artifacts:
+            for ap in a.get("approvals") or []:
+                if ap.get("policy_ref") == "AP-04":
+                    accepted.append("%s (%s, %s)" % (a["id"], ap.get("approver_id", "?"),
+                                                     ap.get("recorded_in", "?")))
+        if accepted:
+            return "PASS", ("risk accepted under AP-04 on %s. The finding stands; a named human "
+                            "owns it." % ", ".join(accepted))
+        return "REQUIRES-EVIDENCE", ("needs the project's own findings list, or a security "
+                                     "exception recorded under AP-04")
+
+    if fn in ("tests_pass", "reproduction_fails_before_fix",
+              "rollback_plan_or_acknowledged", "every_skip_recorded"):
         return "REQUIRES-EVIDENCE", ("needs the project's own test run, findings list or written "
                                      "record; not derivable from artifact headers alone")
 
     return "REQUIRES-EVIDENCE", "no evaluator implemented for %s" % fn
 
 
-def run(workflow_id, stage_id, project):
+def run(workflow_id, stage_id, project, change=None):
     wfs = workflows()
     if workflow_id not in wfs:
         print("ERROR unknown workflow %s. Known: %s" % (workflow_id, ", ".join(sorted(wfs))))
@@ -385,9 +467,10 @@ def run(workflow_id, stage_id, project):
     else:
         entries = [("workflow", e) for e in wf["definition_of_done"]]
 
-    artifacts = load_artifacts(project)
-    print("%s %s | %d artifact(s) found under %s\n" %
-          (workflow_id, stage_id or "(workflow)", len(artifacts), project))
+    artifacts = scope_to_change(load_artifacts(project), change)
+    print("%s %s | %d artifact(s)%s under %s\n" %
+          (workflow_id, stage_id or "(workflow)", len(artifacts),
+           (" for %s" % change) if change else "", project))
     counts = {"PASS": 0, "FAIL": 0, "REQUIRES-EVIDENCE": 0}
     for where, entry in entries:
         fn, args = parse_predicate(entry)
@@ -409,7 +492,7 @@ def run(workflow_id, stage_id, project):
     return 0
 
 
-def run_cycle(cycle_id, project):
+def run_cycle(cycle_id, project, change=None):
     """Evaluate a department cycle's acceptance conditions.
 
     Every cycle declares `determined_by: scripts/check_dod.py against
@@ -426,8 +509,9 @@ def run_cycle(cycle_id, project):
         print("ERROR %s declares no acceptance conditions" % cycle_id)
         return 2
 
-    artifacts = load_artifacts(project)
-    print("%s acceptance | %d artifact(s) found under %s\n" % (cycle_id, len(artifacts), project))
+    artifacts = scope_to_change(load_artifacts(project), change)
+    print("%s acceptance | %d artifact(s)%s under %s\n"
+          % (cycle_id, len(artifacts), (" for %s" % change) if change else "", project))
     counts = {"PASS": 0, "FAIL": 0, "REQUIRES-EVIDENCE": 0}
     for entry in conditions:
         fn, args = parse_predicate(entry)
@@ -454,13 +538,15 @@ def main():
     ap.add_argument("--workflow")
     ap.add_argument("--stage")
     ap.add_argument("--cycle", help="evaluate a department cycle's acceptance conditions")
+    ap.add_argument("--change", help="the unit of work to evaluate: an EPIC, DEF, INC or REL id. "
+                                     "Without it, predicates match every artifact in the project.")
     ap.add_argument("--project", default=".")
     args = ap.parse_args()
     if args.cycle:
-        return run_cycle(args.cycle, os.path.abspath(args.project))
+        return run_cycle(args.cycle, os.path.abspath(args.project), args.change)
     if args.grammar or not args.workflow:
         return check_grammar()
-    return run(args.workflow, args.stage, os.path.abspath(args.project))
+    return run(args.workflow, args.stage, os.path.abspath(args.project), args.change)
 
 
 if __name__ == "__main__":

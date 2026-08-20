@@ -787,3 +787,176 @@ class TestCycleAcceptance(unittest.TestCase):
             self.assertIn("unknown predicate no_such_predicate", proc.stdout)
             self.assertNotEqual(proc.returncode, 0)
 
+
+class TestStopHook(unittest.TestCase):
+    """The Stop hook is the one place the lifecycle is enforced rather than asked for.
+
+    It must block on a structural fault, stay silent otherwise, and never trap a
+    session: a gate that cannot be escaped is worse than no gate.
+    """
+
+    HOOK = os.path.join(ROOT, "hooks", "scripts", "check_artifacts.py")
+
+    def run_stop(self, header, active=False):
+        import tempfile, time
+        with tempfile.TemporaryDirectory() as proj, tempfile.TemporaryDirectory() as data:
+            art = os.path.join(proj, "a.md")
+            with open(art, "w", encoding="utf-8") as fh:
+                fh.write(header)
+            audit = os.path.join(data, "audit")
+            os.makedirs(audit)
+            with open(os.path.join(audit, time.strftime("%Y-%m") + ".jsonl"), "w") as fh:
+                fh.write(json.dumps({"type": "file_change", "session": "S", "path": art}) + "\n")
+            env = dict(os.environ, CLAUDE_PLUGIN_ROOT=ROOT, CLAUDE_PLUGIN_DATA=data,
+                       CLAUDE_PROJECT_DIR=proj)
+            proc = subprocess.run(
+                [sys.executable, self.HOOK],
+                input=json.dumps({"session_id": "S", "stop_hook_active": active}),
+                capture_output=True, text=True, env=env, timeout=30)
+            self.assertEqual(proc.returncode, 0, "a stop hook must always exit 0")
+            return json.loads(proc.stdout) if proc.stdout.strip() else None
+
+    VALID = ("---\nid: ACME-REQ-002\ntype: requirement\ntitle: A complete header\n"
+             "status: approved\n"
+             "owner: requirements-analyst\nversion: 1\ncreated_at: '2026-08-20'\n"
+             "updated_at: '2026-08-20'\nsource: agent\nlinks: {}\n---\n")
+    INVALID = "---\nid: ACME-REQ-001\ntype: requirement\ntitle: Missing the rest\n---\n"
+
+    def test_a_malformed_artifact_blocks_the_stop(self):
+        out = self.run_stop(self.INVALID)
+        self.assertIsNotNone(out, "an invalid artifact must not pass silently")
+        self.assertEqual(out["decision"], "block")
+        self.assertIn("a.md", out["reason"])
+
+    def test_a_valid_artifact_says_nothing(self):
+        self.assertIsNone(self.run_stop(self.VALID))
+
+    def test_it_never_traps_a_session(self):
+        """stop_hook_active means the session is already held open by a stop hook.
+        Ignoring it is how a hook becomes an infinite loop."""
+        self.assertIsNone(self.run_stop(self.INVALID, active=True))
+
+    def test_it_is_registered_for_both_stop_events(self):
+        cfg = load("hooks/hooks.json")["hooks"]
+        for event in ("Stop", "SubagentStop"):
+            with self.subTest(event=event):
+                self.assertIn(event, cfg)
+                cmd = cfg[event][0]["hooks"][0]["command"]
+                self.assertIn("check_artifacts.py", cmd)
+                self.assertIn("${CLAUDE_PLUGIN_ROOT}", cmd)
+
+
+class TestChangeScoping(unittest.TestCase):
+    """Predicates must answer "this work item", not "anything done in this repo".
+
+    Unscoped, a finished run vacuously satisfied a new one and two concurrent runs
+    starved each other: one feature's IN_PROGRESS rollup failed cycle_accepted for
+    every other feature in flight.
+    """
+
+    def project(self, *artifacts):
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d, True)
+        for i, (change, status) in enumerate(artifacts):
+            with open(os.path.join(d, "s%d.md" % i), "w", encoding="utf-8") as fh:
+                fh.write("---\nid: ACME-STORY-%03d\ntype: story\nchange: %s\n"
+                         "title: A story for scoping\nstatus: done\nowner: backend-developer\n"
+                         "version: 1\ncreated_at: '2026-08-01'\nupdated_at: '2026-08-02'\n"
+                         "source: agent\nlinks: {}\nrollup:\n  cycle: CYCLE-DEV\n"
+                         "  status: %s\n  produced_by: development-lead\n  at: '2026-08-02'\n"
+                         "  rework_rounds: 0\n---\n" % (i + 1, change, status))
+        return d
+
+    def check(self, project, change=None):
+        args = ["check_dod.py", "--workflow", "WF-FEATURE", "--stage", "DEV", "--project", project]
+        if change:
+            args += ["--change", change]
+        return script(*args).stdout
+
+    def test_a_concurrent_change_does_not_starve_a_finished_one(self):
+        p = self.project(("ACME-EPIC-001", "ACCEPTED"), ("ACME-EPIC-002", "IN_PROGRESS"))
+        out = self.check(p, "ACME-EPIC-001")
+        self.assertRegex(out, r"PASS\s+cycle_accepted")
+
+    def test_a_stale_rollup_does_not_satisfy_a_new_change(self):
+        p = self.project(("ACME-EPIC-001", "ACCEPTED"))
+        self.assertRegex(self.check(p, "ACME-EPIC-999"), r"FAIL\s+cycle_accepted")
+
+    def test_an_unscoped_run_spanning_two_changes_refuses_to_answer(self):
+        """Silently mixing them is what let a stale rollup satisfy a new feature."""
+        p = self.project(("ACME-EPIC-001", "ACCEPTED"), ("ACME-EPIC-002", "IN_PROGRESS"))
+        out = self.check(p)
+        self.assertIn("Re-run with --change", out)
+
+
+class TestPredicatesAreSatisfiable(unittest.TestCase):
+    """A predicate its own stage cannot satisfy is a trap, not a check."""
+
+    def artifact(self, d, name, body):
+        with open(os.path.join(d, name), "w", encoding="utf-8") as fh:
+            fh.write(body)
+
+    def evaluate(self, project, predicate):
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import check_dod
+        fn, args = check_dod.parse_predicate(predicate)
+        return check_dod.evaluate(fn, args, check_dod.load_artifacts(project), project)[0]
+
+    HEAD = ("---\nid: %s\ntype: %s\nchange: ACME-INC-001\ntitle: %s\nstatus: approved\n"
+            "owner: %s\nversion: 1\ncreated_at: '2026-08-01'\nupdated_at: '2026-08-02'\n"
+            "source: agent\nlinks:%s\n%s---\n")
+
+    def test_an_rca_whose_actions_are_not_defects_can_still_close(self):
+        """The stage lists monitoring and process improvements as valid outcomes,
+        while every_linked(RCA, DEF) demanded a defect specifically."""
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d, True)
+        self.artifact(d, "rca.md", self.HEAD % ("ACME-RCA-001", "rca", "Alert never fired",
+                                                "rca-analyst", "\n  debt:\n    - ACME-DEBT-004", ""))
+        self.artifact(d, "debt.md", self.HEAD % ("ACME-DEBT-004", "technical-debt",
+                                                 "Add the missing alert", "sre", " {}", ""))
+        self.assertEqual(self.evaluate(d, "every_linked(RCA, DEF)"), "FAIL")
+        self.assertEqual(self.evaluate(d, "corrective_actions_tracked(RCA)"), "PASS")
+
+    def test_a_granted_security_exception_resolves_the_finding(self):
+        """CYCLE-SEC offers an exception_granted edge so a human can accept a
+        standing risk. Without this the acceptance conditions could never be met,
+        so the exception led nowhere."""
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d, True)
+        approval = ("approvals:\n  - policy_ref: AP-04\n    approver_id: gitlab:jchen\n"
+                    "    approver_role: security-owner\n"
+                    "    recorded_in: 'gitlab:acme/platform!482'\n    decided_at: '2026-08-02'\n")
+        self.artifact(d, "sec.md", self.HEAD % ("ACME-SEC-001", "security", "Standing finding",
+                                                "security-architect", " {}", approval))
+        self.assertEqual(self.evaluate(d, "no_unresolved_findings(high)"), "PASS")
+
+    def test_without_an_exception_the_finding_still_blocks(self):
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d, True)
+        self.artifact(d, "sec.md", self.HEAD % ("ACME-SEC-002", "security", "Standing finding",
+                                                "security-architect", " {}", ""))
+        self.assertEqual(self.evaluate(d, "no_unresolved_findings(high)"), "REQUIRES-EVIDENCE")
+
+    def test_a_resolved_escalation_stops_blocking_closure(self):
+        """Reading the list itself as open made escalation self-punishing."""
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d, True)
+        base = ("---\nid: ACME-STORY-%03d\ntype: story\nchange: ACME-EPIC-0%d\ntitle: A story\n"
+                "status: done\nowner: backend-developer\nversion: 1\ncreated_at: '2026-08-01'\n"
+                "updated_at: '2026-08-05'\nsource: agent\nlinks: {}\nrollup:\n"
+                "  cycle: CYCLE-DEV\n  status: ACCEPTED\n  produced_by: development-lead\n"
+                "  at: '2026-08-05'\n  rework_rounds: 1\n  escalations:\n"
+                "    - to: engineering-director\n      reason: architecture_issue\n%s---\n")
+        self.artifact(d, "resolved.md", base % (1, 1, "      resolved_at: '2026-08-04'\n"))
+        self.assertEqual(self.evaluate(d, "no_open_rework(CYCLE-DEV)"), "PASS")
+        os.remove(os.path.join(d, "resolved.md"))
+        self.artifact(d, "open.md", base % (2, 2, ""))
+        self.assertEqual(self.evaluate(d, "no_open_rework(CYCLE-DEV)"), "FAIL")
+

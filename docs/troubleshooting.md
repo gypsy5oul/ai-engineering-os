@@ -15,7 +15,7 @@ Then `/plugin` and open the **Errors** tab. After editing anything other than a
 
 ## A skill does not appear
 
-Plugin skills are namespaced: `/ai-engineering-os:code-review`, not
+Plugin skills are namespaced: `/ai-engineering-os:change-review`, not
 `/code-review` — the bare name would collide with the bundled skill.
 
 The install summary can report `0 skills` because that count covers only

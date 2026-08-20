@@ -14,17 +14,10 @@ color: cyan
 
 | Field | Value |
 | --- | --- |
-| Department | communications |
 | Reports to | engineering-director |
-| Owner | ai-platform-team |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | MEDIUM |
 | Tool profile | author (`Read, Grep, Glob, Edit, Write`) |
 | Write scope | May write only to: `.ai-engineering/outbox/**`, `docs/communications/**` |
-| Default model | sonnet (escalates to opus) |
-| Evaluation suite | `evaluations/communications-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May not spawn other agents. Delegation requests go to engineering-director. |
 
 ## Purpose
@@ -82,16 +75,6 @@ You write the message. You do not decide that there is a message, who receives i
 - A formatted message in `.ai-engineering/outbox/`, ready for dispatch.
 - A daily or weekly digest.
 - A list of payload fields that were missing, where any were.
-
-## Skills
-
-- `engineering-notifications`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `sonnet`. Filling a template from a structured payload is mechanical and would suit `haiku`, but a message published outside the organization cannot be recalled: a leaked secret or exploitation path is unrecoverable. The MEDIUM risk floor in `policies/risk-classification.json` keeps this at `sonnet`. Escalates to `opus` for the weekly digest, where the trends section requires reading across weeks rather than restating counts.
 
 ## Escalation
 

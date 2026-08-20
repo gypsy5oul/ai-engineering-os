@@ -1104,7 +1104,8 @@
         "contributing_factors",
         "detection_gaps",
         "corrective_actions",
-        "preventive_actions"
+        "preventive_actions",
+        "prior_rcas_reviewed"
       ],
       "links_required": [
         "incidents"
@@ -1310,13 +1311,6 @@
       "checkable": "project",
       "means": "A rollback plan exists, or irreversibility is acknowledged in writing by a human."
     },
-    "skip_recorded": {
-      "args": [
-        "stage"
-      ],
-      "checkable": "project",
-      "means": "A skipped stage carries a written reason. Skipping is normal; skipping silently is not."
-    },
     "config_valid": {
       "args": [],
       "checkable": "repo",
@@ -1395,6 +1389,18 @@
       ],
       "checkable": "project",
       "means": "No work item sits in CHANGES_REQUESTED or has exceeded the rework limit."
+    },
+    "corrective_actions_tracked": {
+      "args": [
+        "artifact_code"
+      ],
+      "checkable": "project",
+      "means": "Every artifact of this type links to at least one tracked corrective action: a defect, a debt item, a requirement or an architecture decision. every_linked(RCA, DEF) demanded a defect specifically, so an incident whose corrective actions were all monitoring or process improvements -- outcomes the stage itself lists as valid -- could only satisfy its own definition of done by inventing a defect."
+    },
+    "every_skip_recorded": {
+      "args": [],
+      "checkable": "project",
+      "means": "Every stage this change skips carries a written reason. The predicate used to name one stage, skip_recorded(UX), which demanded a skip reason for UX even when UX ran."
     }
   },
   "checkability": {

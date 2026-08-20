@@ -47,6 +47,7 @@ Every stage in every workflow declares the same thing, validated against
 | `definition_of_done` | **Machine-checkable predicates**, evaluated by `scripts/check_dod.py` |
 | `agent_gate` | An AI verdict. Blocking, but never an approval |
 | `human_gate` | A named human's decision, with where it is durably recorded |
+| `human_gate.required_when` | The condition under which the gate has something to decide. A gate that fires when the answer is already settled teaches people to approve without reading |
 | `risk`, `complexity` | Feed `scripts/resolve_model.py` |
 | `execution` | `inline`, `subagent` or `team`; see [execution](execution.md) |
 | `department_cycle` | The Level 2 cycle this stage runs internally, if any |
@@ -108,7 +109,7 @@ workflow declares entry and exit conditions and its failure paths.
 
 | Workflow | Entry | Teams | Key gates | Exit |
 | --- | --- | --- | --- | --- |
-| `WF-FEATURE` feature delivery | A human states a business intent | feature-engineering-team | Requirements (human), Architecture (independent), QA design (independent), Review (human), Release (AP-01) | Running in production, verified, traceable |
+| `WF-FEATURE` feature delivery | A human states a business intent | feature-engineering-team | Scope acceptance (AP-12), Architecture (AP-02), QA design (independent), Merge (AP-09), Residual risk when criteria are unmet (AP-13), Release content (AP-01), Deployment authorization (AP-14) | Running in production, verified, traceable |
 | `WF-DEFECT` defect fix | A defect record with a reproduction | single-agent | Review (human), Release (AP-01) | Original reproduction gone, regression test exists |
 | `WF-INCIDENT` incident and RCA | An alert or credible report | incident-response-team | Every mitigation (AP-01), RCA (human) | Service verified recovered, RCA with owned actions |
 | `WF-DEPENDENCY` dependency change | A dependency change, advisory, end-of-life notice or licence change | single-agent | Classification, Security/licence (AP-04 where an exception is needed), Review (human), Release (AP-01) | Merged with the route, urgency and assessment recorded |
@@ -235,7 +236,7 @@ security or QA, bypass a gate, deploy to production, or push to a protected
 branch. The last is enforced by a guard; the rest by structure and review.
 
 Review is routed by change signal per `policies/review-routing.json` — described
-in full in `skills/code-review/SKILL.md`. Requiring every reviewer on every change
+in full in `skills/change-review/SKILL.md`. Requiring every reviewer on every change
 is how review becomes ceremony.
 
 ## Release, deployment, production

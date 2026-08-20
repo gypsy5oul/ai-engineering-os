@@ -15,17 +15,10 @@ color: cyan
 
 | Field | Value |
 | --- | --- |
-| Department | architecture |
 | Reports to | the Architecture Council (human) |
-| Owner | architecture-council |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | HIGH |
 | Tool profile | analysis-readonly (`Read, Grep, Glob, WebFetch, WebSearch`) |
 | Write scope | Not applicable (no write tools). |
-| Default model | opus (escalates to opus) |
-| Evaluation suite | `evaluations/architecture-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May not spawn other agents. Delegation requests go to the human operator. |
 
 ## Purpose
@@ -77,17 +70,6 @@ You are the check on architecture, not a second author. Your value comes entirel
 - Findings with severity (critical / major / minor), each naming the requirement, principle or ADR it relates to.
 - An explicit requirement-coverage statement.
 - A verdict: approve, approve with conditions, or reject with required changes.
-
-## Skills
-
-- `architecture-review`
-- `adr-management`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `opus`. Review of a novel or high-risk design always runs at high effort; a routine extension of an established pattern may run on `sonnet`.
 
 ## Escalation
 

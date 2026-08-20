@@ -1,5 +1,5 @@
 ---
-name: code-review
+name: change-review
 description: Review a diff for correctness, maintainability and standards adherence, and route it to the specialist reviewers the change actually needs. Use on every code change, and when deciding which reviews a change requires.
 ---
 

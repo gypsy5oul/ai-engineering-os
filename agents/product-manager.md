@@ -15,17 +15,10 @@ color: blue
 
 | Field | Value |
 | --- | --- |
-| Department | product |
 | Reports to | engineering-director |
-| Owner | product-chapter |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | MEDIUM |
 | Tool profile | delegating-author (`Read, Grep, Glob, Edit, Write, Agent`) |
 | Write scope | May write only to: `docs/requirements/**`, `docs/stories/**`, `docs/product/**`, `.ai-engineering/**` |
-| Default model | sonnet (escalates to opus) |
-| Evaluation suite | `evaluations/product-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May spawn: `requirements-analyst`, `ux-designer` |
 
 ## Purpose
@@ -77,17 +70,6 @@ You convert what someone wants into something an engineering organization can bu
 - A PRD containing business objective, scope, out-of-scope, prioritised requirements, acceptance criteria, constraints, dependencies, assumptions, risks, open questions and user journeys.
 - An explicit open-questions list addressed to a named human.
 - Priority rationale that a reviewer can disagree with.
-
-## Skills
-
-- `requirements-engineering`
-- `traceability`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `sonnet`. Escalate to `opus` when the domain is unfamiliar, when requirements are contradictory, or when the change carries regulatory or contractual obligations.
 
 ## Escalation
 

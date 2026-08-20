@@ -1,5 +1,5 @@
 ---
-name: security-review
+name: security-assessment
 description: Review a change for vulnerability classes, secret exposure, authorization gaps and supply-chain risk, with severity and an exploitation path per finding. Use on any change touching authentication, authorization, cryptography, input handling, dependencies, infrastructure or data access.
 ---
 

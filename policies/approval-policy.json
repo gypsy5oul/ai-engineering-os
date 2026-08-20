@@ -2,17 +2,128 @@
   "version": "1",
   "description": "The only operations that require a human decision. Everything not listed here is expected to proceed autonomously inside a reviewed merge request. Asking humans to approve routine work is a defect in this policy, not a safety feature.",
   "human_approval_required": [
-    { "id": "AP-01", "category": "production deployment", "why": "Irreversible customer impact.", "enforced_by": ["hook:guard_bash", "process:release-management"] },
-    { "id": "AP-02", "category": "architecture-changing decision", "why": "Commits the organization to long-lived constraints.", "enforced_by": ["process:architecture-review", "artifact:ADR"] },
-    { "id": "AP-03", "category": "technology selection", "why": "Adds permanent operational and hiring cost.", "enforced_by": ["skill:technology-selection", "artifact:ADR"] },
-    { "id": "AP-04", "category": "security exception", "why": "Accepts residual risk on the organization's behalf.", "enforced_by": ["process:security-review"] },
-    { "id": "AP-05", "category": "destructive or irreversible database migration", "why": "Potential permanent data loss.", "enforced_by": ["hook:guard_bash", "process:code-review"] },
-    { "id": "AP-06", "category": "breaking API change", "why": "Breaks consumers outside this repository's control.", "enforced_by": ["process:architecture-review"] },
-    { "id": "AP-07", "category": "major infrastructure change", "why": "Blast radius exceeds one service.", "enforced_by": ["hook:guard_bash", "process:platform-review"] },
-    { "id": "AP-08", "category": "credential, key or secret change", "why": "Directly changes the security boundary.", "enforced_by": ["hook:guard_bash", "hook:guard_write"] },
-    { "id": "AP-09", "category": "protected-branch write or history rewrite", "why": "Destroys shared history or bypasses review.", "enforced_by": ["hook:guard_bash"] },
-    { "id": "AP-10", "category": "change to this repository's hooks, policies or agent permissions", "why": "Changes the control system itself.", "enforced_by": ["hook:guard_write", "process:governance-review"] },
-    { "id": "AP-11", "category": "production data access or export", "why": "Privacy and regulatory exposure.", "enforced_by": ["hook:guard_bash"] }
+    {
+      "id": "AP-01",
+      "category": "production deployment",
+      "why": "Irreversible customer impact.",
+      "enforced_by": [
+        "hook:guard_bash",
+        "process:release-management"
+      ]
+    },
+    {
+      "id": "AP-02",
+      "category": "architecture-changing decision",
+      "why": "Commits the organization to long-lived constraints.",
+      "enforced_by": [
+        "process:architecture-review",
+        "artifact:ADR"
+      ]
+    },
+    {
+      "id": "AP-03",
+      "category": "technology selection",
+      "why": "Adds permanent operational and hiring cost.",
+      "enforced_by": [
+        "skill:technology-selection",
+        "artifact:ADR"
+      ]
+    },
+    {
+      "id": "AP-04",
+      "category": "security exception",
+      "why": "Accepts residual risk on the organization's behalf.",
+      "enforced_by": [
+        "process:security-assessment"
+      ]
+    },
+    {
+      "id": "AP-05",
+      "category": "destructive or irreversible database migration",
+      "why": "Potential permanent data loss.",
+      "enforced_by": [
+        "hook:guard_bash",
+        "process:change-review"
+      ]
+    },
+    {
+      "id": "AP-06",
+      "category": "breaking API change",
+      "why": "Breaks consumers outside this repository's control.",
+      "enforced_by": [
+        "process:architecture-review"
+      ]
+    },
+    {
+      "id": "AP-07",
+      "category": "major infrastructure change",
+      "why": "Blast radius exceeds one service.",
+      "enforced_by": [
+        "hook:guard_bash",
+        "process:platform-review"
+      ]
+    },
+    {
+      "id": "AP-08",
+      "category": "credential, key or secret change",
+      "why": "Directly changes the security boundary.",
+      "enforced_by": [
+        "hook:guard_bash",
+        "hook:guard_write"
+      ]
+    },
+    {
+      "id": "AP-09",
+      "category": "protected-branch write or history rewrite",
+      "why": "Destroys shared history or bypasses review.",
+      "enforced_by": [
+        "hook:guard_bash"
+      ]
+    },
+    {
+      "id": "AP-10",
+      "category": "change to this repository's hooks, policies or agent permissions",
+      "why": "Changes the control system itself.",
+      "enforced_by": [
+        "hook:guard_write",
+        "process:governance-review"
+      ]
+    },
+    {
+      "id": "AP-11",
+      "category": "production data access or export",
+      "why": "Privacy and regulatory exposure.",
+      "enforced_by": [
+        "hook:guard_bash"
+      ]
+    },
+    {
+      "id": "AP-12",
+      "category": "scope acceptance",
+      "why": "The requester confirming that what was written is what they meant. No predicate can decide this: it is the ground truth every later definition of done derives from. It was the one gate in the workflow with no policy reference, so the most load-bearing human decision in the lifecycle left no machine-readable record.",
+      "enforced_by": [
+        "process:requirements",
+        "artifact:REQ approvals block"
+      ]
+    },
+    {
+      "id": "AP-13",
+      "category": "acceptance of residual quality risk",
+      "why": "Releasing with known unmet test criteria. Distinct from AP-09: approving a merge is not accepting that something is knowingly untested. The simulation previously recorded this decision as AP-09, which filed a quality judgement under a branch-protection id.",
+      "enforced_by": [
+        "process:qa",
+        "artifact:TESTREPORT approvals block"
+      ]
+    },
+    {
+      "id": "AP-14",
+      "category": "deployment authorization",
+      "why": "Authorizing deployment now, against production as it currently stands. AP-01 approves what is in the release; this authorizes acting on it. Both acts previously carried AP-01, so the second was already satisfied by the first and the separation the design argues for existed only in prose.",
+      "enforced_by": [
+        "process:release-management",
+        "artifact:REL approvals block"
+      ]
+    }
   ],
   "explicitly_autonomous": [
     "creating and pushing a feature, defect or hotfix branch",

@@ -4,8 +4,8 @@ description: Produces personas, user journeys, wireframe specifications, interac
 tools: Read, Grep, Glob, Edit, Write
 model: sonnet
 skills:
-  - frontend-development
   - requirements-engineering
+  - story-decomposition
 color: pink
 ---
 
@@ -15,17 +15,10 @@ color: pink
 
 | Field | Value |
 | --- | --- |
-| Department | ux |
 | Reports to | product-manager |
-| Owner | design-chapter |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | LOW |
 | Tool profile | author (`Read, Grep, Glob, Edit, Write`) |
 | Write scope | May write only to: `docs/design/**` |
-| Default model | sonnet (escalates to sonnet) |
-| Evaluation suite | `evaluations/ux-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May not spawn other agents. Delegation requests go to the human operator. |
 
 ## Purpose
@@ -75,17 +68,6 @@ You define what the user experiences and what the frontend must therefore provid
 - Screen and state specifications.
 - Accessibility criteria as acceptance criteria.
 - The frontend contract: data in, actions out, feedback.
-
-## Skills
-
-- `frontend-development`
-- `requirements-engineering`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `sonnet`. UX for a novel interaction model or an accessibility-critical flow escalates to `opus`.
 
 ## Escalation
 

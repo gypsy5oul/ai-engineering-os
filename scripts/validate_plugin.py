@@ -31,9 +31,13 @@ SKILL_FM_KEYS = {"name", "description", "when_to_use", "argument-hint", "argumen
                  "model", "effort", "context", "agent", "background", "hooks", "paths", "shell",
                  "metadata", "license", "compatibility"}
 MODEL_ALIASES = {"opus", "sonnet", "haiku", "fable", "inherit"}
+# Every section here must change what the agent does. "Skills" duplicated the
+# frontmatter and "Model policy" was addressed to whoever spawns the agent, stored
+# where only the agent itself would read it -- and a running subagent cannot change
+# its own model. Both are in policies/agent-registry.json and the docs.
 AGENT_SECTIONS = ["Role contract", "Purpose", "Responsibilities", "Not your responsibility",
                   "Authority", "Allowed actions", "Forbidden actions", "Required inputs",
-                  "Expected outputs", "Skills", "Model policy", "Escalation",
+                  "Expected outputs", "Escalation",
                   "Review requirements", "Handoff", "Definition of done"]
 
 
@@ -370,6 +374,63 @@ def check_spawn_edges_are_executable():
             err("policies/review-routing.json: %s routes %s, which no role may spawn. Either grant "
                 "an edge or record in the route's notes why it is dispatched from the main session."
                 % (route["id"], unreachable))
+
+
+def check_skills_are_reachable():
+    """A skill no agent preloads cannot be reached by any agent.
+
+    None of the 30 agents holds the Skill tool, so the frontmatter `skills:` list
+    is the only way a skill enters an agent's context. backend-development and
+    frontend-development were written for the developer agents and preloaded by
+    neither, while ux-designer preloaded an implementation checklist for work it
+    is forbidden to do.
+    """
+    preloaded = set()
+    agents_dir = os.path.join(ROOT, "agents")
+    for name in sorted(os.listdir(agents_dir)):
+        if not name.endswith(".md"):
+            continue
+        try:
+            fm, _ = read_fm(os.path.join(agents_dir, name))
+        except ValueError:
+            continue
+        preloaded |= set(fm.get("skills") or [])
+
+    skills_dir = os.path.join(ROOT, "skills")
+    for entry in sorted(os.listdir(skills_dir)):
+        path = os.path.join(skills_dir, entry, "SKILL.md")
+        if not os.path.exists(path) or entry in preloaded:
+            continue
+        try:
+            fm, _ = read_fm(path)
+        except ValueError:
+            continue
+        # A command-style skill is invoked by a human, so it needs no preloader.
+        if fm.get("argument-hint") or fm.get("allowed-tools"):
+            continue
+        warn("skills/%s/: no agent preloads it and it is not a command-style skill, so no agent "
+             "can reach it" % entry)
+
+
+def check_workflows_can_be_abandoned():
+    """A workflow with only a success exit cannot end a change that is dropped.
+
+    Every abandoned change then leaves its department cycles open, and its
+    artifacts sit in a state no predicate will ever satisfy.
+    """
+    base = os.path.join(ROOT, "sdlc", "workflows")
+    for name in sorted(os.listdir(base)):
+        if not name.endswith((".yaml", ".yml")):
+            continue
+        wf = parse_file(os.path.join(base, name))
+        cancel = wf.get("cancellation")
+        if not cancel:
+            err("sdlc/workflows/%s: %s has no cancellation path, so a change that will not be "
+                "finished has no way to end" % (name, wf.get("id")))
+            continue
+        if not cancel.get("requires"):
+            err("sdlc/workflows/%s: cancellation states no requirements. Ending a change without "
+                "closing its cycles leaves work the organization still believes is running." % name)
 
 
 def check_hooks():
@@ -912,12 +973,14 @@ def main():
     check_registry_consistency(registry, profiles, write_scope, routing)
     check_skills()
     check_skill_paths()
+    check_skills_are_reachable()
     check_frontmatter_is_strict_yaml()
     check_stated_counts()
     check_spawn_edges_are_executable()
     check_hooks()
     check_schemas()
     check_workflows(registry)
+    check_workflows_can_be_abandoned()
     check_approval_semantics(registry)
     check_definitions_of_done()
     check_execution_and_model(registry)

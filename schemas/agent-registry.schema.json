@@ -63,6 +63,8 @@
               "review-readonly",
               "author",
               "delegating-author",
+              "researching-author",
+              "delegating-researcher",
               "implementer",
               "orchestrator",
               "lead"

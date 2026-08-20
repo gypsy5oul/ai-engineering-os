@@ -106,6 +106,11 @@ in the trace:
 
 ## Operational notes
 
+- **Effort is not an agent field.** Each routing rule names an effort level, and
+  that is guidance for the caller. Claude Code's agent frontmatter carries `name`,
+  `description`, `tools`, `model`, `skills` and `color`; `effort` is skill and
+  command frontmatter. Writing it into an agent file would look like configuration
+  and be read by nothing.
 - **`fable`:** accepted, never selected by the routing table. It is there for a project override on a role where speed matters more than depth, and ranks with `sonnet`, so it cannot be used to slip under a HIGH or CRITICAL floor.
 - **Agent teams:** a teammate's model is fixed at spawn. The lead must apply this
   policy when spawning, because it cannot correct the choice afterwards.

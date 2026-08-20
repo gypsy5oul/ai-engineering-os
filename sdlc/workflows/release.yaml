@@ -12,6 +12,20 @@ entry_conditions:
   - All changes in scope are merged with their gates satisfied.
 exit_conditions:
   - The release is deployed and verified, or rolled back and recorded.
+cancellation:
+  terminal_status: cancelled
+  who: the human who owns the change, recorded like any other decision
+  requires:
+    - Every department cycle this change entered reaches a terminal state, ACCEPTED
+      or WITHDRAWN. A cycle left open is work the organization still believes is
+      running.
+    - The reason is written on the artifact that opened the change.
+    - Anything already deployed is either reverted or explicitly kept, and which one
+      is recorded.
+  note: >-
+    Cancelling is not failing. A change that is dropped for good reasons still has to
+    end tidily, and until this existed a workflow could only be finished by completing
+    it.
 definition_of_done:
   - artifact_status(REL, done)
   - rollback_plan_or_acknowledged()
@@ -107,8 +121,10 @@ stages:
     execution: team
     entry_criteria:
       - A validation plan exists
-      - A release candidate is deployed to staging
+      - A release candidate has been assembled
     actions:
+      - Deploy the release candidate to staging. No earlier stage does this, and a
+        validation stage that assumed someone else had deployed could never start.
       - Execute the validation plan with evidence.
       - A team is used because QA, security and operability validate different things against the same candidate.
     inputs:

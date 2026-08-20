@@ -143,7 +143,8 @@
     "Agent frontmatter carries the role default only. Per-invocation overrides are the escalation mechanism.",
     "For agent-team teammates, the model is fixed at spawn time and cannot be changed afterwards, so the lead must apply this policy when it spawns, not later.",
     "CLAUDE_CODE_SUBAGENT_MODEL overrides frontmatter for all subagents. Do not set it organization-wide: it defeats this policy.",
-    "fable is an accepted alias but the routing table never selects it. It exists so a project override can choose it for a role where speed matters more than depth, and resolve_model.py ranks it alongside sonnet so such an override neither escalates nor breaches a risk floor. A role at a HIGH or CRITICAL floor still cannot be overridden down to it."
+    "fable is an accepted alias but the routing table never selects it. It exists so a project override can choose it for a role where speed matters more than depth, and resolve_model.py ranks it alongside sonnet so such an override neither escalates nor breaches a risk floor. A role at a HIGH or CRITICAL floor still cannot be overridden down to it.",
+    "The effort level in each routing rule is guidance for whoever spawns the role, not a field the agent definition carries. Claude Code's agent frontmatter accepts name, description, tools, model, skills and colour; `effort` belongs to skill and command frontmatter, and setting it on an agent would be a field nothing reads. A caller applies effort through its own session settings or the spawn call. Checked against the installed CLI's own schema rather than assumed."
   ],
   "overrides": {
     "description": "Resolution order, highest priority first. Each layer may only be set by the authority named.",

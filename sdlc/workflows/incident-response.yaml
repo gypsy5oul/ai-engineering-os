@@ -13,10 +13,24 @@ entry_conditions:
 exit_conditions:
   - Service verified recovered.
   - RCA published with typed, owned follow-up items.
+cancellation:
+  terminal_status: cancelled
+  who: the human who owns the change, recorded like any other decision
+  requires:
+    - Every department cycle this change entered reaches a terminal state, ACCEPTED
+      or WITHDRAWN. A cycle left open is work the organization still believes is
+      running.
+    - The reason is written on the artifact that opened the change.
+    - Anything already deployed is either reverted or explicitly kept, and which one
+      is recorded.
+  note: >-
+    Cancelling is not failing. A change that is dropped for good reasons still has to
+    end tidily, and until this existed a workflow could only be finished by completing
+    it.
 definition_of_done:
   - artifact_status(INC, closed)
   - artifact_status(RCA, approved)
-  - every_linked(RCA, DEF)
+  - corrective_actions_tracked(RCA)
   - human_approval_recorded(AP-01)
   - no_blocking_open_decisions(rca-actions)
   - evidence_sealed()
@@ -319,7 +333,10 @@ stages:
       - The RCA is approved
     actions:
       - Type every follow-up item and put it in a real backlog.
-      - A repeat of a prior RCA's cause is escalated as a process failure, not filed as a new action.
+      - Compare this cause against prior RCAs and record the comparison in
+        prior_rcas_reviewed. A repeat is escalated as a process failure, not filed
+        as a new action. The field is what makes the comparison checkable, and
+        without it recurrence detection is a memory the organization lacks.
     inputs:
       - RCA follow-up items
     outputs:
@@ -330,6 +347,6 @@ stages:
       - Every item exists in the backlog with an owner
       - Repeat causes escalated
     definition_of_done:
-      - every_linked(RCA, DEF)
+      - corrective_actions_tracked(RCA)
       - artifact_status(INC, closed)
       - required_fields_present(DEBT)

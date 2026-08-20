@@ -3,6 +3,144 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.10.0] — Closing the review findings
+
+Everything the three 0.9.0 reviews raised, verified before it was acted on. Two
+findings did not survive checking and are recorded below as rejected.
+
+### Fixed — predicates answered the wrong question
+
+`cycle_accepted(CYCLE-DEV)` matched **every** artifact in the project. A finished
+run vacuously satisfied a new one, and two features in flight starved each other:
+one feature's `IN_PROGRESS` rollup failed the predicate for every other feature.
+
+Artifact headers now carry `change`, the unit of work they belong to, and
+`check_dod.py --change` scopes evaluation to it. An unscoped run that spans two
+units of work **refuses to answer** rather than mixing them — silently resolving
+the ambiguity is what let a stale rollup satisfy a new feature.
+
+### Fixed — three predicates their own stage could not satisfy
+
+- **`every_linked(RCA, DEF)`** demanded a defect, while the stage that must satisfy
+  it lists monitoring, automation and process improvements as valid outcomes. An
+  incident whose corrective actions were all monitoring changes could only pass by
+  inventing a defect. Replaced with `corrective_actions_tracked(RCA)`, which accepts
+  a defect, debt item, requirement or architecture decision.
+- **`no_unresolved_findings(high)`** could never pass, so `CYCLE-SEC`'s
+  `exception_granted` edge — the path a human takes to accept a standing risk under
+  AP-04 — led nowhere. A recorded AP-04 exception now resolves the finding. Without
+  one it still blocks.
+- **A recorded escalation blocked closure forever.** The list was read as open in
+  its entirety, so using the mechanism the design tells you to use permanently
+  barred the macro stage. Escalations may now carry `resolved_at`.
+
+### Fixed — no way to end a change that is dropped
+
+Workflows had only a success exit. Every workflow now declares `cancellation`:
+the terminal status, who decides, and what closing requires — including that every
+department cycle the change entered reaches a terminal state. A cycle left open is
+work the organization still believes is running.
+
+### Added — the lifecycle is now enforced in one place
+
+`Stop` and `SubagentStop` hooks run `check_artifacts.py`, which refuses to end a
+session that leaves a malformed artifact behind. It was chosen as the one part of
+the contract that needs **no session state**: the audit log already records what
+the session wrote, and a header either validates or does not. No stage marker, no
+correlation id, nothing the model must maintain truthfully about itself.
+
+It blocks on a structural fact and never on judgement, honours `stop_hook_active`
+so it cannot loop, and fails open — this hook adds a check, it is not a safety
+boundary.
+
+### Fixed — the two most load-bearing human decisions left no record
+
+The requester accepting scope, and QA accepting residual risk, were the only gates
+with no policy reference: `human_approval_recorded(none)` passed vacuously. Three
+approval categories added.
+
+| Id | Decision | Why it was missing or wrong |
+| --- | --- | --- |
+| `AP-12` | Scope acceptance | The ground truth every later definition of done derives from, recorded nowhere |
+| `AP-13` | Residual quality risk | The simulation filed this under `AP-09`, a branch-protection id |
+| `AP-14` | Deployment authorization | Shared `AP-01` with release approval, so the release approval already satisfied it |
+
+`DEPLOY`'s human gate is gone. It carried the same approver and the same policy
+reference as `AUTHORIZE` and decided nothing that had not just been decided;
+execution now depends on the authorization, and the production commands still
+reach a human through `guard_bash`. Human gates may also declare `required_when`,
+so a gate can say when it has something to decide.
+
+### Fixed — the delegation graph and the dispatch surface
+
+- **Nine descriptions rewritten.** Read as a set, several pairs claimed the same
+  task. `sre` and `reliability-reviewer` both claimed "operational review of a
+  change" — and picking `sre` puts a write-capable agent in a reviewer seat, which
+  the plugin's own tool policy forbids. Each now names what it uniquely claims and
+  which neighbour it defers to.
+- **Three roles were told to research with no way to reach the web.**
+  `agent-architect`'s core instruction is to verify against the current Claude Code
+  documentation. New `researching-author` and `delegating-researcher` profiles;
+  still no `Bash`, so nothing fetched can be executed.
+- **Domain skills were unreachable by the agents written for them.** No agent holds
+  the `Skill` tool, so frontmatter is the only route in: `backend-development` and
+  `frontend-development` were preloaded by nobody, while `ux-designer` preloaded an
+  implementation checklist for work it is forbidden to do.
+- **`code-review` and `security-review` collided with skills Claude Code bundles**,
+  and no documentation defines which wins. Renamed to `change-review` and
+  `security-assessment` rather than depending on unspecified behaviour.
+
+### Changed — agent bodies carry only what changes behaviour
+
+**136,436 → 113,761 bytes, 17% smaller, roughly 5,700 tokens saved per full-team
+run.** Removed from all 30 files: registry metadata a running agent cannot act on
+(`Department`, `Owner`, `Version`, `Lifecycle status`, `Evaluation suite`,
+`Review frequency`), the `Default model` row that duplicated frontmatter, the
+`Skills` section that duplicated frontmatter, and a `Model policy` section
+addressed to the caller but stored where only the callee would read it — a running
+subagent cannot change its own model. All of it lives in
+`policies/agent-registry.json`, which is where it was maintained anyway.
+
+### Fixed — orphan entry criteria and dead loops
+
+- `REVIEW` required "CI has run", while the `CI` stage sequences after it. The
+  criterion now names GitLab's pipeline-on-push, which is what it always meant.
+- `STAGING` required a candidate someone else had deployed; no stage deployed one.
+  Deploying it is now the stage's own first action.
+- **`DEBT` was produced and read by nothing.** `OPS` improvement items are now typed
+  as `DEBT`, and `IDEA` must state, for each open item in the area, whether the
+  change addresses it or leaves it. This is the only point where what operating the
+  system taught re-enters what gets built.
+- **Recurrence detection was a memory nobody had.** `RCA` now requires
+  `prior_rcas_reviewed`, which makes the comparison checkable.
+- `skip_recorded(UX)` demanded a skip reason for UX even when UX ran. Replaced with
+  `every_skip_recorded()`, which is what the exit criterion always said.
+
+### Fixed — a test that depended on the developer's branch
+
+Renaming this repository's branch to `main` turned two green guard tests red with
+no guard code changing: they ran from the plugin's own checkout, so "not on a
+protected branch" was an unstated assumption. Guard tests now run in a throwaway
+repository, and protected-branch detection has explicit tests in both directions.
+
+### Rejected after checking
+
+- **"notification-agent and its skill are near-total duplication."** Zero
+  substantial lines are shared; the agent is the role contract and the skill is the
+  procedure.
+- **"Set `effort` in agent frontmatter."** `effort` is skill and command
+  frontmatter. Claude Code's agent schema carries `name`, `description`, `tools`,
+  `model`, `skills` and `color`. Writing it into an agent file would look like
+  configuration and be read by nothing. Documented instead.
+
+### New validators
+
+`check_workflows_can_be_abandoned`, `check_skills_are_reachable`, plus the rework
+and acceptance-path invariants in `check_cycle.py`. `run_evaluations.py` gained
+`json_path_not_contains`, the counterpart its `file_not_contains` implied.
+
+Tests: **213 → 226.**
+
 ## [0.9.0] — The guards were not running
 
 Three reviews of the organization design: the SDLC loops, the agent set, and

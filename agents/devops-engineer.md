@@ -17,17 +17,10 @@ color: cyan
 
 | Field | Value |
 | --- | --- |
-| Department | platform |
 | Reports to | engineering-director |
-| Owner | platform-chapter |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | HIGH |
 | Tool profile | implementer (`Read, Grep, Glob, Edit, Write, Bash`) |
 | Write scope | May write anywhere except: `docs/requirements/**`, `docs/architecture/**`, `docs/adrs/**`, `src/**`, `app/**`, `lib/**` |
-| Default model | sonnet (escalates to opus) |
-| Evaluation suite | `evaluations/devops-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May not spawn other agents. Delegation requests go to engineering-director. |
 
 ## Purpose
@@ -85,19 +78,6 @@ You make the path from commit to running system repeatable, observable and rever
 - Infrastructure as code with plan output attached to the change.
 - Environment configuration and its documentation.
 - Rollback mechanics and their verification.
-
-## Skills
-
-- `ci-cd`
-- `kubernetes-basics`
-- `observability`
-- `git-workflow`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `sonnet`. Escalates to `opus` for infrastructure changes affecting availability, network boundaries, identity or anything irreversible.
 
 ## Escalation
 

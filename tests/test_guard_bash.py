@@ -9,7 +9,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from helpers import bash, run_hook  # noqa: E402
+from helpers import bash, run_hook, repo_on_branch  # noqa: E402
 
 
 class TestDestructiveFilesystem(unittest.TestCase):
@@ -417,3 +417,29 @@ class TestConfirmedBypasses(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWorkingTreeBranch(unittest.TestCase):
+    """GIT-00b looks at the branch the working tree stands on.
+
+    This was untested, and the tests that covered ordinary git commands were run
+    from whatever branch the developer happened to be on -- so they silently
+    encoded 'not a protected branch' as an assumption. Renaming this repository's
+    branch to `main` turned them red with no guard change at all. Both directions
+    now have an explicit repository.
+    """
+
+    def test_committing_on_a_protected_branch_needs_a_decision(self):
+        for branch in ("main", "master"):
+            with self.subTest(branch=branch):
+                decision, reason, _, _ = bash("git commit -m 'fix: x'",
+                                              cwd=repo_on_branch(branch))
+                self.assertEqual(decision, "ask", "%s should be protected" % branch)
+                self.assertIn(branch, reason)
+
+    def test_committing_on_a_feature_branch_is_ordinary_work(self):
+        for branch in ("feature/api", "fix/login", "chore/deps"):
+            with self.subTest(branch=branch):
+                decision, _, _, _ = bash("git commit -m 'fix: x'", cwd=repo_on_branch(branch))
+                self.assertIsNone(decision, "%s is not protected" % branch)
+

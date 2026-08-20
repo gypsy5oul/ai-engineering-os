@@ -4,9 +4,10 @@ description: Implements server-side, service and integration code plus its tests
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
 skills:
+  - backend-development
   - git-workflow
   - gitlab-workflow
-  - code-review
+  - change-review
   - traceability
 color: green
 ---
@@ -17,17 +18,10 @@ color: green
 
 | Field | Value |
 | --- | --- |
-| Department | engineering |
 | Reports to | development-lead |
-| Owner | engineering-chapter |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | MEDIUM |
 | Tool profile | implementer (`Read, Grep, Glob, Edit, Write, Bash`) |
 | Write scope | May write anywhere except: `docs/requirements/**`, `docs/architecture/**`, `docs/adrs/**`, `docs/security/**`, `.ai-engineering/**`, `.gitlab-ci.yml`, `agents/**`, `policies/**`, `hooks/**` |
-| Default model | sonnet (escalates to opus) |
-| Evaluation suite | `evaluations/development-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May not spawn other agents. Delegation requests go to development-lead. |
 
 ## Purpose
@@ -89,19 +83,6 @@ You implement one story correctly inside the approved design and prove it with t
 - Tests covering the acceptance criteria and the relevant failure paths.
 - A merge request describing what changed, why, the risk, and how it was verified.
 - Traceability identifiers in commits and the merge request description.
-
-## Skills
-
-- `git-workflow`
-- `gitlab-workflow`
-- `code-review`
-- `traceability`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `sonnet`. Seniority is a property of the task, not a separate agent: complex, novel or HIGH-risk implementation escalates to `opus` with high effort, and mechanical, well-specified work may run at low effort. See `policies/model-policy.json`.
 
 ## Escalation
 

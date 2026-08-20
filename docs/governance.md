@@ -54,15 +54,15 @@ The full model, and what enforces it, is in [approvals](approvals.md).
 ## Agent lifecycle
 
 ```
-draft → development → evaluation → security-review → pilot → approved → production → deprecated
+draft → development → evaluation → security-assessment → pilot → approved → production → deprecated
 ```
 
 | Transition | Requires |
 | --- | --- |
 | draft → development | Role contract complete, owner named, risk assigned |
 | development → evaluation | Passes validation, registered, tool profile matches |
-| evaluation → security-review | Suite exists with an adversarial case, deterministic checks pass |
-| security-review → pilot | Tools justified, no path to production mutation or secrets. **Mandatory for HIGH and CRITICAL** |
+| evaluation → security-assessment | Suite exists with an adversarial case, deterministic checks pass |
+| security-assessment → pilot | Tools justified, no path to production mutation or secrets. **Mandatory for HIGH and CRITICAL** |
 | pilot → approved | Used on two real changes, no unresolved HIGH finding, owner sign-off. **Human** |
 | approved → production | Governance approval recorded in the merge request. **Human** |
 | any → deprecated | Migration note in `CHANGELOG.md`, no workflow references it. **Human** |

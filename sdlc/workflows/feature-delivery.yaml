@@ -17,6 +17,20 @@ entry_conditions:
 exit_conditions:
   - The change is running in production and post-deployment verification has passed.
   - Every artifact carries traceability identifiers linking requirement to release.
+cancellation:
+  terminal_status: cancelled
+  who: the human who owns the change, recorded like any other decision
+  requires:
+    - Every department cycle this change entered reaches a terminal state, ACCEPTED
+      or WITHDRAWN. A cycle left open is work the organization still believes is
+      running.
+    - The reason is written on the artifact that opened the change.
+    - Anything already deployed is either reverted or explicitly kept, and which one
+      is recorded.
+  note: >-
+    Cancelling is not failing. A change that is dropped for good reasons still has to
+    end tidily, and until this existed a workflow could only be finished by completing
+    it.
 definition_of_done:
   - artifact_status(REQ, approved)
   - artifact_status(ARCH, approved)
@@ -67,17 +81,23 @@ stages:
     actions:
       - Choose the workflow and state which stages this change needs.
       - Name the stages being skipped and why.
+      - Read the open DEBT touching this area and say, for each item, whether this
+        change addresses it or deliberately leaves it. This is the only point where
+        what operating the system taught re-enters what gets built; without it,
+        DEBT accumulates in a place nobody reads and the loop is closed on paper.
     inputs:
       - The request as stated
       - Existing project artifacts
+      - Open DEBT for the affected area
     outputs:
       - Stage plan
       - Recorded skips
+      - A statement on outstanding debt in this area
     exit_criteria:
       - The stage plan is stated
       - Every skipped stage has a written reason
     definition_of_done:
-      - skip_recorded(UX)
+      - every_skip_recorded()
       - config_valid()
     emits:
       - FEATURE_CREATED
@@ -125,7 +145,7 @@ stages:
       - artifact_status(REQ, approved)
       - field_quantified(NFR, target)
       - agent_verdict(qa-lead, pass)
-      - human_approval_recorded(none)
+      - human_approval_recorded(AP-12)
       - required_fields_present(REQ)
       - artifact_owned_by(REQ, requirements-analyst)
       - no_open_blocking_decisions_for(REQ)
@@ -143,6 +163,7 @@ stages:
     human_gate:
       approver: requester
       recorded_in: project-decision-log
+      policy_ref: AP-12
       decision:
         - accept scope
         - reject
@@ -501,14 +522,16 @@ stages:
       - dependency-reviewer
       - test-reviewer
     skills:
-      - code-review
-      - security-review
+      - change-review
+      - security-assessment
     risk: MEDIUM
     complexity: routine
     execution: subagent
     entry_criteria:
       - A merge request exists
-      - CI has run at least once
+      - The merge request pipeline has run at least once. This is GitLab's own
+        pipeline on push, not this workflow's CI stage, which sequences after
+        REVIEW and gates the merge rather than the review.
       - The change links to a story
     actions:
       - Route the change to the reviewers it needs, per policies/review-routing.json.
@@ -623,6 +646,8 @@ stages:
     human_gate:
       approver: QA owner
       recorded_in: project-decision-log
+      policy_ref: AP-13
+      required_when: the QA exit criteria are not fully met
       decision:
         - accept residual risk
         - reject
@@ -710,12 +735,12 @@ stages:
       - The authorization names the human who gave it and when
     definition_of_done:
       - release_authorized()
-      - human_approval_recorded(AP-01)
-      - human_identity_recorded(AP-01)
+      - human_approval_recorded(AP-14)
+      - human_identity_recorded(AP-14)
     human_gate:
       approver: named release approver
       approver_role: release-approver
-      policy_ref: AP-01
+      policy_ref: AP-14
       recorded_in: gitlab-release
       decision:
         - authorize
@@ -731,7 +756,8 @@ stages:
     execution: inline
     entry_criteria:
       - The release artifact is in state 'authorized'
-      - The rollback path has been tested
+      - The rollback path has been tested, or the release records that it was not
+        and who accepted that
     actions:
       - Deploy the artifact that was tested. Never rebuild for production.
     inputs:
@@ -745,15 +771,11 @@ stages:
       - Rollback remains available
     definition_of_done:
       - release_authorized()
-      - human_approval_recorded(AP-01)
+      - human_approval_recorded(AP-14)
+      - human_identity_recorded(AP-14)
       - cycle_accepted(CYCLE-DEVOPS)
       - cycle_rollup_reported(CYCLE-DEVOPS)
       - no_open_rework(CYCLE-DEVOPS)
-    human_gate:
-      approver: named release approver
-      recorded_in: gitlab-release
-      policy_ref: AP-01
-      approver_role: release-approver
     coupled_artifacts:
       - deployment-manifest
     department_cycle: CYCLE-DEVOPS
@@ -802,6 +824,9 @@ stages:
       - The change is running in production
     actions:
       - Observe SLOs and alert quality against the change's new failure modes.
+      - Write each improvement item as a DEBT artifact with an owner. An improvement
+        item that exists only as prose in a stage output is one nothing can pick up,
+        and operating a system teaches things that outages never do.
     inputs:
       - Running system
       - SLOs
@@ -809,10 +834,13 @@ stages:
     outputs:
       - Operational signal
       - Incidents
-      - Improvement items
+      - Improvement items, typed as DEBT
+    produces:
+      - DEBT
     exit_criteria:
       - SLOs observed
       - Alerts actionable
+      - Every improvement item exists as a DEBT artifact with an owner
     definition_of_done:
       - no_unresolved_findings(high)
       - cycle_accepted(CYCLE-SRE)
@@ -849,6 +877,6 @@ stages:
       - Feeding the next cycle
     definition_of_done:
       - artifact_exists(RCA)
-      - every_linked(RCA, DEF)
+      - corrective_actions_tracked(RCA)
     optional_when:
       - No incident occurred.

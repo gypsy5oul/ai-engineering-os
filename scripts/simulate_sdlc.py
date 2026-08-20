@@ -179,7 +179,9 @@ def scenario_feature(project, log):
         log("product-manager + requirements-analyst, gated on testability by qa-lead")
         st["req"] = write_artifact(project, "REQ", status="approved", source="project-owner",
                                    reviewers=[verdict("qa-lead")],
-                                   approvals=[approval("AP-03", "project-owner",
+                                   approvals=[approval("AP-12", "requester",
+                                                       recorded_in="project-decision-log"),
+                                              approval("AP-03", "project-owner",
                                                        recorded_in="project-decision-log")],
                                    rollup=rollup("CYCLE-PROD", next_gate="FEAS"))
         st["nfr"] = write_artifact(project, "NFR", status="approved", source=st["req"],
@@ -258,7 +260,7 @@ def scenario_feature(project, log):
         write_artifact(project, "TESTREPORT", status="closed", source=st["tp"],
                        links={"test_plans": [st["tp"]], "stories": [st["story"]]},
                        reviewers=[verdict("test-reviewer")],
-                       approvals=[approval("AP-09", "qa-owner",
+                       approvals=[approval("AP-13", "qa-owner",
                                            recorded_in="project-decision-log")],
                        rollup=rollup("CYCLE-QA", next_gate="RELEASE"))
         emit(project, "QA_COMPLETED", st["feat"], st["feat"], verdict="pass", passed=1, failed=0)
@@ -444,7 +446,7 @@ def scenario_release_rollback(project, log):
         st["tr"] = write_artifact(project, "TESTREPORT", status="closed", source=st["rel"],
                                   links={"test_plans": [], "stories": []},
                                   reviewers=[verdict("test-reviewer")],
-                                  approvals=[approval("AP-09", "qa-owner",
+                                  approvals=[approval("AP-13", "qa-owner",
                                                       recorded_in="project-decision-log")],
                                   rollup=rollup("CYCLE-QA", next_gate="APPROVE"))
 

@@ -91,6 +91,20 @@ carried standing permission to deploy on Friday against a production that had
 since changed. `AUTHORIZE` is a separate stage in both deploying workflows, and a
 rollback needs the same authorization.
 
+The two acts now carry **different approval ids**. Until 0.9.0 both were `AP-01`,
+which meant the release approval already satisfied the authorization's own
+definition of done: the separation the table describes existed in prose and not
+in anything a machine checked. Content approval is `AP-01`; authorizing
+deployment now is `AP-14`.
+
+**Execution is not a third decision.** `DEPLOY` used to carry its own human gate
+with the same approver and the same policy reference as `AUTHORIZE`, deciding
+nothing that had not just been decided. It now depends on the authorization
+being recorded, and the production commands themselves still reach the human
+through `guard_bash`. A gate that asks a question whose answer is already
+determined teaches people to approve without reading, and then the gates that
+matter get the same reflex.
+
 ## Where approval lives
 
 `policies/system-of-record.json` states it plainly:

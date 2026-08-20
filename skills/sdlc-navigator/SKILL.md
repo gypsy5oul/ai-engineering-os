@@ -17,7 +17,7 @@ Read the workflow definitions in `${CLAUDE_PLUGIN_ROOT}/sdlc/workflows/`:
 | New capability or material behaviour change | `feature-delivery.yaml` (WF-FEATURE) |
 | Existing specified behaviour is wrong | `defect-fix.yaml` (WF-DEFECT) |
 | Production is degraded now | `incident-response.yaml` (WF-INCIDENT) |
-| Dependency added, removed or upgraded | `dependency-upgrade.yaml` (WF-DEPENDENCY) |
+| Dependency added, removed or upgraded | `dependency-change.yaml` (WF-DEPENDENCY) |
 | Merged work needs to reach production | `release.yaml` (WF-RELEASE) |
 | Project has no `.ai-engineering/project.yaml` | `project-onboarding.yaml` (WF-ONBOARDING) |
 | This plugin's own agents, skills, hooks or policies change | `agent-change.yaml` (WF-AGENT-CHANGE) |

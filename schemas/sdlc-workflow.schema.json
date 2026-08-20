@@ -231,6 +231,10 @@
               "approver_role": {
                 "type": "string",
                 "description": "Human role identifier recorded on the approval. Never an agent name."
+              },
+              "required_when": {
+                "type": "string",
+                "description": "The condition under which this gate has something to decide. A gate that fires when the answer is already determined trains people to approve without reading, and then the gates that matter get the same reflex."
               }
             }
           },
@@ -365,6 +369,34 @@
         "type": "string"
       },
       "description": "Workflow-level definition of done. The union of the stage DoDs plus anything only true at the end."
+    },
+    "cancellation": {
+      "type": "object",
+      "description": "How a change that will not be finished is ended. Without this a workflow had only a success exit, so an abandoned change left its department cycles open forever and its artifacts in a state no predicate would ever satisfy.",
+      "required": [
+        "terminal_status",
+        "requires",
+        "who"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "terminal_status": {
+          "type": "string"
+        },
+        "requires": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "who": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      }
     }
   }
 }

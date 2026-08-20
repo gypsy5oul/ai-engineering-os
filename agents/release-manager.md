@@ -15,17 +15,10 @@ color: yellow
 
 | Field | Value |
 | --- | --- |
-| Department | release |
 | Reports to | engineering-director |
-| Owner | release-chapter |
-| Version | 0.1.0 |
-| Lifecycle status | pilot |
 | Risk class | HIGH |
 | Tool profile | author (`Read, Grep, Glob, Edit, Write`) |
 | Write scope | May write only to: `docs/release/**`, `CHANGELOG.md` |
-| Default model | sonnet (escalates to opus) |
-| Evaluation suite | `evaluations/release-evaluation/` |
-| Review frequency | quarterly |
 | Team spawn permission | May not spawn other agents. Delegation requests go to engineering-director. |
 
 ## Purpose
@@ -83,17 +76,6 @@ You make each release a deliberate, reversible, documented event rather than an 
 - Release notes.
 - An approval request to a named human with all evidence attached (AP-01).
 - Post-deployment verification record.
-
-## Skills
-
-- `release-management`
-- `traceability`
-
-Skills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.
-
-## Model policy
-
-Default `sonnet`. Escalates to `opus` for releases containing irreversible migrations, breaking changes or coordinated multi-service deployment.
 
 ## Escalation
 

@@ -14,11 +14,25 @@ entry_conditions:
 exit_conditions:
   - The configuration exists, validates against the schema and has been approved by a human.
   - Remaining unknowns are recorded in open_decisions rather than guessed.
+cancellation:
+  terminal_status: cancelled
+  who: the human who owns the change, recorded like any other decision
+  requires:
+    - Every department cycle this change entered reaches a terminal state, ACCEPTED
+      or WITHDRAWN. A cycle left open is work the organization still believes is
+      running.
+    - The reason is written on the artifact that opened the change.
+    - Anything already deployed is either reverted or explicitly kept, and which one
+      is recorded.
+  note: >-
+    Cancelling is not failing. A change that is dropped for good reasons still has to
+    end tidily, and until this existed a workflow could only be finished by completing
+    it.
 definition_of_done:
   - config_valid()
   - human_approval_recorded(AP-03)
   - no_blocking_open_decisions(unowned)
-  - skip_recorded(UX)
+  - every_skip_recorded()
   - human_identity_recorded(AP-03)
 failure_paths:
   - when: The human cannot answer a technology question

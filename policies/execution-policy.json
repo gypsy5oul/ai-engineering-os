@@ -50,7 +50,7 @@
   "constraints_from_the_platform": [
     "Agent teams are experimental and disabled by default; they require CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1.",
     "Teammates spawn only in interactive sessions.",
-    "Teammates cannot spawn teammates: team depth is one level.",
+    "Teammates cannot spawn teammates, so a team is never nested. A teammate can still spawn ordinary subagents, so depth below a team member follows the platform's subagent nesting limit rather than stopping at one level.",
     "A teammate's model is fixed at spawn time. Permission mode is not: teammates start in the lead's mode and individual modes can be changed after spawning, but cannot be set per teammate at spawn time.",
     "A subagent definition's tools and model apply to a teammate, but its skills and mcpServers do not.",
     "A teammate's idle notification does not carry its output.",
