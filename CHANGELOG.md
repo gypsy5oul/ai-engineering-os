@@ -3,6 +3,27 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.18.1] — The tags never existed
+
+Ten versions shipped with `.claude-plugin/marketplace.json` naming a tag that was
+never created. `ref: ai-engineering-os--v0.18.0` pointed at nothing, and every
+release before it the same, so a marketplace install would have resolved to a tag
+that did not exist.
+
+All ten are now tagged and pushed. Each commit's `plugin.json` already declared
+its own version, so the mapping is one-to-one and the retroactive tags are honest
+rather than approximate.
+
+The reason nothing caught it: `scripts/check_release.py` compares the ref against
+`CI_COMMIT_TAG`, so it only runs **on** a tag and is silent when none was ever
+made. `check_marketplace_ref_exists()` now runs on every validation and fails when
+the ref names a tag the repository does not have.
+
+A note on the negative test, because it nearly passed for the wrong reason: the
+first attempt cloned the repository to test the check, and `git clone` copies only
+committed content — so it ran the *old* validator and reported nothing. The check
+was fine; the test was wrong. Re-run against the working tree, it fires.
+
 ## [0.18.0] — The remaining roadmap, built in parallel
 
 Three agents working simultaneously in disjoint file sets: organizational

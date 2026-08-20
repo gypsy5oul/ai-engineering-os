@@ -48,7 +48,22 @@ claude plugin tag . --message "ai-engineering-os %s" --push
 **`{plugin-name}--v{version}`** — so v0.7.0 is tagged `ai-engineering-os--v0.7.0`,
 not `v0.7.0`. The `ref` in `.claude-plugin/marketplace.json` must name that exact
 tag, or new installs resolve to a tag that does not exist.
-`scripts/check_release.py` checks both.
+
+**Two checks, and they cover different failures.** `scripts/check_release.py`
+compares the ref against `CI_COMMIT_TAG`, so it only runs *on* a tag and says
+nothing at all when no tag was ever created — which is exactly how this
+repository shipped ten versions whose `ref` pointed at tags that did not exist.
+Every one of them would have failed to resolve for anyone installing from the
+marketplace. `check_marketplace_ref_exists()` in `scripts/validate_plugin.py`
+closes that: it runs on every validation and fails when the ref names a tag the
+repository does not have.
+
+If you tag by hand rather than with `claude plugin tag`, the annotated form is:
+
+```bash
+git tag -a ai-engineering-os--v0.18.0 -m "ai-engineering-os--v0.18.0"
+git push origin --tags
+```
 
 Then create the GitLab release from the tag and update the `ref` in
 `.claude-plugin/marketplace.json` so new installs land on it.

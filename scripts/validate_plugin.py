@@ -11,6 +11,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -537,6 +538,48 @@ def check_permission_rules_are_effective():
                     err("%s: %s rule %r is not matched by file permission checks. Use %s(...) "
                         "instead; it covers every file-editing tool."
                         % (rel, bucket, rule, inert[tool]))
+
+
+def check_marketplace_ref_exists():
+    """The marketplace ref names a tag. A tag that does not exist is a broken install.
+
+    check_release.py compares the ref against CI_COMMIT_TAG, so it only runs *on*
+    a tag and says nothing when none was ever created. This repository shipped ten
+    versions with the ref pointing at tags that did not exist; every one of them
+    would have failed to resolve for anyone installing from the marketplace.
+    """
+    manifest = load_json(".claude-plugin/plugin.json") or {}
+    market = load_json(".claude-plugin/marketplace.json") or {}
+    version, name = manifest.get("version"), manifest.get("name")
+    if not (version and name):
+        return
+    try:
+        out = subprocess.run(["git", "tag"], cwd=ROOT, capture_output=True, text=True,
+                             timeout=30)
+    except Exception:
+        return
+    if out.returncode != 0:
+        return
+    tags = set(out.stdout.split())
+    if not tags:
+        # A fresh clone or a repository that has never released. Nothing to check
+        # against, and failing here would block the first release.
+        return
+    expected = "%s--v%s" % (name, version)
+    for entry in market.get("plugins", []):
+        ref = (entry.get("source") or {}).get("ref")
+        if not ref or ref in tags:
+            continue
+        if ref == expected:
+            # Mid-release: the version is bumped and the tag comes next. Warn rather
+            # than block, because the alternative is a gate you cannot get through -
+            # you would have to tag before validating, which is the wrong order.
+            warn(".claude-plugin/marketplace.json: ref %r has no tag yet. Create it when you cut "
+                 "the release: git tag -a %s && git push origin --tags" % (ref, ref))
+        else:
+            err(".claude-plugin/marketplace.json: plugin %r has ref %r, which is neither an "
+                "existing tag nor the current version %s. New installs resolve to nothing."
+                % (entry.get("name"), ref, expected))
 
 
 def check_hooks():
@@ -1086,6 +1129,7 @@ def main():
     check_spawn_edges_are_executable()
     check_hooks()
     check_ci_config()
+    check_marketplace_ref_exists()
     check_permission_rules_are_effective()
     check_schemas()
     check_workflows(registry)
