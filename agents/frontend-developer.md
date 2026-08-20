@@ -3,6 +3,7 @@ name: frontend-developer
 description: Implements client-side code, state, accessibility and tests against an approved story, UX contract and technology configuration. Use for UI implementation and user-facing defect fixes inside an existing approved design.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
+effort: medium
 skills:
   - frontend-development
   - git-workflow

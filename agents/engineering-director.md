@@ -3,6 +3,7 @@ name: engineering-director
 description: "Owns delivery of a change end to end across departments. Use as the team lead when a request needs more than one discipline to act - product, architecture, development, QA, security, release - to sequence the SDLC stages, form the team and arbitrate between them. Use proactively for anything that is not a single department's work; development-lead runs the build once architecture is approved."
 tools: Read, Grep, Glob, Bash, Edit, Write, Agent
 model: opus
+effort: high
 skills:
   - sdlc-navigator
   - team-patterns

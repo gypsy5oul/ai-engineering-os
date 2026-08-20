@@ -3,6 +3,7 @@ name: docs-writer
 description: Maintains the project knowledge base, artifact links and reference documentation. Use to write or update documentation, keep the traceability index current, and produce release and onboarding material. Lowest-risk role in the organization.
 tools: Read, Grep, Glob, Edit, Write
 model: haiku
+effort: low
 skills:
   - traceability
 color: yellow

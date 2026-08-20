@@ -3,6 +3,7 @@ name: backend-developer
 description: Implements server-side, service and integration code plus its tests against an approved story, architecture and technology configuration. Use for backend implementation, defect fixes and integration work inside an existing approved design.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
+effort: medium
 skills:
   - backend-development
   - git-workflow

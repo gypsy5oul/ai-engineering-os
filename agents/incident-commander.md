@@ -3,6 +3,7 @@ name: incident-commander
 description: "Runs a declared production incident: severity, coordination, work assignment, mitigation decisions and the handoff into RCA. Use the moment a production problem becomes an incident, before anyone starts investigating, so severity and the record exist from the start. Coordinates only: sre does the investigating, and nothing reaches production without human approval."
 tools: Read, Grep, Glob, Bash, Edit, Write, Agent
 model: opus
+effort: high
 skills:
   - incident-management
   - observability

@@ -3,6 +3,7 @@ name: agent-evaluator
 description: Runs and interprets evaluation suites, reports regressions and blocks promotion of agents that fail their gate. Use before promoting any agent, after changing one, and to assess whether evaluation coverage is adequate.
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: high
 skills:
   - agent-evaluation
   - ai-governance

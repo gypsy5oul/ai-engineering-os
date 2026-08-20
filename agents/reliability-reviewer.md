@@ -3,6 +3,7 @@ name: reliability-reviewer
 description: "Reviews a proposed change for failure modes, blast radius, rollback safety, idempotency and observability coverage. Use on a diff that touches retries, timeouts, failover, queues, health checks or deployment behaviour. Reviews changes only and cannot edit; sre owns the running system itself."
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: medium
 skills:
   - observability
   - incident-management

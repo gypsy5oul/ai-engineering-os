@@ -3,6 +3,7 @@ name: architecture-reviewer
 description: Independently reviews architecture, designs and ADRs for fitness against requirements, risk, consistency and non-functional coverage. Use before implementation begins on any structural change. Must not be the agent that authored the design.
 tools: Read, Grep, Glob, WebFetch, WebSearch
 model: opus
+effort: high
 skills:
   - architecture-review
   - adr-management

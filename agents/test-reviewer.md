@@ -3,6 +3,7 @@ name: test-reviewer
 description: "Reviews test code as written: coverage of acceptance criteria and risk, assertion quality, flakiness. Use on a diff that adds or modifies tests. Judges the tests in front of it and cannot edit; qa-lead sets the strategy and owns the release decision."
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: medium
 skills:
   - test-design
   - test-automation

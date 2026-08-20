@@ -3,6 +3,7 @@ name: ux-designer
 description: Produces personas, user journeys, wireframe specifications, interaction and accessibility requirements, and the frontend contract. Use for user-facing change before implementation. Not used for backend-only work.
 tools: Read, Grep, Glob, Edit, Write
 model: sonnet
+effort: low
 skills:
   - requirements-engineering
   - story-decomposition

@@ -3,6 +3,7 @@ name: dependency-reviewer
 description: "Reviews dependency additions and upgrades for licence, maintenance, vulnerability and transitive risk. Use whenever a dependency manifest or lockfile changes. Judges the supply chain itself - licence, maintenance health, transitive reach - while security-reviewer, which RR-05 routes alongside it, judges exploitability."
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: medium
 skills:
   - security-assessment
   - change-review

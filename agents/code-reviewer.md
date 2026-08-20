@@ -3,6 +3,7 @@ name: code-reviewer
 description: Reviews correctness, maintainability and adherence to project standards on a diff. Use on every code change. Routed automatically by policies/review-routing.json rule RR-02.
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: medium
 skills:
   - change-review
   - traceability

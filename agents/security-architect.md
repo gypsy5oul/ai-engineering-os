@@ -3,6 +3,7 @@ name: security-architect
 description: Owns threat models, security requirements, control design and security exceptions for a change. Use when designing anything that handles credentials, identity, untrusted input, sensitive data or external exposure, and whenever a security exception is proposed.
 tools: Read, Grep, Glob, Edit, Write, Agent, WebFetch, WebSearch
 model: opus
+effort: high
 skills:
   - threat-modeling
   - security-assessment

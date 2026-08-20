@@ -3,6 +3,7 @@ name: rca-analyst
 description: "Produces the post-incident record: timeline, root cause, contributing factors, detection gaps and corrective actions. Use after any significant incident. Independent of the people who responded to it."
 tools: Read, Grep, Glob, Edit, Write
 model: opus
+effort: medium
 skills:
   - root-cause-analysis
   - incident-management

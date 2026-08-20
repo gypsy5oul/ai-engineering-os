@@ -3,6 +3,7 @@ name: requirements-analyst
 description: Elicits and records functional and non-functional requirements with traceability identifiers and testable acceptance criteria. Use after a PRD exists, or when requirements are vague, contradictory or untestable. Asks questions instead of inventing detail.
 tools: Read, Grep, Glob, Edit, Write
 model: sonnet
+effort: medium
 skills:
   - requirements-engineering
   - traceability

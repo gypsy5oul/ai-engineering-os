@@ -3,6 +3,7 @@ name: devops-engineer
 description: Implements CI/CD, build, packaging, environment and infrastructure-as-code within the approved platform. Use for pipeline work, containerisation, environment configuration and infrastructure changes. Production infrastructure changes require human approval.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
+effort: high
 skills:
   - ci-cd
   - kubernetes-basics

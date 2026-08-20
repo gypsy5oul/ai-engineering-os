@@ -960,3 +960,104 @@ class TestPredicatesAreSatisfiable(unittest.TestCase):
         self.artifact(d, "open.md", base % (2, 2, ""))
         self.assertEqual(self.evaluate(d, "no_open_rework(CYCLE-DEV)"), "FAIL")
 
+
+class TestModelFloorBlocks(unittest.TestCase):
+    """A risk floor that silently degrades is not a floor.
+
+    An organization's availableModels allowlist can exclude the model a floor
+    requires. Claude Code then runs on something weaker while the resolver kept
+    reporting the model it wanted, so the floor read as satisfied.
+    """
+
+    def project(self, models):
+        import tempfile, shutil
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        os.makedirs(os.path.join(d, ".ai-engineering"))
+        with open(os.path.join(d, ".ai-engineering", "project.yaml"), "w") as fh:
+            fh.write("project:\n  name: constrained\nai:\n  available_models:\n")
+            for m in models:
+                fh.write("    - %s\n" % m)
+        return d
+
+    def resolve(self, role, risk, project):
+        proc = script("resolve_model.py", "--role", role, "--risk", risk,
+                      "--project", project, "--json")
+        return json.loads(proc.stdout), proc.returncode
+
+    def test_critical_work_blocks_when_its_model_is_unavailable(self):
+        result, code = self.resolve("security-architect", "CRITICAL", self.project(["sonnet"]))
+        self.assertTrue(result["blocked"])
+        self.assertEqual(code, 3, "a caller reading stdout must see the block in the exit code")
+
+    def test_high_risk_work_blocks_too(self):
+        result, _ = self.resolve("solution-architect", "HIGH", self.project(["haiku"]))
+        self.assertTrue(result["blocked"])
+
+    def test_low_risk_work_proceeds_on_what_is_available(self):
+        result, code = self.resolve("docs-writer", "LOW", self.project(["sonnet", "haiku"]))
+        self.assertFalse(result["blocked"])
+        self.assertEqual(code, 0)
+
+    def test_an_unconstrained_organization_is_unaffected(self):
+        import tempfile, shutil
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        result, code = self.resolve("security-architect", "CRITICAL", d)
+        self.assertFalse(result["blocked"])
+        self.assertEqual(result["model"], "opus")
+
+
+class TestPluginAgentFrontmatter(unittest.TestCase):
+    """Only keys Claude Code actually honours for a plugin agent may appear.
+
+    It warns and discards permissionMode, hooks and mcpServers on plugin agents.
+    Carrying one would be configuration that looks like a control and is none.
+    """
+
+    IGNORED = ("permissionMode", "hooks", "mcpServers")
+
+    def frontmatter(self):
+        out = {}
+        for name in sorted(os.listdir(os.path.join(ROOT, "agents"))):
+            if name.endswith(".md"):
+                fm, _ = read_fm(os.path.join(ROOT, "agents", name))
+                out[name] = fm
+        return out
+
+    def test_no_agent_sets_a_key_the_platform_discards(self):
+        for name, fm in self.frontmatter().items():
+            for key in self.IGNORED:
+                with self.subTest(agent=name, key=key):
+                    self.assertNotIn(key, fm)
+
+    def test_every_agent_declares_an_effort_the_platform_accepts(self):
+        allowed = {"low", "medium", "high", "xhigh", "max"}
+        for name, fm in self.frontmatter().items():
+            with self.subTest(agent=name):
+                effort = fm.get("effort")
+                self.assertIsNotNone(effort, "%s sets no effort" % name)
+                if not isinstance(effort, int):
+                    self.assertIn(effort, allowed)
+
+    def test_effort_matches_the_model_policy(self):
+        policy = load("policies/model-policy.json")
+        registry = {a["name"]: a for a in load("policies/agent-registry.json")["agents"]}
+        for name, fm in self.frontmatter().items():
+            role = fm["name"]
+            entry = registry.get(role)
+            if not entry:
+                continue
+            expected = None
+            for rule in policy["routing"]:
+                w = rule.get("when") or {}
+                if "risk" in w and entry.get("risk") not in w["risk"]:
+                    continue
+                if "role" in w and role not in w["role"]:
+                    continue
+                expected = rule.get("effort")
+                break
+            if expected:
+                with self.subTest(agent=role):
+                    self.assertEqual(fm.get("effort"), expected)
+

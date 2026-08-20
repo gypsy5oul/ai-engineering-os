@@ -3,6 +3,7 @@ name: agent-developer
 description: "Writes and edits the agent, skill, hook, schema and evaluation files of this repository. Use to implement or fix a component of the AI Engineering OS once its shape is settled. Implements decisions rather than making them; agent-architect decides whether a component should exist. Changes to critical components require governance approval."
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
+effort: high
 skills:
   - agent-development
   - agent-evaluation

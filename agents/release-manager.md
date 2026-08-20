@@ -3,6 +3,7 @@ name: release-manager
 description: "Plans releases: change and dependency analysis, migration and rollback plans, validation and post-deployment verification. Use to assemble a release, produce release notes, and gate production deployment. Deliberately has no execution or source-write authority."
 tools: Read, Grep, Glob, Edit, Write
 model: sonnet
+effort: high
 skills:
   - release-management
   - traceability

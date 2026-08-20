@@ -164,6 +164,13 @@ approval:
 
 ai:
   agent_teams_available: false     # experimental and off by default; stages declaring 'team' fall back to 'subagent'
+
+  # The models your Claude organization actually permits. Leave empty when the
+  # organization does not restrict them. When it does, list them here: a HIGH or
+  # CRITICAL role whose required model is missing BLOCKS rather than running on a
+  # weaker one, because a risk floor that silently degrades is not a floor.
+  # scripts/resolve_model.py exits 3 on a block.
+  available_models: []
   model_overrides:
     data-engineer:
       model: opus

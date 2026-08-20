@@ -3,6 +3,70 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.11.0] — Platform review P0s
+
+A repository-level review against Claude Code as of 20 August 2026. Seven items
+were raised as blocking an enterprise pilot. Six were real. One was not, and
+checking it found a mistake of my own going the other way.
+
+### Fixed — an unavailable model silently downgraded critical work
+
+An organization's `availableModels` allowlist can exclude the model a risk floor
+requires. Claude Code then runs on something weaker while `resolve_model.py` kept
+reporting the model it wanted, so the floor read as satisfied while the work ran
+below it.
+
+HIGH and CRITICAL work now **blocks**. `resolve_model.py` exits `3`, because a
+caller that reads `opus` off stdout and proceeds is exactly the failure this
+prevents. LOW and MEDIUM work falls back to the best available model and says so.
+Projects declare `ai.available_models`; empty means unrestricted.
+
+### Fixed — three keys that looked like configuration and were none
+
+Claude Code warns and discards `permissionMode`, `hooks` and `mcpServers` on a
+plugin agent. The frontmatter allowlist permitted all three. It now rejects them,
+so the repository cannot carry a control that does nothing.
+
+### Corrected — I was wrong about `effort` in 0.10.0
+
+0.10.0 documented that `effort` was skill and command frontmatter and would be
+"read by nothing" on an agent. That is false. Claude Code validates `effort` on
+plugin agent files against `low`, `medium`, `high`, `xhigh`, `max` or an integer.
+It is now set on all 30 agents from `policies/model-policy.json`, and a test
+fails if a body and the policy disagree.
+
+### Rejected — "plugin subagents ignore the `skills` frontmatter"
+
+Raised as a P0. It does not hold. The CLI's warning covers exactly three fields —
+`permissionMode`, `hooks`, `mcpServers` — and `skills` is not among them. An
+earlier review had already confirmed empirically that a plugin agent quotes its
+preloaded skill content verbatim. No change; the mechanism works as documented.
+
+### Fixed — the hook description contradicted the hooks
+
+`hooks.json` still announced "Every guard fails open with a loud message", which
+has been untrue since failure became risk-tiered. Catastrophic and high-risk
+actions are denied when a guard cannot complete; only advisory guards fail open.
+
+### Fixed — CI could not be trusted as a release gate
+
+- **A duplicated `rules:` key.** YAML keeps the last, so the earlier block never
+  applied. Silent in every loader, which is why `check_ci_config` now looks for it.
+- **`claude-plugin-validate` allowed failure unconditionally.** A release could
+  ship a plugin Claude Code's own validator rejects. It stays tolerant on a branch,
+  where a runner may genuinely lack the CLI, and is mandatory on the default branch
+  and on tags.
+- `strict-structure` is likewise mandatory on a tag, which is what makes the
+  placeholder marketplace URL a release blocker rather than a warning.
+
+### Fixed — version and count drift
+
+`plugin.json` said `0.9.0`, the README said `0.7.0` and "29 agents". Both are now
+checked: a version or agent-set claim in prose that disagrees with the manifest is
+a CI error, not a reading exercise.
+
+Tests: **226 → 233.**
+
 ## [0.10.0] — Closing the review findings
 
 Everything the three 0.9.0 reviews raised, verified before it was acted on. Two

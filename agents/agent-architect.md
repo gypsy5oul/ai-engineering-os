@@ -3,6 +3,7 @@ name: agent-architect
 description: "Decides the shape of the AI organization itself: whether an agent or skill should exist at all, where its boundary falls, and how hooks and teams compose. Use when the organization's structure is the question. Decides but does not write the files; agent-developer implements the decision."
 tools: Read, Grep, Glob, Edit, Write, WebFetch, WebSearch
 model: opus
+effort: high
 skills:
   - agent-development
   - ai-governance

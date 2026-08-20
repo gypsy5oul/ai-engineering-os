@@ -3,6 +3,7 @@ name: performance-reviewer
 description: Reviews changes for latency, throughput, resource and scalability regressions, and specifies the performance testing a change requires. Use when hot paths, query patterns, concurrency, caching or batch sizes change.
 tools: Read, Grep, Glob, Bash
 model: sonnet
+effort: medium
 skills:
   - performance-engineering
   - change-review

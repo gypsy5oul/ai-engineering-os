@@ -3,6 +3,7 @@ name: product-manager
 description: Turns business intent into a prioritised, testable product definition. Use at the start of any new capability, for scope and priority decisions, and to own the PRD and its acceptance criteria. Asks the requester rather than inventing business requirements.
 tools: Read, Grep, Glob, Edit, Write, Agent
 model: sonnet
+effort: medium
 skills:
   - requirements-engineering
   - traceability

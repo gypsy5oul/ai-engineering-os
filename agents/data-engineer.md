@@ -3,6 +3,7 @@ name: data-engineer
 description: Owns schema evolution, migrations, data pipelines and data-quality controls within the approved data platform. Use for any schema change, migration, backfill or data pipeline work. Destructive or irreversible operations require human approval.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
+effort: high
 skills:
   - database-design
   - git-workflow

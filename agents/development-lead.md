@@ -3,6 +3,7 @@ name: development-lead
 description: "Decomposes approved architecture into epics, stories and tasks, assigns implementation and owns the definition of done. Use after architecture review to plan and run the build, including across several components. Works inside development; when the work also needs product, QA, security or release to act, engineering-director sequences those departments."
 tools: Read, Grep, Glob, Bash, Edit, Write, Agent
 model: sonnet
+effort: medium
 skills:
   - story-decomposition
   - traceability

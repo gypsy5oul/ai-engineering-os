@@ -23,9 +23,16 @@ from minyaml import parse_file  # noqa: E402
 ERRORS = []
 WARNINGS = []
 
-AGENT_FM_KEYS = {"name", "description", "tools", "disallowedTools", "model", "permissionMode",
-                 "maxTurns", "skills", "mcpServers", "hooks", "memory", "background", "effort",
+AGENT_FM_KEYS = {"name", "description", "tools", "disallowedTools", "model",
+                 "maxTurns", "skills", "memory", "background", "effort",
                  "isolation", "color", "initialPrompt"}
+
+# Claude Code warns and ignores these on a plugin agent: "Plugin agent file <f>
+# sets <k>, which is ignored for plugin agents. Use .claude/agents/ for this level
+# of control." Allowing them here would let the repository carry configuration
+# that looks effective and is not.
+AGENT_FM_IGNORED_FOR_PLUGINS = ("permissionMode", "hooks", "mcpServers")
+AGENT_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 SKILL_FM_KEYS = {"name", "description", "when_to_use", "argument-hint", "arguments",
                  "disable-model-invocation", "user-invocable", "allowed-tools", "disallowed-tools",
                  "model", "effort", "context", "agent", "background", "hooks", "paths", "shell",
@@ -311,9 +318,12 @@ def check_frontmatter_is_strict_yaml():
 # whose subject is consistency cannot claim five different totals across four
 # documents, which is what happened before this check existed.
 COUNT_CLAIM = re.compile(r"\b(\d+)\s+(agents|skills|evaluation cases)\b")
+VERSION_CLAIM = re.compile(r"\bVersion (\d+\.\d+\.\d+)\b")
+AGENT_SET_CLAIM = re.compile(r"agent set is fixed at (\d+)")
 
 
 def check_stated_counts():
+    manifest_version = (load_json(".claude-plugin/plugin.json") or {}).get("version", "")
     actual = {
         "agents": len([f for f in os.listdir(os.path.join(ROOT, "agents")) if f.endswith(".md")]),
         "skills": len([d for d in os.listdir(os.path.join(ROOT, "skills"))
@@ -328,6 +338,15 @@ def check_stated_counts():
     for rel, path in docs:
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
+        for match in VERSION_CLAIM.finditer(text):
+            stated = match.group(1)
+            if stated != manifest_version:
+                err("%s: says version %s; .claude-plugin/plugin.json says %s"
+                    % (rel, stated, manifest_version))
+        for match in AGENT_SET_CLAIM.finditer(text):
+            if int(match.group(1)) != actual["agents"]:
+                err("%s: says the agent set is fixed at %s; the repository has %d"
+                    % (rel, match.group(1), actual["agents"]))
         for match in COUNT_CLAIM.finditer(text):
             stated, noun = int(match.group(1)), match.group(2)
             # A count inside backticks is quoted output, not a claim about this repository.
@@ -431,6 +450,69 @@ def check_workflows_can_be_abandoned():
         if not cancel.get("requires"):
             err("sdlc/workflows/%s: cancellation states no requirements. Ending a change without "
                 "closing its cycles leaves work the organization still believes is running." % name)
+
+
+def check_agent_frontmatter_is_effective():
+    """Every frontmatter key an agent sets must actually do something.
+
+    Three keys are accepted by the parser and discarded for plugin agents. A
+    repository whose whole premise is that controls are real must not carry them.
+    """
+    base = os.path.join(ROOT, "agents")
+    for name in sorted(os.listdir(base)):
+        if not name.endswith(".md"):
+            continue
+        rel = "agents/%s" % name
+        try:
+            fm, _ = read_fm(os.path.join(base, name))
+        except ValueError:
+            continue
+        for key in AGENT_FM_IGNORED_FOR_PLUGINS:
+            if key in fm:
+                err("%s: sets %r, which Claude Code ignores for plugin agents. It would look "
+                    "like a control and be none." % (rel, key))
+        effort = fm.get("effort")
+        if effort is not None and not isinstance(effort, int) and effort not in AGENT_EFFORTS:
+            err("%s: effort %r is not one of %s or an integer"
+                % (rel, effort, sorted(AGENT_EFFORTS)))
+
+
+def check_ci_config():
+    """CI is a release gate, so its own shape has to be right.
+
+    A duplicated key in GitLab CI is silent: the loader keeps the last and the
+    earlier block simply never applies. And a validation job that may fail without
+    consequence is not a gate. Claude Code's own structural check must be
+    mandatory on a tag; shipping a plugin its validator rejects is the one failure
+    this repository cannot argue its way out of.
+    """
+    path = os.path.join(ROOT, ".gitlab-ci.yml")
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("\n")
+
+    job, seen = None, {}
+    for line in lines:
+        if re.match(r"^[A-Za-z_][\w-]*:", line):
+            job, seen = line.split(":")[0], {}
+            continue
+        m = re.match(r"^  ([a-z_]+):", line)
+        if m and job:
+            key = m.group(1)
+            if key in seen:
+                err(".gitlab-ci.yml: job %r sets %r twice. YAML keeps the last, so the earlier "
+                    "block never applies." % (job, key))
+            seen[key] = True
+
+    body = "\n".join(lines)
+    m = re.search(r"^claude-plugin-validate:.*?(?=^\S|\Z)", body, re.M | re.S)
+    if not m:
+        err(".gitlab-ci.yml: no claude-plugin-validate job. Claude Code's own structural check is "
+            "the one validation this repository cannot replace.")
+    elif re.search(r"^  allow_failure: true", m.group(), re.M):
+        err(".gitlab-ci.yml: claude-plugin-validate allows failure unconditionally, so a release "
+            "can ship a plugin Claude Code rejects. Allow it only on a branch.")
 
 
 def check_hooks():
@@ -974,10 +1056,12 @@ def main():
     check_skills()
     check_skill_paths()
     check_skills_are_reachable()
+    check_agent_frontmatter_is_effective()
     check_frontmatter_is_strict_yaml()
     check_stated_counts()
     check_spawn_edges_are_executable()
     check_hooks()
+    check_ci_config()
     check_schemas()
     check_workflows(registry)
     check_workflows_can_be_abandoned()

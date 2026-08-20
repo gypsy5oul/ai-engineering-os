@@ -540,6 +540,19 @@
         "agent_teams_available": {
           "type": "boolean",
           "description": "False where the organization has not enabled the experimental agent-teams feature. Stages declaring 'team' fall back to 'subagent'."
+        },
+        "available_models": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "opus",
+              "sonnet",
+              "haiku",
+              "fable"
+            ]
+          },
+          "description": "The models this Claude organization permits. Empty means unrestricted. When an organization's allowlist excludes the model a risk floor requires, HIGH and CRITICAL work blocks instead of running on a weaker one: a floor that silently degrades is not a floor, and the resolver used to keep reporting the model it wanted while the work ran below it."
         }
       }
     },

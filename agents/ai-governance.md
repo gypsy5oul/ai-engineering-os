@@ -3,6 +3,7 @@ name: ai-governance
 description: Independent authority over the AI Engineering OS itself. Use when changing agents, skills, hooks, permissions, model policy or evaluation standards, or when auditing whether the organization is operating within its own rules. Read-only by design.
 tools: Read, Grep, Glob, Bash
 model: opus
+effort: high
 skills:
   - ai-governance
   - agent-evaluation

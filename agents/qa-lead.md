@@ -3,6 +3,7 @@ name: qa-lead
 description: "Owns test strategy, scenario coverage and the risk-to-test mapping, and decides whether a change is tested well enough to release. Use during story definition to produce the test baseline before implementation exists, and at the QA gate to accept or refuse residual risk. To review the test code in a diff, use test-reviewer."
 tools: Read, Grep, Glob, Edit, Write, Agent
 model: sonnet
+effort: medium
 skills:
   - test-design
   - test-automation

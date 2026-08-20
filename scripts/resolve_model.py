@@ -97,8 +97,51 @@ def resolve(role, risk, complexity, reversibility="reversible", project=None):
         chosen, effort = "opus", "high"
         trace.append("CRITICAL role: never de-escalated")
 
-    return {"role": role, "risk": risk, "complexity": complexity, "model": chosen,
-            "effort": effort, "trace": trace}
+    result = {"role": role, "risk": risk, "complexity": complexity, "model": chosen,
+              "effort": effort, "trace": trace, "available": True, "blocked": False}
+
+    # An organization's availableModels allowlist can exclude the model a risk floor
+    # requires. Claude Code will then run on something weaker, and this resolver used
+    # to keep reporting the model it wanted -- so the floor read as satisfied while the
+    # work ran below it. For HIGH and CRITICAL that must stop the work, not downgrade it.
+    available = available_models(project)
+    if available is not None and chosen not in available:
+        result["available"] = False
+        risk_now = risk or (entry["risk"] if entry else "MEDIUM")
+        if risk_now in ("HIGH", "CRITICAL"):
+            result["blocked"] = True
+            trace.append("%s is REQUIRED for %s-risk work and is not in availableModels. "
+                         "BLOCKED: this work does not run on a weaker model." % (chosen, risk_now))
+        else:
+            fallback = max((m for m in available if m in RANK), key=lambda m: RANK[m], default=None)
+            trace.append("%s is not in availableModels; %s-risk work may proceed on %s"
+                         % (chosen, risk_now, fallback or "the session default"))
+            result["model"] = fallback or chosen
+    return result
+
+
+def available_models(project):
+    """The organization's model allowlist, or None when it does not constrain us.
+
+    Read from the project configuration rather than guessed: a resolver that
+    assumed availability would be asserting a fact about someone else's managed
+    settings.
+    """
+    if not project:
+        return None
+    cfg = {}
+    for name in ("project.yaml", "project.json"):
+        path = os.path.join(project, ".ai-engineering", name)
+        if not os.path.exists(path):
+            continue
+        if name.endswith(".json"):
+            with open(path, encoding="utf-8") as fh:
+                cfg = json.load(fh)
+        else:
+            cfg = parse_file(path)
+        break
+    models = ((cfg.get("ai") or {}).get("available_models")) if isinstance(cfg, dict) else None
+    return list(models) if models else None
 
 
 def stage_lookup(workflow_id, stage_id):
@@ -173,7 +216,9 @@ def main():
         print("model: %s   effort: %s" % (result["model"], result["effort"]))
         for line in result["trace"]:
             print("  - %s" % line)
-    return 0
+    # The exit code has to carry the block. A caller that reads "opus" off stdout
+    # and proceeds is exactly the silent downgrade this is here to prevent.
+    return 3 if result.get("blocked") else 0
 
 
 if __name__ == "__main__":

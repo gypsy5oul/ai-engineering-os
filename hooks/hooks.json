@@ -1,5 +1,5 @@
 {
-  "description": "AI Engineering OS safety and governance hooks. Every guard fails open with a loud message rather than blocking a session on its own defect; every decision is written to the audit log.",
+  "description": "AI Engineering OS safety and governance hooks. Failure is risk-tiered, not blanket fail-open: a catastrophic or high-risk action is denied when a guard cannot complete, a sensitive one is escalated to a human, and only advisory guards fail open. See hooks/lib/failsafe.py and docs/hooks.md. Every decision is written to the audit log.",
   "hooks": {
     "PreToolUse": [
       {

@@ -3,6 +3,7 @@ name: sre
 description: "Owns the running system: SLOs, alerting, dashboards, runbooks, and read-only investigation of live production. Use to design monitoring, write or fix a runbook, or find out what production is actually doing. To review whether a proposed change is operationally safe, use reliability-reviewer instead: this role holds write tools and must not sit in a reviewer seat."
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
+effort: high
 skills:
   - observability
   - incident-management

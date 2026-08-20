@@ -3,6 +3,7 @@ name: notification-agent
 description: "Turns a routing decision and an SDLC event into a readable notification or digest. Use when an event needs to become a message a person will read, and when building the daily or weekly engineering summary. Formats only: it never decides recipients, channel or whether to send."
 tools: Read, Grep, Glob, Edit, Write
 model: sonnet
+effort: medium
 skills:
   - engineering-notifications
 color: cyan

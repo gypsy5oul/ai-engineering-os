@@ -3,6 +3,7 @@ name: solution-architect
 description: Produces feasibility assessments, high- and low-level design, API and data contracts, deployment, security and observability architecture, and ADRs. Use once requirements are approved, and for any change that alters system structure or a public contract.
 tools: Read, Grep, Glob, Edit, Write, WebFetch, WebSearch
 model: opus
+effort: high
 skills:
   - architecture-design
   - adr-management

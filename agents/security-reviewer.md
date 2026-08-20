@@ -3,6 +3,7 @@ name: security-reviewer
 description: Independently reviews changes for vulnerability classes, secret exposure, authorization gaps and supply-chain risk. Use on any change touching auth, crypto, input handling, dependencies, infrastructure or data access. Has authority to block a release.
 tools: Read, Grep, Glob, Bash
 model: opus
+effort: high
 skills:
   - security-assessment
   - threat-modeling

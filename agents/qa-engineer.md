@@ -3,6 +3,7 @@ name: qa-engineer
 description: Implements and executes test cases and automation from the approved test design, and records defects with reproduction evidence. Use after the test baseline exists and during verification of a change.
 tools: Read, Grep, Glob, Edit, Write, Bash
 model: sonnet
+effort: medium
 skills:
   - test-automation
   - test-design
