@@ -265,10 +265,37 @@ def scenario_feature(project, log):
                        rollup=rollup("CYCLE-QA", next_gate="RELEASE"))
         emit(project, "QA_COMPLETED", st["feat"], st["feat"], verdict="pass", passed=1, failed=0)
 
+    def readiness():
+        log("evidence is collected, not re-decided; what is unmet is written down")
+        st["run"] = write_artifact(
+            project, "RUN", status="active", source=st["feat"],
+            symptoms=["Upload latency above 5s at p95", "SFTP connections refused"],
+            diagnostics=["Check the transfer queue depth", "Check the connection pool"],
+            dependencies=["object storage", "the identity provider"],
+            remediation=["Drain and restart the transfer workers",
+                         "Failover to the secondary region (needs AP-01)"],
+            rollback="Redeploy the previous release; no data migration is involved",
+            escalation="on-call SRE, then the engineering owner",
+            owner_role="sre", last_exercised="never")
+        st["prr"] = write_artifact(
+            project, "PRR", status="ready", source=st["feat"],
+            links={"runbooks": [st["run"]]},
+            architecture=st["arch"], security="SEC approved, no HIGH findings",
+            testing="TESTREPORT accepted", performance="not applicable, no new query path",
+            observability="SLO and alerts defined in ARCH",
+            runbook=st["run"], backup_restore="unchanged by this release",
+            rollback="previous release redeploys cleanly",
+            capacity="within current limits",
+            unmet=["The runbook has not been exercised"],
+            accepted_by="gitlab:sim-human",
+            reviewers=[verdict("reliability-reviewer")],
+            rollup=rollup("CYCLE-SRE", status="IN_PROGRESS", next_gate="RELEASE"))
+
     def release():
         log("release-manager assembles; the rollback plan exists BEFORE approval is sought")
         st["rel"] = write_artifact(project, "REL", status="approved", source=st["story"],
-                                   links={"stories": [st["story"]], "merge_requests": ["!1"]},
+                                   links={"stories": [st["story"]], "merge_requests": ["!1"],
+                                          "production_readiness": [st["prr"]]},
                                    reviewers=[verdict("sre")],
                                    approvals=[approval("AP-01", "release-approver",
                                                        recorded_in="gitlab-release")],
@@ -295,12 +322,18 @@ def scenario_feature(project, log):
     def ops():
         log("sre observes SLOs and alert quality; CYCLE-SRE concludes")
         patch_rollup(project, st["rel"], rollup("CYCLE-SRE", next_gate="next cycle"))
+        # The readiness record opened this cycle at READINESS, so it closes here too.
+        patch_rollup(project, st["prr"], rollup("CYCLE-SRE", next_gate="next cycle"))
+        write_artifact(project, "DEBT", status="open", source=st["prr"],
+                       links={"architecture": []},
+                       title="Exercise the runbook: it has never been followed")
 
     return [("WF-FEATURE", "IDEA", idea), ("WF-FEATURE", "REQ", req),
             ("WF-FEATURE", "FEAS", feas), ("WF-FEATURE", "ARCH", arch),
             ("WF-FEATURE", "STORY", story), ("WF-FEATURE", "QADESIGN", qadesign),
             ("WF-FEATURE", "DEV", dev), ("WF-FEATURE", "REVIEW", review),
-            ("WF-FEATURE", "QA", qa), ("WF-FEATURE", "RELEASE", release),
+            ("WF-FEATURE", "QA", qa), ("WF-FEATURE", "READINESS", readiness),
+            ("WF-FEATURE", "RELEASE", release),
             ("WF-FEATURE", "AUTHORIZE", authorize), ("WF-FEATURE", "DEPLOY", deploy),
             ("WF-FEATURE", "VERIFY", verify), ("WF-FEATURE", "OPS", ops)]
 

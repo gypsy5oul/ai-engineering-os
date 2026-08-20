@@ -623,6 +623,18 @@
       "recipients": [
         "engineering-owner"
       ]
+    },
+    {
+      "event": "PRODUCTION_READINESS_ASSESSED",
+      "notify": "immediate",
+      "channel": "releases",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "release",
+      "recipients": [
+        "engineering-owner",
+        "release-approver"
+      ]
     }
   ],
   "suppression": {

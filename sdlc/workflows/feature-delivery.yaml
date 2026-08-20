@@ -657,6 +657,68 @@ stages:
       - QA_COMPLETED
       - QA_STARTED
     cycle_role: completes
+  - id: READINESS
+    name: Production readiness
+    owner: sre
+    participants:
+      - qa-lead
+      - security-architect
+      - release-manager
+    skills:
+      - observability
+      - incident-management
+    risk: HIGH
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - QA has concluded, with residual risk accepted or no residual risk
+    actions:
+      - Collect the evidence each dimension already produced. This stage decides
+        nothing that has been decided elsewhere; a readiness review that re-litigates
+        architecture is a second architecture review, which is how a gate becomes
+        theatre.
+      - For any dimension that does not apply, say so and say why. An empty field and
+        a deliberate exemption look identical later.
+      - Write down what is unmet. A readiness record listing nothing outstanding is
+        either true or unread, and the release approver is entitled to know which.
+      - Write the runbook for whoever is woken at 3am, starting from what they will
+        see rather than from what it is called.
+    inputs:
+      - Architecture and its review
+      - Security findings
+      - Test report
+      - Observability design
+      - Rollback plan
+    outputs:
+      - Production readiness record
+      - Runbook
+      - Outstanding items
+    produces:
+      - PRR
+      - RUN
+    exit_criteria:
+      - Every dimension is answered or exempted with a reason
+      - A runbook exists that someone other than its author could follow
+      - Outstanding items are named rather than implied
+    definition_of_done:
+      - artifact_exists(PRR)
+      - artifact_exists(RUN)
+      - required_fields_present(PRR)
+      - required_fields_present(RUN)
+      - agent_verdict(reliability-reviewer, pass)
+      - every_linked(PRR, RUN)
+    agent_gate:
+      reviewer: reliability-reviewer
+      blocking: true
+      recorded_in: the production readiness record
+      purpose: >-
+        whether each dimension is answered by evidence or by assertion, and whether
+        the runbook could be followed by someone who did not write it. Not whether
+        the system is well built.
+    department_cycle: CYCLE-SRE
+    cycle_role: enters
+    emits:
+      - PRODUCTION_READINESS_ASSESSED
   - id: RELEASE
     name: Release planning and approval
     owner: release-manager
@@ -695,6 +757,8 @@ stages:
       - A rollback plan exists, or irreversibility is acknowledged by a human
     definition_of_done:
       - artifact_exists(REL)
+      - artifact_status(PRR, ready)
+      - every_linked(REL, PRR)
       - rollback_plan_or_acknowledged()
       - human_approval_recorded(AP-01)
       - required_fields_present(REL)
@@ -810,7 +874,7 @@ stages:
       - no_unresolved_findings(high)
       - required_fields_present(REL)
     department_cycle: CYCLE-SRE
-    cycle_role: enters
+    cycle_role: continues
   - id: OPS
     name: Operations and feedback
     owner: sre

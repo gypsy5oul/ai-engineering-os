@@ -43,7 +43,8 @@ class TestFaultsAreHandled(unittest.TestCase):
                        "escalation is still open", "withdrawn", "Agent teams are unavailable",
                        "notification channel", "GitLab is unreachable", "hook policy",
                        "required model", "nobody moves it", "concurrency limit",
-                       "untested rollback", "dimension unanswered"):
+                       "untested rollback", "dimension unanswered",
+                       "readiness still not ready", "no runbook"):
             with self.subTest(case=needed):
                 self.assertIn(needed, listing)
 
@@ -71,6 +72,11 @@ class TestFaultsDetectRemovedControls(unittest.TestCase):
          "policies/artifact-model.json", '"rollback_tested",', '"rollback_procedure_dup",'),
         ("F-19", "blocking decisions stop blocking", "scripts/check_dod.py",
          'if a.get("status") == "open" and args[0] in (a.get("blocks") or [])]', "if False]"),
+        ("F-20", "the release stops checking readiness",
+         "sdlc/workflows/feature-delivery.yaml", "      - artifact_status(PRR, ready)\n", ""),
+        ("F-21", "readiness stops requiring a runbook", "sdlc/workflows/feature-delivery.yaml",
+         "      - artifact_exists(RUN)\n      - required_fields_present(PRR)",
+         "      - required_fields_present(PRR)"),
     ]
 
     def test_removing_a_control_makes_its_fault_fail(self):

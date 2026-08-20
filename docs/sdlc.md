@@ -135,6 +135,50 @@ project genuinely needs a separate security or performance phase — a regulated
 release, a capacity-critical launch — it adds one to
 `sdlc.required_stages` in its own configuration.
 
+## Production readiness is a record, not a review
+
+`READINESS` runs after QA and before `RELEASE`, and it **decides nothing that has
+been decided elsewhere**. Each field of the `PRR` points at evidence a stage
+already produced, or says the dimension does not apply and why. A readiness review
+that re-litigates architecture is a second architecture review, which is how a
+gate becomes theatre.
+
+| Dimension | Where its evidence came from |
+| --- | --- |
+| architecture | `ARCH` and its independent review |
+| security | `SEC` findings |
+| testing | `TESTREPORT` |
+| performance | routed `performance-reviewer`, or an exemption |
+| observability | the SLOs and alerts designed in `ARCH` |
+| runbook | the `RUN` produced here |
+| backup / restore, rollback, capacity | the release plan and operational limits |
+
+It adds **no human gate**. What it changes is what the existing one reads:
+`RELEASE` now requires `artifact_status(PRR, ready)` and a link to it, so the AP-01
+approver is looking at an evidence sheet rather than approving "the release".
+
+The field that carries the most weight is `unmet`. A readiness record listing
+nothing outstanding is either true or unread, and the approver is entitled to know
+which. `not-ready` is a legitimate outcome, not a failed review.
+
+## Runbooks are written for 3am
+
+The `RUN` artifact starts from **symptoms**, because the person reading it knows
+what they are seeing and not what it is called. Remediation steps that need
+approval say so inline, so nobody discovers a gate halfway through an outage.
+
+It carries no approval. `reliability-reviewer` records a verdict, and a verdict is
+not an approval — a runbook needing sign-off before anyone may follow it is a
+runbook nobody reads during an outage.
+
+`last_exercised` exists because a runbook nobody has followed is a document rather
+than a procedure, and the steps that have quietly stopped working are invisible
+until someone tries them under pressure. An incident is the only time a runbook is
+genuinely tested, so `WF-INCIDENT/RCA` records whether one existed, whether it was
+followed, and where it was wrong — and updates `last_exercised` on any that were
+used. That turns "never exercised" from a fact nobody tracks into one the readiness
+record can list as unmet.
+
 ## Two workflows about the things code cannot undo
 
 **`WF-CHANGE`** exists because "increase retention from 30 days to 90" is one

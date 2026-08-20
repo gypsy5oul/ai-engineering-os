@@ -19,7 +19,7 @@
   "properties": {
     "id": {
       "type": "string",
-      "pattern": "^[A-Z][A-Z0-9]{1,9}-(ADR|CR|ARCH|DEBT|DEC|DEF|DEPA|DES|EPIC|EVID|FEAS|INC|MIG|MR|NFR|RCA|REL|REQ|REVIEW|SEC|STORY|TASK|TEST|TESTREPORT|TP)-[0-9]{3,}$"
+      "pattern": "^[A-Z][A-Z0-9]{1,9}-(ADR|CR|ARCH|DEBT|DEC|DEF|DEPA|DES|EPIC|EVID|FEAS|INC|MIG|MR|NFR|PRR|RCA|REL|REQ|REVIEW|RUN|SEC|STORY|TASK|TEST|TESTREPORT|TP)-[0-9]{3,}$"
     },
     "type": {
       "type": "string",
@@ -37,10 +37,12 @@
         "migration-plan",
         "nfr",
         "open-decision",
+        "production-readiness",
         "rca",
         "release",
         "requirement",
         "review",
+        "runbook",
         "security",
         "story",
         "task",

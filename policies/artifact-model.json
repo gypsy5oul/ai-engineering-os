@@ -1358,6 +1358,125 @@
       "immutable_after_creation": false,
       "append_only": false,
       "notes": "rollback_tested is separate from rollback_procedure because a written rollback that has never been run is a hope. irreversible_after names the point past which rollback stops being possible, usually the moment data is written in the new format and the old readers can no longer parse it; a migration whose answer is 'immediately' needs a different design, not a braver deployment."
+    },
+    {
+      "code": "PRR",
+      "type": "production-readiness",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "READINESS",
+      "owner_role": "sre",
+      "may_modify": [
+        "sre",
+        "release-manager"
+      ],
+      "may_review": [
+        "reliability-reviewer",
+        "security-architect",
+        "qa-lead"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "engineering owner"
+      },
+      "storage": "docs/release/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "ready",
+        "not-ready",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "architecture",
+        "security",
+        "testing",
+        "performance",
+        "observability",
+        "runbook",
+        "backup_restore",
+        "rollback",
+        "capacity",
+        "unmet",
+        "accepted_by"
+      ],
+      "links_required": [],
+      "depends_on": [],
+      "consumed_by": [
+        "REL"
+      ],
+      "immutable_after_creation": false,
+      "append_only": false,
+      "notes": "An aggregating artifact. It does not re-decide anything: each field points at the evidence a stage already produced, or says the dimension does not apply and why. A readiness review that re-litigates architecture is a second architecture review, which is how a gate becomes theatre. The field that matters most is `unmet`: a readiness record listing nothing outstanding is either true or unread, and the release approver is entitled to know which. Status `not-ready` is a legitimate outcome, not a failure of the review."
+    },
+    {
+      "code": "RUN",
+      "type": "runbook",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "READINESS",
+      "owner_role": "sre",
+      "may_modify": [
+        "sre",
+        "devops-engineer"
+      ],
+      "may_review": [
+        "reliability-reviewer",
+        "incident-commander"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/runbooks/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "active",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "symptoms",
+        "diagnostics",
+        "dependencies",
+        "remediation",
+        "rollback",
+        "escalation",
+        "owner_role",
+        "last_exercised"
+      ],
+      "links_required": [],
+      "depends_on": [],
+      "consumed_by": [
+        "INC",
+        "RCA"
+      ],
+      "immutable_after_creation": false,
+      "append_only": false,
+      "notes": "Written for whoever is woken at 3am, which is why symptoms come first: the reader knows what they are seeing, not what it is called. `last_exercised` exists because a runbook nobody has followed is a document rather than a procedure, and the steps that have quietly stopped working are invisible until someone tries them. Remediation steps that need approval say so inline, so the reader does not discover the gate halfway through an outage. It carries no approval: reliability-reviewer records a verdict, and a verdict is not an approval. A runbook needing sign-off before anyone may follow it would be a runbook nobody reads during an outage."
     }
   ],
   "dod_predicates": {

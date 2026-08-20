@@ -3,6 +3,59 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.15.0] — Production readiness and runbooks
+
+### Added — `PRR`, and a `READINESS` stage that decides nothing
+
+Before this, the AP-01 release approver approved "the release" with no single
+sheet of evidence to read. `READINESS` runs after QA in `WF-FEATURE` and after
+staging in `WF-RELEASE`, and collects what each dimension already produced:
+architecture, security, testing, performance, observability, runbook, backup and
+restore, rollback, capacity.
+
+It **adds no human gate**. What it changes is what the existing one reads:
+`RELEASE` now requires `artifact_status(PRR, ready)` and a link to it. A readiness
+review that re-litigated architecture would be a second architecture review, which
+is how a gate becomes theatre, so each field points at existing evidence or states
+an exemption and its reason. An empty field and a deliberate exemption look
+identical later, so both are written down.
+
+The field carrying the most weight is `unmet`. A readiness record listing nothing
+outstanding is either true or unread, and the approver is entitled to know which.
+`not-ready` is a legitimate outcome, not a failed review.
+
+### Added — `RUN`, written for 3am
+
+Symptoms come first, because the person reading it knows what they are seeing and
+not what it is called. Remediation steps needing approval say so inline, so nobody
+discovers a gate halfway through an outage.
+
+It carries **no approval**, and the validator was what insisted: `reliability-reviewer`
+records a verdict, and this repository's own principle is that a verdict is not an
+approval. A runbook needing sign-off before anyone may follow it is a runbook
+nobody reads during an outage.
+
+`last_exercised` exists because a runbook nobody has followed is a document rather
+than a procedure. An incident is the only time one is genuinely tested, so
+`WF-INCIDENT/RCA` now records whether a runbook existed, whether it was followed,
+and where it was wrong, and updates `last_exercised` on any that were used. That
+turns "never exercised" from a fact nobody tracks into one the readiness record
+lists as unmet — which is exactly what the shipped simulation does, raising a
+`DEBT` item for it at `OPS`.
+
+### Changed — SRE engages before production, not after it
+
+`CYCLE-SRE` was entered at `VERIFY`, which is after deployment. It is now entered
+at `READINESS` and continued at `VERIFY`, so the department that operates the
+system is involved before it has to.
+
+### Two new faults
+
+`F-20` seeks a release with readiness `not-ready`. `F-21` declares readiness with
+no runbook. Both mutation-tested.
+
+Faults: **19 → 21.** DoD predicates: **334 → 346.**
+
 ## [0.14.0] — Change request and data migration
 
 Two workflows for changes the existing set handled badly: altering a commitment

@@ -85,7 +85,7 @@ stages:
     inputs:
       - Signals
       - Recent deployments
-      - Runbooks
+      - Runbooks (RUN) for the affected surface
     outputs:
       - Declared severity
       - Incident record opened
@@ -169,7 +169,7 @@ stages:
     inputs:
       - Telemetry
       - Change history
-      - Runbooks
+      - Runbooks (RUN) for the affected surface
     outputs:
       - Hypotheses tested in parallel
       - Evidence
@@ -333,6 +333,12 @@ stages:
       - The RCA is approved
     actions:
       - Type every follow-up item and put it in a real backlog.
+      - Record whether a runbook existed for this symptom, whether it was followed,
+        and where it was wrong or missing. An incident is the only time a runbook is
+        genuinely tested, and the steps that have quietly stopped working are
+        invisible until someone tries them under pressure.
+      - Update last_exercised on any runbook that was used, so a runbook nobody has
+        followed becomes visible rather than merely old.
       - Compare this cause against prior RCAs and record the comparison in
         prior_rcas_reviewed. A repeat is escalated as a process failure, not filed
         as a new action. The field is what makes the comparison checkable, and

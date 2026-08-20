@@ -103,7 +103,8 @@
         "observability/**",
         "monitoring/**",
         "docs/runbooks/**",
-        "docs/incidents/**"
+        "docs/incidents/**",
+        "docs/release/**"
       ]
     },
     "devops-engineer": {

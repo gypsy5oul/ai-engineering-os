@@ -455,6 +455,50 @@ def f19(project):
     return True, why
 
 
+
+@fault("F-20", "A release is sought with readiness still not ready",
+       "RELEASE does not pass: the approver reads the readiness record, not a promise")
+def f20(project):
+    S.write_artifact(project, "PRR", status="not-ready",
+                     architecture="approved", security="one HIGH finding open",
+                     testing="TESTREPORT accepted", performance="not applicable",
+                     observability="alerts defined", runbook="SIM-RUN-001",
+                     backup_restore="unchanged", rollback="previous tag redeploys",
+                     capacity="within limits",
+                     unmet=["A HIGH security finding is open"], accepted_by="")
+    S.write_artifact(project, "REL", status="approved",
+                     approvals=[S.approval("AP-01", "release-approver")],
+                     rollback_plan="revert to the previous tag")
+    res = dod(project, "WF-FEATURE", "RELEASE")
+    ok, why = must_fail(res, "artifact_status(PRR, ready)")
+    if not ok:
+        return False, why
+    held, detail = must_hold(res, "artifact_exists(REL)")
+    if not held:
+        return False, "the unready readiness record broke an unrelated predicate: " + detail
+    return True, why
+
+
+@fault("F-21", "Readiness is declared with no runbook",
+       "READINESS does not pass: nobody can be woken at 3am to read an intention")
+def f21(project):
+    S.write_artifact(project, "PRR", status="ready",
+                     architecture="approved", security="clean", testing="accepted",
+                     performance="not applicable", observability="alerts defined",
+                     runbook="to be written", backup_restore="unchanged",
+                     rollback="previous tag", capacity="within limits",
+                     unmet=[], accepted_by="gitlab:sim-human",
+                     reviewers=[S.verdict("reliability-reviewer")])
+    res = dod(project, "WF-FEATURE", "READINESS")
+    ok, why = must_fail(res, "artifact_exists(RUN)")
+    if not ok:
+        return False, why
+    ok2, why2 = must_fail(res, "every_linked(PRR, RUN)")
+    if not ok2:
+        return False, "the runbook is missing but the link predicate passed: " + why2
+    return True, why
+
+
 # ------------------------------------------------------------------- runner
 
 def run(selected=None, verbose=False):

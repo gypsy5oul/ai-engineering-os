@@ -747,6 +747,19 @@
       "category": "lifecycle",
       "default_severity": "normal",
       "default_status": "completed"
+    },
+    {
+      "type": "PRODUCTION_READINESS_ASSESSED",
+      "level": "organization",
+      "emitted_by": "WF-FEATURE/READINESS",
+      "meaning": "Every readiness dimension has an answer or a stated exemption, and what remains unmet is written down rather than implied.",
+      "payload_fields": [
+        "ready",
+        "unmet_count"
+      ],
+      "category": "release",
+      "default_severity": "normal",
+      "default_status": "completed"
     }
   ],
   "categories": {

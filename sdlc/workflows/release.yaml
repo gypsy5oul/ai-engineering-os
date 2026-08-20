@@ -156,6 +156,59 @@ stages:
       requires_human_acknowledgement: false
     department_cycle: CYCLE-QA
     cycle_role: completes
+  - id: READINESS
+    name: Production readiness
+    owner: sre
+    participants:
+      - qa-lead
+      - security-architect
+      - release-manager
+    skills:
+      - observability
+      - incident-management
+    risk: HIGH
+    complexity: routine
+    execution: subagent
+    entry_criteria:
+      - Staging validation has concluded
+    actions:
+      - Collect the evidence each dimension already produced, and decide nothing that
+        has been decided elsewhere.
+      - For any dimension that does not apply to this release, say so and say why.
+      - Write down what is unmet, so the approver reads a list rather than an absence.
+      - Confirm a runbook exists for what is being released, and that it has been
+        followed by someone since it was written.
+    inputs:
+      - Staging evidence
+      - Security findings
+      - Rollback plan
+      - Existing runbooks
+    outputs:
+      - Production readiness record
+      - Runbook, new or confirmed current
+      - Outstanding items
+    produces:
+      - PRR
+      - RUN
+    exit_criteria:
+      - Every dimension is answered or exempted with a reason
+      - Outstanding items are named rather than implied
+    definition_of_done:
+      - artifact_exists(PRR)
+      - required_fields_present(PRR)
+      - agent_verdict(reliability-reviewer, pass)
+      - every_linked(PRR, RUN)
+    agent_gate:
+      reviewer: reliability-reviewer
+      blocking: true
+      recorded_in: the production readiness record
+      purpose: >-
+        whether each dimension is answered by evidence or by assertion, and whether
+        the runbook could be followed by someone who did not write it.
+    department_cycle: CYCLE-SRE
+    cycle_role: enters
+    emits:
+      - PRODUCTION_READINESS_ASSESSED
   - id: APPROVE
     name: Production approval
     owner: release-manager
