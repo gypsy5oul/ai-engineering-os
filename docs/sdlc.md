@@ -135,6 +135,37 @@ project genuinely needs a separate security or performance phase — a regulated
 release, a capacity-critical launch — it adds one to
 `sdlc.required_stages` in its own configuration.
 
+## An objective and the ability to measure it fail independently
+
+`OBSERVABILITY` runs after architecture and **before development**, because
+instrumentation added after an incident is instrumentation designed from memory.
+It produces two artifacts rather than one, and the separation is the point:
+
+| | Says | Fails by |
+| --- | --- | --- |
+| `SLO` | What is promised, and how it is computed | Being a number nobody can breach |
+| `OBS` | What the system can be seen doing | Being a dashboard nobody asked for |
+
+`every_linked(SLO, OBS)` is what catches promising 99.9% with no metric behind it.
+`every_linked(NFR, SLO)` catches the other direction: a quantified target that
+never became a commitment anyone could breach.
+
+An `SLO` keeps `sli` and `measured_from` as separate fields because "availability"
+is not a measurement until something says where the number comes from. And
+`breach_consequence` is required because an objective nothing happens about is a
+wish — `"none"` is a legitimate answer that at least stops the objective being
+quoted as a commitment later.
+
+The field that earns its place in `OBS` is `gaps`. Naming what *cannot* be seen is
+worth more than listing what can, and it is what stops the answer after production
+being "there is no metric for this". The shipped simulation demonstrates it: the
+feature ships with a known gap that nothing distinguishes a partner-side refusal
+from our own timeout.
+
+The stage is `optional_when` the change ships no running service, or is entirely
+covered by an existing objective — and the second case must **name which one**, so
+it is a decision rather than an omission.
+
 ## Production readiness is a record, not a review
 
 `READINESS` runs after QA and before `RELEASE`, and it **decides nothing that has

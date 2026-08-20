@@ -499,6 +499,43 @@ def f21(project):
     return True, why
 
 
+
+@fault("F-22", "An objective is promised with nothing that can measure it",
+       "OBSERVABILITY does not pass: this is why the SLO and the design are separate artifacts")
+def f22(project):
+    nfr = S.write_artifact(project, "NFR", status="approved", target="99.9% availability")
+    S.write_artifact(project, "SLO", status="active", source=nfr,
+                     links={"non_functional": [nfr]},
+                     sli="successful requests / total requests", objective="99.9%",
+                     window="30 days", measured_from="a metric that does not exist yet",
+                     error_budget="0.1%", breach_consequence="feature work pauses",
+                     reviewers=[S.verdict("reliability-reviewer")])
+    res = dod(project, "WF-FEATURE", "OBSERVABILITY")
+    ok, why = must_fail(res, "every_linked(SLO, OBS)")
+    if not ok:
+        return False, why
+    ok2, why2 = must_fail(res, "artifact_exists(OBS)")
+    if not ok2:
+        return False, "no observability design but artifact_exists passed: " + why2
+    return True, why
+
+
+@fault("F-23", "A quantified target ships with no objective at all",
+       "OBSERVABILITY does not pass: a number in an NFR is not a commitment anyone can breach")
+def f23(project):
+    S.write_artifact(project, "NFR", status="approved", target="p95 under 800ms")
+    S.write_artifact(project, "OBS", status="active",
+                     signals=["request_duration_seconds"], dashboards=["Latency"],
+                     alerts=[], health_checks=["/healthz"], logging="structured",
+                     tracing="otel", instrumentation_owner="backend-developer", gaps=[],
+                     reviewers=[S.verdict("reliability-reviewer")])
+    res = dod(project, "WF-FEATURE", "OBSERVABILITY")
+    ok, why = must_fail(res, "every_linked(NFR, SLO)")
+    if not ok:
+        return False, why
+    return True, why
+
+
 # ------------------------------------------------------------------- runner
 
 def run(selected=None, verbose=False):

@@ -38,7 +38,8 @@
       "allow": [
         "docs/architecture/**",
         "docs/adrs/**",
-        "docs/design/**"
+        "docs/design/**",
+        "docs/observability/**"
       ]
     },
     "ux-designer": {
@@ -104,7 +105,8 @@
         "monitoring/**",
         "docs/runbooks/**",
         "docs/incidents/**",
-        "docs/release/**"
+        "docs/release/**",
+        "docs/observability/**"
       ]
     },
     "devops-engineer": {

@@ -309,6 +309,73 @@ stages:
       - ARCHITECTURE_REJECTED
       - ARCHITECTURE_STARTED
     cycle_role: completes
+  - id: OBSERVABILITY
+    name: Observability design
+    owner: sre
+    participants:
+      - solution-architect
+      - backend-developer
+    skills:
+      - observability
+    risk: MEDIUM
+    complexity: routine
+    execution: subagent
+    optional_when:
+      - The change ships no running service. A library, a documentation change or a
+        build-time tool has nothing to observe, and inventing an SLO for it would be
+        a target nobody could breach.
+      - The change is entirely covered by an existing SLO and adds no new failure
+        mode. Say which SLO, so this is a decision rather than an omission.
+    entry_criteria:
+      - The architecture is approved
+    actions:
+      - Turn each quantified non-functional target into an objective that can be
+        measured. A target is a number; an objective names the indicator, the window
+        and the signal the number is computed from.
+      - Design what the system will be seen doing before it is built, because
+        instrumentation added after an incident is instrumentation designed from
+        memory.
+      - Say what cannot be seen. The gaps are worth more than the list of what can,
+        and they are what stops the answer after production being "there is no metric
+        for this".
+      - State what happens when an error budget is spent. An objective nothing happens
+        about is a wish.
+    inputs:
+      - Approved architecture
+      - Non-functional targets
+      - Existing project SLOs
+    outputs:
+      - Service level objectives
+      - Observability design
+      - Known gaps
+    produces:
+      - SLO
+      - OBS
+    exit_criteria:
+      - Every quantified non-functional target has an objective, or is recorded as
+        covered by an existing one
+      - Every objective names the signal it is measured from
+      - Known gaps are written down
+    definition_of_done:
+      - artifact_exists(SLO)
+      - artifact_exists(OBS)
+      - required_fields_present(SLO)
+      - required_fields_present(OBS)
+      - every_linked(NFR, SLO)
+      - every_linked(SLO, OBS)
+      - agent_verdict(reliability-reviewer, pass)
+    agent_gate:
+      reviewer: reliability-reviewer
+      blocking: true
+      recorded_in: the observability design
+      purpose: >-
+        whether each objective could actually be computed from the signals named, and
+        whether the alerts would fire on the failure modes the architecture review
+        identified. Not whether the targets are the right ones.
+    department_cycle: CYCLE-SRE
+    cycle_role: enters
+    emits:
+      - OBSERVABILITY_DESIGNED
   - id: UX
     name: UX and design
     owner: ux-designer
@@ -707,6 +774,7 @@ stages:
       - required_fields_present(RUN)
       - agent_verdict(reliability-reviewer, pass)
       - every_linked(PRR, RUN)
+      - every_linked(SLO, OBS)
     agent_gate:
       reviewer: reliability-reviewer
       blocking: true
@@ -716,7 +784,7 @@ stages:
         the runbook could be followed by someone who did not write it. Not whether
         the system is well built.
     department_cycle: CYCLE-SRE
-    cycle_role: enters
+    cycle_role: continues
     emits:
       - PRODUCTION_READINESS_ASSESSED
   - id: RELEASE

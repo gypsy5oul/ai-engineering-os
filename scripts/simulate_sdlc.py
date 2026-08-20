@@ -265,6 +265,34 @@ def scenario_feature(project, log):
                        rollup=rollup("CYCLE-QA", next_gate="RELEASE"))
         emit(project, "QA_COMPLETED", st["feat"], st["feat"], verdict="pass", passed=1, failed=0)
 
+    def observability():
+        log("targets become objectives that can be computed; gaps are named before build")
+        st["obs"] = write_artifact(
+            project, "OBS", status="active", source=st["arch"],
+            signals=["transfer_result_total", "session_establish_seconds"],
+            dashboards=["SFTP transfers", "Partner sessions"],
+            alerts=["transfer success below objective for 15m",
+                    "p95 session establishment above 800ms for 10m"],
+            health_checks=["/healthz on each transfer worker"],
+            logging="structured JSON with a partner id on every transfer line",
+            tracing="otel spans across accept, transfer and acknowledge",
+            instrumentation_owner="backend-developer",
+            gaps=["No signal distinguishes a partner-side refusal from our own timeout"],
+            reviewers=[verdict("reliability-reviewer")],
+            rollup=rollup("CYCLE-SRE", status="IN_PROGRESS", next_gate="READINESS"))
+        st["slo"] = write_artifact(
+            project, "SLO", status="active", source=st["nfr"],
+            links={"non_functional": [st["nfr"]], "observability": [st["obs"]]},
+            sli="successful transfers / attempted transfers",
+            objective="99.5%", window="30 days",
+            measured_from="transfer_result_total, by outcome label",
+            error_budget="0.5% of transfers over 30 days",
+            breach_consequence="feature work pauses until the budget recovers",
+            reviewers=[verdict("reliability-reviewer")],
+            rollup=rollup("CYCLE-SRE", status="IN_PROGRESS", next_gate="READINESS"))
+        emit(project, "OBSERVABILITY_DESIGNED", st["feat"], st["feat"],
+             objectives="1", gaps="1")
+
     def readiness():
         log("evidence is collected, not re-decided; what is unmet is written down")
         st["run"] = write_artifact(
@@ -282,7 +310,7 @@ def scenario_feature(project, log):
             links={"runbooks": [st["run"]]},
             architecture=st["arch"], security="SEC approved, no HIGH findings",
             testing="TESTREPORT accepted", performance="not applicable, no new query path",
-            observability="SLO and alerts defined in ARCH",
+            observability=st["obs"], slo_coverage=st["slo"],
             runbook=st["run"], backup_restore="unchanged by this release",
             rollback="previous release redeploys cleanly",
             capacity="within current limits",
@@ -321,15 +349,17 @@ def scenario_feature(project, log):
 
     def ops():
         log("sre observes SLOs and alert quality; CYCLE-SRE concludes")
-        patch_rollup(project, st["rel"], rollup("CYCLE-SRE", next_gate="next cycle"))
-        # The readiness record opened this cycle at READINESS, so it closes here too.
-        patch_rollup(project, st["prr"], rollup("CYCLE-SRE", next_gate="next cycle"))
+        # Everything SRE opened across the change closes here: the objectives and the
+        # observability design from OBSERVABILITY, the readiness record, the release.
+        for key in ("rel", "prr", "obs", "slo"):
+            patch_rollup(project, st[key], rollup("CYCLE-SRE", next_gate="next cycle"))
         write_artifact(project, "DEBT", status="open", source=st["prr"],
                        links={"architecture": []},
                        title="Exercise the runbook: it has never been followed")
 
     return [("WF-FEATURE", "IDEA", idea), ("WF-FEATURE", "REQ", req),
             ("WF-FEATURE", "FEAS", feas), ("WF-FEATURE", "ARCH", arch),
+            ("WF-FEATURE", "OBSERVABILITY", observability),
             ("WF-FEATURE", "STORY", story), ("WF-FEATURE", "QADESIGN", qadesign),
             ("WF-FEATURE", "DEV", dev), ("WF-FEATURE", "REVIEW", review),
             ("WF-FEATURE", "QA", qa), ("WF-FEATURE", "READINESS", readiness),

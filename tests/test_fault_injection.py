@@ -44,7 +44,8 @@ class TestFaultsAreHandled(unittest.TestCase):
                        "notification channel", "GitLab is unreachable", "hook policy",
                        "required model", "nobody moves it", "concurrency limit",
                        "untested rollback", "dimension unanswered",
-                       "readiness still not ready", "no runbook"):
+                       "readiness still not ready", "no runbook",
+                       "nothing that can measure it", "no objective at all"):
             with self.subTest(case=needed):
                 self.assertIn(needed, listing)
 
@@ -77,6 +78,12 @@ class TestFaultsDetectRemovedControls(unittest.TestCase):
         ("F-21", "readiness stops requiring a runbook", "sdlc/workflows/feature-delivery.yaml",
          "      - artifact_exists(RUN)\n      - required_fields_present(PRR)",
          "      - required_fields_present(PRR)"),
+        ("F-22", "an objective no longer needs a way to measure it",
+         "sdlc/workflows/feature-delivery.yaml",
+         "      - every_linked(SLO, OBS)\n      - agent_verdict(reliability-reviewer, pass)",
+         "      - agent_verdict(reliability-reviewer, pass)"),
+        ("F-23", "targets no longer need objectives", "sdlc/workflows/feature-delivery.yaml",
+         "      - every_linked(NFR, SLO)\n", ""),
     ]
 
     def test_removing_a_control_makes_its_fault_fail(self):

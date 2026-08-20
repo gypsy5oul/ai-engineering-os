@@ -1405,6 +1405,7 @@
         "testing",
         "performance",
         "observability",
+        "slo_coverage",
         "runbook",
         "backup_restore",
         "rollback",
@@ -1477,6 +1478,124 @@
       "immutable_after_creation": false,
       "append_only": false,
       "notes": "Written for whoever is woken at 3am, which is why symptoms come first: the reader knows what they are seeing, not what it is called. `last_exercised` exists because a runbook nobody has followed is a document rather than a procedure, and the steps that have quietly stopped working are invisible until someone tries them. Remediation steps that need approval say so inline, so the reader does not discover the gate halfway through an outage. It carries no approval: reliability-reviewer records a verdict, and a verdict is not an approval. A runbook needing sign-off before anyone may follow it would be a runbook nobody reads during an outage."
+    },
+    {
+      "code": "SLO",
+      "type": "service-level-objective",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "OBSERVABILITY",
+      "owner_role": "sre",
+      "may_modify": [
+        "sre",
+        "solution-architect"
+      ],
+      "may_review": [
+        "reliability-reviewer",
+        "qa-lead"
+      ],
+      "may_approve": {
+        "kind": "human",
+        "role": "engineering owner"
+      },
+      "storage": "docs/observability/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "active",
+        "breached",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "sli",
+        "objective",
+        "window",
+        "measured_from",
+        "error_budget",
+        "breach_consequence"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "NFR"
+      ],
+      "consumed_by": [
+        "PRR",
+        "INC"
+      ],
+      "immutable_after_creation": false,
+      "append_only": false,
+      "notes": "An NFR states a target; an SLO makes it measurable. `sli` is the indicator and `measured_from` is the signal it is computed from, and the two are separate fields on purpose: 'availability' is not a measurement until something says where the number comes from. `breach_consequence` is what changes when the budget is spent - an objective nothing happens about is a wish, and writing 'none' is a legitimate answer that at least stops the objective being quoted as a commitment later."
+    },
+    {
+      "code": "OBS",
+      "type": "observability-design",
+      "workflow": "WF-FEATURE",
+      "produced_by_stage": "OBSERVABILITY",
+      "owner_role": "sre",
+      "may_modify": [
+        "sre",
+        "devops-engineer",
+        "backend-developer"
+      ],
+      "may_review": [
+        "reliability-reviewer",
+        "solution-architect"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/observability/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "active",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "signals",
+        "dashboards",
+        "alerts",
+        "health_checks",
+        "logging",
+        "tracing",
+        "instrumentation_owner",
+        "gaps"
+      ],
+      "links_required": [],
+      "depends_on": [],
+      "consumed_by": [
+        "SLO",
+        "PRR",
+        "RUN"
+      ],
+      "immutable_after_creation": false,
+      "append_only": false,
+      "notes": "What the system can actually be seen doing. It exists as a separate artifact from the SLO because an objective and the ability to measure it fail independently: every_linked(SLO, OBS) is the check that catches promising 99.9% with no metric behind it. `gaps` is the field that earns its place - naming what cannot currently be seen is worth more than listing what can, and it is what stops SRE discovering after production that there is no metric for this."
     }
   ],
   "dod_predicates": {

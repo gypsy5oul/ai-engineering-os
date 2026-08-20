@@ -18,6 +18,7 @@ used_by_stages:
   - WF-MIGRATION/CLOSE
   - WF-FEATURE/READINESS
   - WF-RELEASE/READINESS
+  - WF-FEATURE/OBSERVABILITY
 work_item:
   kind: observability change, runbook or investigation thread
   artifact: INC

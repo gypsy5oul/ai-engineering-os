@@ -3,6 +3,52 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.16.0] — SLOs and observability design
+
+### Added — `SLO` and `OBS`, deliberately two artifacts
+
+`OBSERVABILITY` runs after architecture and **before development**, because
+instrumentation added after an incident is instrumentation designed from memory.
+
+It produces two artifacts rather than one, and the separation is the whole point:
+an objective and the ability to measure it fail independently.
+
+| | Says | Fails by |
+| --- | --- | --- |
+| `SLO` | What is promised, and how it is computed | Being a number nobody can breach |
+| `OBS` | What the system can be seen doing | Being a dashboard nobody asked for |
+
+`every_linked(SLO, OBS)` catches promising 99.9% with no metric behind it.
+`every_linked(NFR, SLO)` catches the other direction: a quantified target that
+never became a commitment anyone could breach. Both are new faults, both
+mutation-tested.
+
+`SLO` keeps `sli` and `measured_from` separate because "availability" is not a
+measurement until something says where the number comes from. `breach_consequence`
+is required because an objective nothing happens about is a wish; `"none"` is a
+legitimate answer that at least stops it being quoted as a commitment later.
+
+The field that earns its place in `OBS` is `gaps`. Naming what **cannot** be seen
+is worth more than listing what can, and it is what stops the answer after
+production being "there is no metric for this". The shipped simulation ships a
+feature with a real one: nothing distinguishes a partner-side refusal from our own
+timeout.
+
+The stage is `optional_when` the change ships no running service, or is entirely
+covered by an existing objective — and the second case must name **which** one, so
+it is a decision rather than an omission.
+
+### Changed — SRE now spans the whole change
+
+`CYCLE-SRE` opened at `VERIFY` two releases ago, then at `READINESS`, and now at
+`OBSERVABILITY`. The department that has to operate the system is involved from
+the design onward rather than arriving to find out what was built.
+
+`READINESS` gained `every_linked(SLO, OBS)` and its `PRR` now points at the real
+observability artifacts instead of describing them in prose.
+
+Faults: **21 → 23.** DoD predicates: **346 → 354.**
+
 ## [0.15.0] — Production readiness and runbooks
 
 ### Added — `PRR`, and a `READINESS` stage that decides nothing

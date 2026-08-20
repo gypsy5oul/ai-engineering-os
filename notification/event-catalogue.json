@@ -760,6 +760,19 @@
       "category": "release",
       "default_severity": "normal",
       "default_status": "completed"
+    },
+    {
+      "type": "OBSERVABILITY_DESIGNED",
+      "level": "department",
+      "emitted_by": "WF-FEATURE/OBSERVABILITY",
+      "meaning": "Every quantified target has an objective that can be computed, and what cannot be seen is written down before it is built rather than discovered after an incident.",
+      "payload_fields": [
+        "objectives",
+        "gaps"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "completed"
     }
   ],
   "categories": {

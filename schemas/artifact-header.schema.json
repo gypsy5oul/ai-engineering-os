@@ -19,7 +19,7 @@
   "properties": {
     "id": {
       "type": "string",
-      "pattern": "^[A-Z][A-Z0-9]{1,9}-(ADR|CR|ARCH|DEBT|DEC|DEF|DEPA|DES|EPIC|EVID|FEAS|INC|MIG|MR|NFR|PRR|RCA|REL|REQ|REVIEW|RUN|SEC|STORY|TASK|TEST|TESTREPORT|TP)-[0-9]{3,}$"
+      "pattern": "^[A-Z][A-Z0-9]{1,9}-(ADR|CR|ARCH|DEBT|DEC|DEF|DEPA|DES|EPIC|EVID|FEAS|INC|MIG|MR|NFR|OBS|PRR|RCA|REL|REQ|REVIEW|RUN|SEC|SLO|STORY|TASK|TEST|TESTREPORT|TP)-[0-9]{3,}$"
     },
     "type": {
       "type": "string",
@@ -36,6 +36,7 @@
         "incident",
         "migration-plan",
         "nfr",
+        "observability-design",
         "open-decision",
         "production-readiness",
         "rca",
@@ -44,6 +45,7 @@
         "review",
         "runbook",
         "security",
+        "service-level-objective",
         "story",
         "task",
         "technical-debt",

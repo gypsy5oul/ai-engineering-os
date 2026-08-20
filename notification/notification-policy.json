@@ -635,6 +635,17 @@
         "engineering-owner",
         "release-approver"
       ]
+    },
+    {
+      "event": "OBSERVABILITY_DESIGNED",
+      "notify": "aggregate",
+      "channel": "devops",
+      "priority": "normal",
+      "thread": "subject",
+      "template": "feature",
+      "recipients": [
+        "engineering-owner"
+      ]
     }
   ],
   "suppression": {
