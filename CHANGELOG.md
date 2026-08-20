@@ -3,6 +3,61 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.17.0] — Environment promotion
+
+A release used to say "tests pass". It now says where.
+
+### Added — a declared ladder, and a record per rung
+
+`deployment.environments` in the project's own configuration, ordered and ending
+at production, because a library has no ladder and a regulated platform has five.
+Each rung declares what it `proves` and — the field worth arguing over —
+`differs_from_next`.
+
+```yaml
+- name: staging
+  proves: End-to-end behaviour against partner-shaped data and real credentials.
+  differs_from_next: Roughly a tenth of production volume, one partner instead of
+    forty, and no sustained concurrent load. Says nothing about behaviour at peak.
+```
+
+**"It worked in staging" is only evidence to the extent staging resembles
+production.** Writing the difference down is what stops an environment being
+treated as proof of something it never tested.
+
+### Added — `PROM`, immutable
+
+One record per rung, carrying that environment's own evidence rather than the
+release carrying one undifferentiated claim. `what_this_does_not_prove` is copied
+from the ladder **at the moment of promotion**, which is deliberate duplication:
+the ladder can be edited later and the record of what was believed at the time
+should not move with it.
+
+Immutable for the same reason, with `may_modify` empty — the validator refused the
+first version, which declared it immutable and then listed roles that could edit
+it. A promotion is amended by promoting again, not by revising what was recorded
+last time.
+
+### Added — `promoted_through(environment)`
+
+In `DEPLOY` for both deploying workflows. It reads the project's ladder, so it
+adapts rather than assuming five environments, and it fails by **naming the rung
+that has no record**:
+
+```
+FAIL  promoted_through(production)
+      no promotion record for staging. The ladder is dev -> staging -> production
+      and it cannot be skipped.
+```
+
+A release that reached production with no staging record did not skip a test; it
+skipped the evidence that the test happened, and from the outside those are
+indistinguishable.
+
+`F-24` skips a rung and must be refused, and must name which one. Mutation-tested.
+
+Faults: **23 → 24.** DoD predicates: **354 → 357.**
+
 ## [0.16.0] — SLOs and observability design
 
 ### Added — `SLO` and `OBS`, deliberately two artifacts

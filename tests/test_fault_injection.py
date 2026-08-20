@@ -45,7 +45,8 @@ class TestFaultsAreHandled(unittest.TestCase):
                        "required model", "nobody moves it", "concurrency limit",
                        "untested rollback", "dimension unanswered",
                        "readiness still not ready", "no runbook",
-                       "nothing that can measure it", "no objective at all"):
+                       "nothing that can measure it", "no objective at all",
+                       "skipped a rung"):
             with self.subTest(case=needed):
                 self.assertIn(needed, listing)
 
@@ -84,6 +85,8 @@ class TestFaultsDetectRemovedControls(unittest.TestCase):
          "      - agent_verdict(reliability-reviewer, pass)"),
         ("F-23", "targets no longer need objectives", "sdlc/workflows/feature-delivery.yaml",
          "      - every_linked(NFR, SLO)\n", ""),
+        ("F-24", "deploy stops checking the promotion ladder", "sdlc/workflows/release.yaml",
+         "      - promoted_through(production)\n", ""),
     ]
 
     def test_removing_a_control_makes_its_fault_fail(self):

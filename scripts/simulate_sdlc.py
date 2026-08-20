@@ -158,6 +158,31 @@ def check_stage(project, workflow, stage):
     return out
 
 
+
+LADDER = [
+    ("dev", "(none)", "Unit and integration suites pass against synthetic data.",
+     "Synthetic data only, and no partner ever connects."),
+    ("staging", "dev", "End-to-end validation against partner-shaped data.",
+     "Roughly a tenth of production volume and no sustained concurrent load."),
+    ("production", "staging", "Post-deployment verification passed.", "Nothing above it."),
+]
+
+
+def promote(project, source, upto, version="1.4.0"):
+    """Record one promotion per rung of the ladder, up to and including `upto`."""
+    made = []
+    for name, prev, evidence, caveat in LADDER:
+        made.append(write_artifact(
+            project, "PROM", status="promoted", source=source,
+            title="Promotion to %s" % name,
+            environment=name, promoted_from=prev, release_version=version,
+            evidence=evidence, what_this_does_not_prove=caveat,
+            promoted_by="gitlab:sim-human"))
+        if name == upto:
+            break
+    return made
+
+
 # ---------------------------------------------------------------- scenarios
 #
 # A scenario is a list of (workflow, stage, work). The work runs, then that
@@ -338,7 +363,8 @@ def scenario_feature(project, log):
              approver_role="release-approver", window="now")
 
     def deploy():
-        log("devops-engineer executes against an AUTHORIZED release; CYCLE-DEVOPS concludes")
+        log("devops-engineer executes against an AUTHORIZED release; the ladder is recorded")
+        promote(project, st["rel"], "production")
         patch_rollup(project, st["rel"], rollup("CYCLE-DEVOPS", next_gate="VERIFY"))
 
     def verify():
@@ -512,6 +538,7 @@ def scenario_release_rollback(project, log):
                                   approvals=[approval("AP-13", "qa-owner",
                                                       recorded_in="project-decision-log")],
                                   rollup=rollup("CYCLE-QA", next_gate="APPROVE"))
+        promote(project, st["rel"], "staging")
 
     def approve():
         log("content approved by a named human (AP-01)")
@@ -521,7 +548,8 @@ def scenario_release_rollback(project, log):
         patch_status(project, st["rel"], "authorized")
 
     def deploy():
-        log("devops executes; CYCLE-DEVOPS concludes")
+        log("devops executes; the last rung of the ladder is recorded like the others")
+        promote(project, st["rel"], "production")
         patch_rollup(project, st["rel"], rollup("CYCLE-DEVOPS", next_gate="VERIFY"))
 
     def verify():

@@ -135,6 +135,38 @@ project genuinely needs a separate security or performance phase — a regulated
 release, a capacity-critical launch — it adds one to
 `sdlc.required_stages` in its own configuration.
 
+## Promotion carries evidence per rung
+
+A release used to say "tests pass". It now says where.
+
+The ladder lives in the project's own configuration under
+`deployment.environments`, because a library has none and a regulated platform has
+five. Each rung declares two things:
+
+```yaml
+- name: staging
+  proves: End-to-end behaviour against partner-shaped data and real credentials.
+  differs_from_next: Roughly a tenth of production volume, one partner instead of
+    forty, and no sustained concurrent load. Says nothing about behaviour at peak.
+```
+
+`differs_from_next` is the field worth arguing over. **"It worked in staging" is
+only evidence to the extent staging resembles production**, and the difference is
+what decides how much. Writing it down is what stops an environment being treated
+as proof of something it never tested.
+
+Each promotion writes a `PROM` carrying that rung's own evidence, and copies
+`differs_from_next` into `what_this_does_not_prove` at the moment of promotion.
+The duplication is deliberate: the ladder can be edited later, and the record of
+what was believed at the time should not move with it. `PROM` is immutable for the
+same reason — a promotion record that can be revised is a record of the present,
+not of what was known when the decision was made.
+
+`promoted_through(production)` sits in both deploying workflows' `DEPLOY` stage and
+fails by naming the rung that has no record. A release that reached production with
+no staging record did not skip a test; it skipped the evidence that the test
+happened, and from the outside those are indistinguishable.
+
 ## An objective and the ability to measure it fail independently
 
 `OBSERVABILITY` runs after architecture and **before development**, because

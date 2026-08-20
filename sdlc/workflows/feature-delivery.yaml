@@ -905,6 +905,7 @@ stages:
       - release_authorized()
       - human_approval_recorded(AP-14)
       - human_identity_recorded(AP-14)
+      - promoted_through(production)
       - cycle_accepted(CYCLE-DEVOPS)
       - cycle_rollup_reported(CYCLE-DEVOPS)
       - no_open_rework(CYCLE-DEVOPS)

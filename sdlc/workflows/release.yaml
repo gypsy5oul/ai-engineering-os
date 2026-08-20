@@ -126,6 +126,9 @@ stages:
       - Deploy the release candidate to staging. No earlier stage does this, and a
         validation stage that assumed someone else had deployed could never start.
       - Execute the validation plan with evidence.
+      - Record a promotion for each rung below production, carrying that environment's
+        own evidence and, copied from the ladder, what it does not prove. "It worked in
+        staging" is only evidence to the extent staging resembles production.
       - A team is used because QA, security and operability validate different things against the same candidate.
     inputs:
       - Release candidate
@@ -134,12 +137,14 @@ stages:
       - Validation results with evidence
     produces:
       - TESTREPORT
+      - PROM
     exit_criteria:
       - The validation plan executed and passed, or deviations accepted by a named human
     definition_of_done:
       - tests_pass(e2e)
       - agent_verdict(test-reviewer, pass)
       - no_unresolved_findings(high)
+      - required_fields_present(PROM)
       - cycle_accepted(CYCLE-QA)
       - cycle_rollup_reported(CYCLE-QA)
       - no_open_rework(CYCLE-QA)
@@ -297,6 +302,7 @@ stages:
     definition_of_done:
       - release_authorized()
       - human_approval_recorded(AP-01)
+      - promoted_through(production)
       - cycle_accepted(CYCLE-DEVOPS)
       - cycle_rollup_reported(CYCLE-DEVOPS)
       - no_open_rework(CYCLE-DEVOPS)

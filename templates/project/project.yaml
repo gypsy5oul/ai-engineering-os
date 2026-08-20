@@ -88,6 +88,25 @@ deployment:
   strategy: rolling
   rollback: Redeploy the previous image tag; schema changes are expand-only within a release.
 
+  # The promotion ladder, in order, ending at production. Promotion follows this
+  # list and cannot skip a rung.
+  #
+  # differs_from_next is the field worth arguing over. "It worked in staging" is
+  # only evidence to the extent staging resembles production, and the difference
+  # is what decides how much. Writing it down is what stops an environment being
+  # treated as proof of something it never tested.
+  environments:
+    - name: dev
+      proves: The change builds, and its own unit and integration tests pass.
+      differs_from_next: Synthetic data only, and no partner ever connects.
+    - name: staging
+      proves: End-to-end behaviour against partner-shaped data and real credentials.
+      differs_from_next: Roughly a tenth of production volume, one partner instead of
+        forty, and no sustained concurrent load. Says nothing about behaviour at peak.
+    - name: production
+      proves: Only itself.
+      differs_from_next: Nothing above it.
+
 security:
   data_classification: confidential
   secret_management: External secret manager, injected at runtime. Never in the repository or an image.

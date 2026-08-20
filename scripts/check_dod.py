@@ -272,6 +272,40 @@ def evaluate(fn, args, artifacts, project):
         return "REQUIRES-EVIDENCE", ("%s must be recorded in GitLab. A session cannot see it; "
                                      "check the merge request or release." % args[0])
 
+    if fn == "promoted_through":
+        target = args[0]
+        cfg = {}
+        for cand in ("project.yaml", "project.json"):
+            path = os.path.join(project, ".ai-engineering", cand)
+            if not os.path.exists(path):
+                continue
+            if path.endswith((".yaml", ".yml")):
+                cfg = parse_file(path)
+            else:
+                with open(path, encoding="utf-8") as fh:
+                    cfg = json.load(fh)
+            break
+        ladder = [e.get("name") for e in ((cfg.get("deployment") or {}).get("environments") or [])]
+        if not ladder:
+            return "REQUIRES-EVIDENCE", ("the project declares no deployment ladder under "
+                                         "deployment.environments, so there is nothing to promote "
+                                         "through")
+        if target not in ladder:
+            return "FAIL", ("%r is not in this project's ladder (%s)"
+                            % (target, " -> ".join(ladder)))
+        # Every rung strictly below the target must carry a promotion record. A
+        # release that reached production without a staging record did not skip a
+        # test; it skipped the evidence that the test happened.
+        below = ladder[:ladder.index(target)]
+        promoted = {a.get("environment") for a in by_code(artifacts, "PROM")
+                    if a.get("status") == "promoted"}
+        missing = [e for e in below if e not in promoted]
+        if missing:
+            return "FAIL", ("no promotion record for %s. The ladder is %s and it cannot be skipped."
+                            % (", ".join(missing), " -> ".join(ladder)))
+        return "PASS", ("promoted through %s" % " -> ".join(below + [target]) if below
+                        else "%s is the first rung" % target)
+
     if fn == "no_blocking_open_decisions":
         cfg_path = None
         for cand in ("project.yaml", "project.json"):

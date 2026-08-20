@@ -1596,6 +1596,59 @@
       "immutable_after_creation": false,
       "append_only": false,
       "notes": "What the system can actually be seen doing. It exists as a separate artifact from the SLO because an objective and the ability to measure it fail independently: every_linked(SLO, OBS) is the check that catches promising 99.9% with no metric behind it. `gaps` is the field that earns its place - naming what cannot currently be seen is worth more than listing what can, and it is what stops SRE discovering after production that there is no metric for this."
+    },
+    {
+      "code": "PROM",
+      "type": "promotion-record",
+      "workflow": "WF-RELEASE",
+      "produced_by_stage": "STAGING",
+      "owner_role": "release-manager",
+      "may_modify": [],
+      "may_review": [
+        "sre",
+        "qa-lead"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/release/",
+      "statuses": [
+        "draft",
+        "promoted",
+        "rejected",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "environment",
+        "promoted_from",
+        "release_version",
+        "evidence",
+        "what_this_does_not_prove",
+        "promoted_by"
+      ],
+      "links_required": [],
+      "depends_on": [
+        "REL"
+      ],
+      "consumed_by": [
+        "REL"
+      ],
+      "immutable_after_creation": true,
+      "append_only": false,
+      "notes": "One record per rung of the ladder, so each environment carries its own evidence rather than the release carrying one undifferentiated claim that tests passed. `what_this_does_not_prove` is copied from the environment's differs_from_next at the moment of promotion, which is deliberate duplication: the ladder can be edited later and the record of what was believed at the time should not move. Immutable after creation for the same reason - a promotion record that can be revised is a record of the present, not of what was known when the decision was made. may_modify is empty because immutable means immutable: a promotion is amended by promoting again, not by editing what was recorded last time."
     }
   ],
   "dod_predicates": {
@@ -1766,6 +1819,13 @@
       "args": [],
       "checkable": "project",
       "means": "Every stage this change skips carries a written reason. The predicate used to name one stage, skip_recorded(UX), which demanded a skip reason for UX even when UX ran."
+    },
+    "promoted_through": {
+      "args": [
+        "environment"
+      ],
+      "checkable": "project",
+      "means": "Every environment below this one in the project's deployment ladder has a promotion record, in order. A release that reached production without a staging record did not skip a test; it skipped the evidence that the test happened."
     }
   },
   "checkability": {

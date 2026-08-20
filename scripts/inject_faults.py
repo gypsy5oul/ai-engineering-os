@@ -536,6 +536,27 @@ def f23(project):
     return True, why
 
 
+
+@fault("F-24", "A release reaches production having skipped a rung",
+       "DEPLOY does not pass: skipping the record is skipping the evidence")
+def f24(project):
+    S.write_artifact(project, "REL", status="authorized",
+                     approvals=[S.approval("AP-14", "release-approver")])
+    # dev only. Staging never happened, or happened and nobody recorded it, and
+    # from the outside those are the same thing.
+    S.write_artifact(project, "PROM", status="promoted", environment="dev",
+                     promoted_from="(none)", release_version="1.4.0",
+                     evidence="unit and integration suites pass",
+                     what_this_does_not_prove="Synthetic data only",
+                     promoted_by="gitlab:sim-human")
+    ok, why = must_fail(dod(project, "WF-RELEASE", "DEPLOY"), "promoted_through(production)")
+    if not ok:
+        return False, why
+    if "staging" not in why:
+        return False, "refused, but did not name the missing rung: %s" % why
+    return True, why
+
+
 # ------------------------------------------------------------------- runner
 
 def run(selected=None, verbose=False):

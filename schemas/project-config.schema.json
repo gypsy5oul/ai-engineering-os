@@ -252,6 +252,32 @@
         "rollback": {
           "type": "string",
           "description": "How a release is reverted, in one sentence."
+        },
+        "environments": {
+          "type": "array",
+          "description": "The promotion ladder, in order, ending at production. Promotion follows this list and cannot skip a rung. Empty means the project does not promote through environments, which is a legitimate answer for a library or a tool.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "proves",
+              "differs_from_next"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "proves": {
+                "type": "string",
+                "description": "What reaching this environment demonstrates."
+              },
+              "differs_from_next": {
+                "type": "string",
+                "description": "What this environment does NOT tell you about the next one. This is the field worth arguing over: 'it worked in staging' is only evidence to the extent staging resembles production, and the difference is what decides how much."
+              }
+            }
+          }
         }
       }
     },
