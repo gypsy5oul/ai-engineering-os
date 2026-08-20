@@ -3,6 +3,58 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.12.0] — Fault injection
+
+The simulation showed the process can complete. This shows it stops when it
+should — and, where the failure is a degradation rather than a fault, that it
+carries on.
+
+### Added — `scripts/inject_faults.py`
+
+Fifteen faults across five classes, each asserting a specific outcome rather than
+"something failed":
+
+- **Loop-backs**: architecture rejected, QA failing, production verification failing
+- **Gates**: scope never accepted, a high finding with no exception, release unapproved
+- **The department cycle**: rework limit exceeded and reached, an open escalation,
+  an item withdrawn rather than finished
+- **Degradations that must NOT stop delivery**: agent teams unavailable, chat
+  unreachable, GitLab unreachable
+- **The controls' own failure**: a corrupt hook policy, a model the organization
+  does not permit
+
+Two rules shape every case.
+
+**A refusal for the wrong reason is still a bug.** Each fault names the predicate
+that must be the one to object. The harness caught this in its own first draft:
+F-12 "passed" because three cycle predicates failed over a missing rollup, which
+had nothing to do with notifications. It would have kept passing after the control
+it claimed to test was deleted.
+
+**Degradation is not failure.** A chat webhook being down must leave delivery
+running, and three cases assert exactly that.
+
+### Added — the fault suite is itself tested
+
+`tests/test_fault_injection.py` removes a control and requires the matching fault
+to start failing. Verified against five mutations, all caught:
+
+| Control removed | Result |
+| --- | --- |
+| The AP-12 predicate deleted from REQ | caught |
+| The rework limit stops being enforced | caught |
+| Withdrawing an item counts as accepting it | caught |
+| An unavailable model downgrades instead of blocking | caught |
+| The guard falls silent when its policy is corrupt | caught |
+
+A fault suite that still passes against a broken system is worse than none,
+because it certifies the damage.
+
+Fault injection now runs in `check_all.sh` and in CI as its own job. It takes
+about ten seconds.
+
+Tests: **233 → 236.**
+
 ## [0.11.0] — Platform review P0s
 
 A repository-level review against Claude Code as of 20 August 2026. Seven items

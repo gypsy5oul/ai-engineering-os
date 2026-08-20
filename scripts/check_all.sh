@@ -35,6 +35,9 @@ python3 -m unittest discover -s tests -q
 step "End-to-end SDLC simulation"
 python3 scripts/simulate_sdlc.py --all | tail -3
 
+step "Fault injection"
+python3 scripts/inject_faults.py | tail -3
+
 step "Deterministic evaluations"
 python3 scripts/run_evaluations.py
 

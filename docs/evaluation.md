@@ -124,6 +124,62 @@ nothing.
 
 A HIGH or CRITICAL agent cannot be promoted with any failing critical case.
 
+## Fault injection
+
+`scripts/simulate_sdlc.py` walks seven happy paths. That is the easier half: it
+shows the process **can** complete. A control only earns trust when it is shown to
+**stop** something, and every loop in this design exists for a failure that the
+happy paths never exercise.
+
+```bash
+python3 scripts/inject_faults.py            # all 15
+python3 scripts/inject_faults.py --list     # what each one asserts
+python3 scripts/inject_faults.py --fault F-07 --verbose
+```
+
+| | Fault | What must happen |
+| --- | --- | --- |
+| F-01 | Architecture rejected | `ARCH` refuses and a path back to it exists |
+| F-02 | QA fails | `QA` refuses and the work routes to development |
+| F-03 | Production verification fails | `VERIFY` refuses and `ROLLBACK` exists |
+| F-04 | Scope never accepted | `AP-12` blocks `REQ` |
+| F-05 | High finding, no exception | `CYCLE-SEC` is not accepted |
+| F-06 | Release not approved | `AP-01` blocks `RELEASE` |
+| F-07 | Rework limit exceeded | `no_open_rework` fails |
+| F-08 | Rework limit reached | Every cycle can escalate at it |
+| F-09 | Escalation still open | Blocks, then unblocks when resolved |
+| F-10 | Item withdrawn | `WITHDRAWN` is terminal and is not `ACCEPTED` |
+| F-11 | Agent teams unavailable | Every team stage declares its degraded mode |
+| F-12 | Chat unreachable | **Delivery continues** |
+| F-13 | GitLab unreachable | Evidence is pending, never satisfied |
+| F-14 | Hook policy corrupt | `terraform destroy` is denied anyway |
+| F-15 | Required model not allowed | CRITICAL work blocks, exit 3 |
+
+Two rules shape every case.
+
+**A refusal for the wrong reason is still a bug.** Each fault names the predicate
+that must be the one to object. This is not theoretical: the first version of F-12
+"passed" because three cycle predicates failed for a missing rollup, which had
+nothing to do with notifications — it would have kept passing after the control it
+claimed to test was deleted.
+
+**Degradation is not failure.** F-11, F-12 and F-13 assert the opposite: a chat
+webhook being down must leave delivery running.
+
+### The suite is itself tested
+
+`tests/test_fault_injection.py` removes a control and requires the matching fault
+to start failing:
+
+| Control removed | Fault that must notice |
+| --- | --- |
+| The rework limit stops being enforced | F-07 |
+| Withdrawing an item counts as accepting it | F-10 |
+| An unavailable model downgrades instead of blocking | F-15 |
+
+A fault suite that still passes against a broken system is worse than none,
+because it certifies the damage.
+
 ## Regression discipline
 
 Every defect found in real use becomes a permanent case. A suite containing only

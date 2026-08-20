@@ -172,6 +172,18 @@ sdlc-simulation:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH
 
+fault-injection:
+  stage: evaluate
+  script:
+    # The simulation proves the process can complete. This proves it stops when it
+    # should: architecture rejected, QA failing, a rework limit reached, an approval
+    # that never came, a corrupt guard policy, a model the organization does not
+    # allow. Degradations that must NOT stop delivery are asserted the other way.
+    - python3 scripts/inject_faults.py
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
 deterministic-evaluations:
   stage: evaluate
   script:
