@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Work item",
+  "description": "The durable unit the organization works on. It lives in the project's source control under .ai-engineering/work/<id>/work-item.yaml, not in a session. Delete every Claude session and this file, its graph and its history are still enough to say what is being built, what has happened, what remains and who owns the next action.",
+  "type": "object",
+  "required": ["id", "type", "intent", "objective", "owner", "risk", "workflow", "stage", "status", "created_at", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{1,9}-(FEAT|DEF|INC|REL|CHG|MIG|OPS)-[0-9]{3,}$"},
+    "type": {"type": "string", "enum": ["feature", "defect", "incident", "release", "change-request", "migration", "operations"]},
+    "intent": {"type": "string", "minLength": 10, "description": "What the human asked for, in their words. Preserved verbatim: the organization's interpretation is recorded separately in `objective`, so the two can be compared when a plan turns out to have solved the wrong problem."},
+    "objective": {"type": "string", "minLength": 10, "description": "What the organization understood, in its words. This is the thing acceptance is judged against."},
+    "owner": {"type": "string", "description": "The role accountable for the item reaching a terminal state."},
+    "human_owner": {"type": "string", "description": "The person who can answer questions the organization cannot."},
+    "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
+    "workflow": {"type": "string", "pattern": "^WF-[A-Z-]+$"},
+    "stage": {"type": "string", "description": "The lifecycle stage the item currently sits in."},
+    "status": {"type": "string", "enum": ["planning", "in-progress", "blocked", "review", "escalated", "accepted", "cancelled"]},
+    "created_at": {"type": "string"},
+    "updated_at": {"type": "string"},
+    "inputs": {"type": "array", "items": {"type": "string"}},
+    "required_artifacts": {"type": "array", "items": {"type": "string"}},
+    "required_roles": {"type": "array", "items": {"type": "string"}},
+    "definition_of_done": {"type": "array", "items": {"type": "string"}, "description": "Predicates from policies/artifact-model.json. The item is accepted when these pass, not when its owner says so."},
+    "approvals": {"type": "array", "items": {"type": "object", "additionalProperties": true}},
+    "evidence": {"type": "array", "items": {"type": "string"}},
+    "decisions": {"type": "array", "items": {"type": "string"}},
+    "blocked_reason": {"type": "string"},
+    "escalation": {"type": "object", "additionalProperties": true},
+    "replans": {"type": "integer", "minimum": 0, "description": "How many times the plan was rebuilt. A number worth watching: repeated replanning means the problem was not understood, not that the planner is diligent."}
+  }
+}

@@ -3,6 +3,96 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.19.0] — Work items, a task graph, and a bounded control loop
+
+The centre of gravity moves from "which stage are we in" to "what is being built,
+what has happened, and what happens next when it fails".
+
+### Verified before building, and it changed the design
+
+`TaskCreated` and `TaskCompleted` exist and fire. They carry `task_id` and a
+subject, **no dependency information, and no `hookSpecificOutput`** — the only
+lever is an exit-2 veto. A control loop built on them could observe and could not
+steer, so nothing here uses them.
+
+What does work, confirmed on the wire: **`SubagentStart` returns
+`additionalContext` and the subagent receives it.** That is undocumented, and it
+is the mechanism the whole design rests on.
+
+### Added — the durable work item
+
+`.ai-engineering/work/<id>/` holds `work-item.yaml`, `graph.yaml` and an
+append-only `history.jsonl`, in the project's own source control.
+
+Claude Code has a native task list with real `blocks`/`blockedBy` edges, and this
+is deliberately not a second one — `docs/work-items.md` sets out the difference.
+The native list is execution state on one machine; this is what the organization
+knows, and it survives a machine loss, a clone, and everyone forgetting.
+
+**`intent` and `objective` are separate fields.** What the human said, verbatim,
+and what the organization understood. A plan that solves the wrong problem is
+invisible when the only record is the restatement — and both reach every agent, so
+the agent can notice the gap rather than inherit it.
+
+### Added — a graph that is generated rather than fixed
+
+Built per work item from the workflow's stages, with `optional_when` stages
+dropped and the reason recorded.
+
+One judgement worth stating: `optional_when` is prose, and no planner can read
+*"the change ships no running service"* out of a sentence of intent. On a LOW or
+MEDIUM change, guessing wrong costs a stage nobody needed; on a HIGH or CRITICAL
+one it costs the observability design for a service going to production. So the
+default **inverts with risk**. Above MEDIUM, optional stages are kept unless the
+project lists them as skippable.
+
+Two runnable tasks naming the same coupled surface are never both offered. The
+coupling policy gives each surface one owner, and handing both out invites two
+agents to redefine the same contract in parallel.
+
+### Added — bounded loops, and a replan that is a first-class operation
+
+| Bound | Default | On exhaustion |
+| --- | --- | --- |
+| Attempts per task | 3 | escalate |
+| Replans per work item | 2 | escalate: two replans means the intake was wrong |
+| The same failure twice | — | escalate without spending a third attempt |
+
+That last one is the useful one. A different failure each time is progress; the
+same failure twice is not, and retrying it only spends tokens to learn what is
+already known.
+
+A replan carries accepted work forward, records its reason, and leaves the
+superseded generation in the history. What the organization used to believe is
+evidence about how it plans.
+
+### Added — two hooks that make it work at runtime
+
+- `SubagentStart` → `inject_context.py` hands each agent its work item and **its
+  own** task. That is what lets agent definitions stay small rather than carrying
+  the project's configuration in thirty files that drift apart.
+- `SubagentStop` → `observe_subagent.py` records the result against the task and
+  says so when an agent stops having produced nothing. A subagent that stops
+  silently looks identical to one that succeeded, unless something outside it is
+  watching.
+
+### The defect an audit found in this work before it was committed once
+
+`control_loop.py` loaded `control-loop-policy.json` into a variable and then
+decided everything with a hardcoded chain. Four of the eight declared rules could
+never fire, and the bounds in the policy were not the bounds in force. That is the
+`ai.agent_teams_available` shape exactly — a file that reads like the authority
+and is decoration.
+
+Fixed: the rules and the bounds are read. And `check_control_loop_policy_is_live()`
+now fails the build when a declared rule has no predicate, when a loop declares no
+bound, or when the policy names an enforcer that does not exist. The two schemas
+had the same problem — written, and validated by nothing. They validate on write
+now, which immediately caught a real round-trip bug where YAML returns an ISO
+timestamp as a `datetime`.
+
+Tests: **300 → 330.**
+
 ## [0.18.1] — The tags never existed
 
 Ten versions shipped with `.claude-plugin/marketplace.json` naming a tag that was

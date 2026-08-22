@@ -1,0 +1,74 @@
+{
+  "version": "1",
+  "description": "How the organization decides what to do next, and when to stop deciding and ask a human. The declarative workflow says what must be true; this says how the system converges on it when reality does not match the plan.",
+  "why": [
+    "A workflow that only describes the happy path leaves the interesting question unanswered: what happens when a review rejects, a test keeps failing, or the architecture turns out to be wrong. Without an answer the system either retries forever or stops dead.",
+    "Every loop here is bounded. An unbounded retry is indistinguishable from a hang, and the third identical failure is information about the plan rather than about the attempt."
+  ],
+  "loops": {
+    "implement": {
+      "sequence": ["plan", "implement", "verify", "review", "accept"],
+      "max_iterations": 3,
+      "on_exhaustion": "escalate",
+      "why": "Three rounds of the same rework means the acceptance criteria, the design, or an unwritten disagreement is the problem. A fourth round hides that instead of surfacing it."
+    },
+    "diagnose": {
+      "sequence": ["review", "diagnose", "replan", "implement", "verify"],
+      "max_iterations": 2,
+      "on_exhaustion": "escalate",
+      "why": "Replanning twice on the same work item means the problem was not understood at intake. A third replan is a new work item, not a better plan."
+    },
+    "verify": {
+      "sequence": ["verify", "fix", "verify"],
+      "max_iterations": 2,
+      "on_exhaustion": "escalate",
+      "why": "Verification that keeps failing on the same evidence is not flaky; it is correct."
+    }
+  },
+  "decide": {
+    "description": "Given an observed task outcome, what the loop does next. Evaluated top to bottom; the first match wins.",
+    "rules": [
+      {"when": "task_accepted", "action": "continue", "why": "Unblock whatever depended on it."},
+      {"when": "attempts_exhausted", "action": "escalate", "why": "The bound exists to be honoured. Checked before retry so an exhausted task cannot loop once more."},
+      {"when": "same_failure_repeated", "action": "escalate", "why": "A different failure each time is progress. The same failure twice is not, and retrying it a third time only spends tokens to learn what is already known."},
+      {"when": "review_rejected", "action": "rework", "why": "A rejection is information the implementer has not seen yet."},
+      {"when": "dependency_invalidated", "action": "replan", "why": "The graph is no longer a description of the work."},
+      {"when": "architecture_contradicted", "action": "replan", "why": "Evidence beat the design. Continuing would build on something known to be wrong."},
+      {"when": "missing_information", "action": "escalate", "why": "An agent that guesses here produces work nobody can trust. A DEC is cheaper than the rework."},
+      {"when": "approval_missing", "action": "wait", "why": "Not a failure. The organization is waiting on a human, and the liveness policy decides when that wait becomes a problem."},
+      {"when": "transient_failure", "action": "retry", "why": "Only after every rule above has declined it. Retry is the last resort, not the first instinct."}
+    ]
+  },
+  "replan": {
+    "triggers": [
+      "architecture invalidated by evidence",
+      "dependency conflict that reordering cannot resolve",
+      "test evidence contradicts a stated assumption",
+      "a security finding changes what may be built",
+      "an API or schema contract conflict between parallel tasks",
+      "implementation complexity materially exceeds the plan",
+      "an external system the plan depended on is unavailable"
+    ],
+    "requires": [
+      "The diagnosis is written down before the new plan is generated. A replan with no recorded reason is indistinguishable from thrashing.",
+      "The superseded generation stays in history.jsonl. What the organization used to believe is evidence about how it plans.",
+      "Tasks already accepted are carried forward rather than redone, unless the diagnosis says their result is invalid."
+    ],
+    "max_per_work_item": 2,
+    "on_exhaustion": "escalate to the human owner: two replans means the intake was wrong"
+  },
+  "escalation": {
+    "ladder": ["lead", "head", "human_owner"],
+    "record": "Every escalation appends to the work item's history with the trigger, the evidence and the target. An escalation nobody recorded is a decision nobody can review."
+  },
+  "enforced_by": {
+    "mechanical": [
+      "scripts/control_loop.py refuses to hand out a task whose attempts are exhausted",
+      "scripts/control_loop.py refuses to replan past max_per_work_item",
+      "hooks/scripts/observe_subagent.py records every subagent result against its task"
+    ],
+    "advisory": [
+      "Which decide rule applies to an observed failure is a judgement the model makes. The bounds on retrying and replanning are not."
+    ]
+  }
+}

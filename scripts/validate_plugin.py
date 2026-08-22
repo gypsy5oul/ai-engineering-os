@@ -582,6 +582,47 @@ def check_marketplace_ref_exists():
                 % (entry.get("name"), ref, expected))
 
 
+def check_control_loop_policy_is_live():
+    """Every rule the control loop policy declares must have code behind it.
+
+    The first version of control_loop.py loaded this policy into a variable and
+    then decided everything with a hardcoded chain. Four of its eight rules could
+    never fire, and the bounds it declared were not the bounds in force. That is
+    the `ai.agent_teams_available` shape: a file that reads like the authority and
+    is decoration, which nothing catches because everything still passes.
+    """
+    pol = load_json("policies/control-loop-policy.json")
+    if not pol:
+        return
+    path = os.path.join(ROOT, "scripts", "control_loop.py")
+    if not os.path.exists(path):
+        err("policies/control-loop-policy.json exists but scripts/control_loop.py does not, "
+            "so nothing enforces it")
+        return
+    with open(path, encoding="utf-8") as fh:
+        code = fh.read()
+
+    declared = [r.get("when") for r in ((pol.get("decide") or {}).get("rules") or [])]
+    for name in declared:
+        if name and ('"%s":' % name) not in code:
+            err("policies/control-loop-policy.json: rule %r has no predicate in "
+                "control_loop.py RULE_PREDICATES, so it can never fire" % name)
+
+    for loop in (pol.get("loops") or {}):
+        if "max_iterations" not in (pol["loops"][loop] or {}):
+            err("policies/control-loop-policy.json: loop %r declares no max_iterations. "
+                "An unbounded loop is a hang." % loop)
+    if "loop_bound(" not in code:
+        err("scripts/control_loop.py does not read the policy's loop bounds; a limit stated "
+            "in a policy and a different limit hardcoded in the code enforcing it is not a limit")
+
+    for named in ((pol.get("enforced_by") or {}).get("mechanical") or []):
+        for token in named.split():
+            if token.endswith(".py") and not os.path.exists(os.path.join(ROOT, token)):
+                err("policies/control-loop-policy.json claims %r enforces it, and that file "
+                    "does not exist" % token)
+
+
 def check_hooks():
     cfg = load_json("hooks/hooks.json")
     if cfg is None:
@@ -1129,6 +1170,7 @@ def main():
     check_spawn_edges_are_executable()
     check_hooks()
     check_ci_config()
+    check_control_loop_policy_is_live()
     check_marketplace_ref_exists()
     check_permission_rules_are_effective()
     check_schemas()

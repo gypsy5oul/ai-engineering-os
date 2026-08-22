@@ -555,7 +555,7 @@ class TestDocumentation(unittest.TestCase):
                     "docs/mcp.md", "docs/gitlab.md", "docs/limitations.md",
                     "docs/approvals.md", "docs/execution.md", "docs/organization-freeze.md", "docs/department-cycles.md",
                     "docs/getting-started.md", "docs/communications.md", "docs/production-readiness.md",
-                    "docs/enterprise-deployment.md", "docs/lsp.md",
+                    "docs/enterprise-deployment.md", "docs/lsp.md", "docs/work-items.md",
                     "docs/liveness-and-limits.md"]
         missing = [p for p in required if not os.path.exists(os.path.join(ROOT, p))]
         self.assertEqual(missing, [], "missing documentation: %s" % missing)
@@ -843,9 +843,11 @@ class TestStopHook(unittest.TestCase):
         for event in ("Stop", "SubagentStop"):
             with self.subTest(event=event):
                 self.assertIn(event, cfg)
-                cmd = cfg[event][0]["hooks"][0]["command"]
-                self.assertIn("check_artifacts.py", cmd)
-                self.assertIn("${CLAUDE_PLUGIN_ROOT}", cmd)
+                cmds = [h["command"] for h in cfg[event][0]["hooks"]]
+                self.assertTrue(any("check_artifacts.py" in c for c in cmds),
+                                "%s no longer runs the artifact check: %s" % (event, cmds))
+                for c in cmds:
+                    self.assertIn("${CLAUDE_PLUGIN_ROOT}", c)
 
 
 class TestChangeScoping(unittest.TestCase):

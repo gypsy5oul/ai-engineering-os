@@ -48,6 +48,18 @@
         ]
       }
     ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/inject_context.py\"",
+            "timeout": 10,
+            "statusMessage": "Giving the agent its work item"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -63,6 +75,12 @@
     "SubagentStop": [
       {
         "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/observe_subagent.py\"",
+            "timeout": 10,
+            "statusMessage": "Recording the result against its task"
+          },
           {
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/check_artifacts.py\"",
