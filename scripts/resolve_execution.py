@@ -73,9 +73,40 @@ def teams_available(project):
     return True, "teams are enabled"
 
 
+def project_override(project, stage):
+    """A mode the project pinned for this stage, or None.
+
+    `ai.execution_overrides` sat in the template and the schema for eight versions
+    reading like configuration and consumed by nothing -- a team could write
+    `ARCH: subagent` there and get a four-way architecture team anyway.
+    """
+    if not stage:
+        return None
+    cfg = {}
+    for name in ("project.yaml", "project.json"):
+        path = os.path.join(project, ".ai-engineering", name)
+        if not os.path.exists(path):
+            continue
+        if name.endswith(".json"):
+            with open(path, encoding="utf-8") as fh:
+                cfg = json.load(fh)
+        else:
+            sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+            from minyaml import parse_file
+            cfg = parse_file(path)
+        break
+    return ((cfg.get("ai") or {}).get("execution_overrides") or {}).get(stage)
+
+
 def resolve(project, graph, task):
     """(mode, why). The first fact that overrules the declaration wins."""
     declared = task.get("execution", "subagent")
+    pinned = project_override(project, task.get("stage"))
+    if pinned and pinned != declared:
+        # The project knows things the workflow author did not: how big the team
+        # is, what the change actually costs. A pin is a decision, so it is taken
+        # before the runtime facts and then still subject to them.
+        declared = pinned
     risk = task.get("risk", "MEDIUM")
     role = task.get("role", "")
     surface = task.get("coupled_surface")
@@ -110,6 +141,9 @@ def resolve(project, graph, task):
                             "one checkout produce a build output nobody owns."
                             % (len(running), role))
 
+    if pinned and pinned == declared:
+        return declared, ("the project pinned %s for stage %s in ai.execution_overrides"
+                          % (declared, task.get("stage")))
     return declared, "no fact overruled the stage's recommendation"
 
 

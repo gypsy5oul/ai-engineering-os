@@ -1129,3 +1129,49 @@ class TestChangeScopingIsLive(unittest.TestCase):
         art = [a for a in check_dod.load_artifacts(d) if a["id"] == aid][0]
         self.assertNotIn("simulated", str(art.get("change", "")))
 
+
+class TestUnusedPredicatesStillWork(unittest.TestCase):
+    """Vocabulary the grammar declares but no workflow currently uses.
+
+    Not every word has to appear in every text, but a word nothing uses and
+    nothing tests is one whose implementation rots quietly and is reached for
+    years later, by which time it is wrong.
+    """
+
+    def project_with_decision(self, status):
+        import tempfile, shutil
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import simulate_sdlc as S
+        d = tempfile.mkdtemp(prefix="aieos-pred-")
+        self.addCleanup(shutil.rmtree, d, True)
+        S.make_project(d)
+        S.set_change("ACME-FEAT-001")
+        aid = S.write_artifact(d, "DEC", status=status,
+                               question="Which retention window applies to the audit log")
+        return d, aid
+
+    def evaluate(self, project, predicate):
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import check_dod
+        fn, args = check_dod.parse_predicate(predicate)
+        return check_dod.evaluate(fn, args, check_dod.load_artifacts(project), project)
+
+    def test_decision_resolved_passes_on_an_answered_decision(self):
+        # "answered", not "resolved": DEC's statuses are open, answered, withdrawn,
+        # superseded. Inventing one is the mistake the simulator's own validation
+        # now catches, and it caught this test too.
+        project, aid = self.project_with_decision("answered")
+        self.assertEqual(self.evaluate(project, "decision_resolved(%s)" % aid)[0], "PASS")
+
+    def test_decision_resolved_fails_while_it_is_open(self):
+        project, aid = self.project_with_decision("open")
+        status, detail = self.evaluate(project, "decision_resolved(%s)" % aid)
+        self.assertEqual(status, "FAIL")
+        self.assertIn(aid, detail)
+
+    def test_decision_resolved_fails_when_the_decision_does_not_exist(self):
+        """Naming a decision that is not there is a mistake, not a pass."""
+        project, _ = self.project_with_decision("answered")
+        self.assertEqual(self.evaluate(project, "decision_resolved(ACME-DEC-999)")[0], "FAIL")
+

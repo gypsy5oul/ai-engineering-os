@@ -1773,7 +1773,7 @@
         "decision_id"
       ],
       "checkable": "project",
-      "means": "The named open decision is answered. An agent blocked by one names it by id and stops."
+      "means": "The named open decision is answered. An agent blocked by one names it by id and stops. Available vocabulary rather than currently used: no workflow names a specific decision today. Kept because the capability is real and the implementation is correct, and covered by a unit test so it is verified rather than merely present."
     },
     "no_open_blocking_decisions_for": {
       "args": [

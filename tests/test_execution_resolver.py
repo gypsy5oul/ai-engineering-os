@@ -47,8 +47,24 @@ class Resolver(unittest.TestCase):
     def graph(self):
         return W.load_graph(self.project, "SFTP-FEAT-001")
 
+    def pinned_stages(self):
+        """Stages the shipped template pins in ai.execution_overrides.
+
+        The template pins ARCH: subagent, which is a real project decision and now
+        actually takes effect. A test that picked the first team stage was testing
+        the pin rather than the degradation it meant to.
+        """
+        path = os.path.join(self.project, ".ai-engineering", "project.yaml")
+        with open(path, encoding="utf-8") as fh:
+            body = fh.read()
+        block = body.split("execution_overrides:")[1].split("\n\n")[0] if \
+            "execution_overrides:" in body else ""
+        return {line.split(":")[0].strip() for line in block.splitlines() if ":" in line}
+
     def team_task(self):
-        return next(t for t in self.graph()["tasks"] if t.get("execution") == "team")
+        pinned = self.pinned_stages()
+        return next(t for t in self.graph()["tasks"]
+                    if t.get("execution") == "team" and t.get("stage") not in pinned)
 
 
 class TestDegradation(Resolver):
@@ -128,7 +144,8 @@ class TestRiskOverrules(Resolver):
         """The point of the risk tier is that somebody is watching, and a
         background task is precisely the one nobody is."""
         g = self.graph()
-        t = g["tasks"][3]
+        pinned = self.pinned_stages()
+        t = next(x for x in g["tasks"] if x.get("stage") not in pinned)
         t["execution"], t["risk"] = "background", "CRITICAL"
         W.save_graph(self.project, g)
         r = self.resolved()[t["id"]]

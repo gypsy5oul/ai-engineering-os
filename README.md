@@ -245,7 +245,7 @@ Read in this order and each one builds on the last.
 
 ## Status
 
-Version 0.21.3. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
+Version 0.21.4. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
 evaluated on its deterministic cases, and not yet promoted to `production`.
 Promotion requires a human governance decision per `GOVERNANCE.md`.
 

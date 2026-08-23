@@ -3,6 +3,67 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.21.4] — Dead policy keys: three wired up, none deleted
+
+An audit listed roughly forty-five policy keys nothing reads. Checking them
+separately showed that most are explanatory prose doing exactly its job — a `why`
+or a `means` is read by the person reviewing the policy, and deleting it would
+strip the reasoning that makes the rule reviewable.
+
+Five keys genuinely **looked operative and were not**, which is the dangerous
+kind: a file that reads like the place to change something, where changing it does
+nothing.
+
+### Wired up
+
+**`hook-policy.production_markers`** was the worst of them. Four markers listed in
+the policy, and the same four inlined into seven rule patterns and twice more in
+`failsafe.py`. A project adding its own production marker to that list got
+nothing. `guard_bash` now builds the alternation from the policy plus the
+project's own `security.json`, longest-first so `production` is not swallowed by
+`prod`:
+
+```
+kubectl delete deploy api -n corp-eu    →  deny   (project-declared marker)
+kubectl delete deploy api -n staging    →  allowed
+```
+
+**`model-policy.aliases`** was a second copy of `MODEL_ALIASES` in
+`validate_plugin.py`. They agreed and nothing compared them, which is how the next
+model family gets added in one place and rejected by the other. The validator
+reads the policy now.
+
+**`ai.execution_overrides`** sat in the project template and its schema for eight
+versions, reading like configuration and consumed by nothing — a team could write
+`ARCH: subagent` and get a four-way architecture team anyway. `resolve_execution.py`
+honours it, and a pin is still subject to the runtime facts afterwards.
+
+### Kept, because they are not dead
+
+`approval-authority.kinds` defines the agent-gate versus human-gate distinction
+the entire approval model rests on. `channels.transport` says what the webhook can
+and cannot do. `team_lead_plan_approval` classifies a specific case. Nothing reads
+them because they are addressed to people.
+
+### Kept and tested
+
+`decision_resolved` is a predicate no workflow uses. Removing a correct
+implementation because nothing currently needs it is churn — but an unexercised
+one rots quietly and is reached for years later, by which time it is wrong. It now
+has tests, and `check_every_predicate_is_exercised()` requires every declared
+predicate to be used by a workflow **or** covered by a test.
+
+### Two tests broke, both correctly
+
+Wiring `execution_overrides` broke four resolver tests: they picked the first team
+stage, which the shipped template pins, so they were testing the pin rather than
+the degradation they meant to. And two new tests invented a `resolved` status for
+a `DEC`, whose statuses are `open`, `answered`, `withdrawn`, `superseded` — caught
+by the artifact validation added one release ago, which is the third time that
+guard has caught me inventing a value.
+
+Tests: **382 → 385.**
+
 ## [0.21.3] — The simulation never checked what it wrote
 
 `simulate_sdlc.py` is this repository's proof that the process can be completed.

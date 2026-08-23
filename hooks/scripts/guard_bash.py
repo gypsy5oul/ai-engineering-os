@@ -19,12 +19,35 @@ _SUBJECT = [""]
 SEVERITY_ORDER = {"deny": 0, "escalate": 1, "warn": 2}
 
 
+# The token every production rule matches on. It appears in seven rule patterns
+# and, before this, `production_markers` in the policy was read by nothing: a
+# project adding its own marker to that list changed precisely nothing, while the
+# list sat there looking like the place to add one.
+MARKER_TOKEN = "prod|prd|production|live"
+
+
+def marker_alternation(pol, overrides):
+    """The production markers, from the policy and the project, as one alternation.
+
+    Longest first, so `production` is matched before `prod` would swallow its
+    prefix.
+    """
+    markers = list(pol.get("production_markers") or [])
+    markers += list((overrides or {}).get("production_markers") or [])
+    seen = [m for m in dict.fromkeys(markers) if m]
+    if not seen:
+        return MARKER_TOKEN
+    return "|".join(sorted(seen, key=len, reverse=True))
+
+
 def compile_rules(pol, overrides):
     rules = []
+    alternation = marker_alternation(pol, overrides)
     for r in pol.get("rules", []):
         flags = re.I if "i" in (r.get("flags") or "") else 0
+        pattern = r["pattern"].replace(MARKER_TOKEN, alternation)
         try:
-            rules.append((re.compile(r["pattern"], flags), r))
+            rules.append((re.compile(pattern, flags), r))
         except re.error:
             continue
     for i, pat in enumerate(overrides.get("extra_deny_patterns", []) or []):

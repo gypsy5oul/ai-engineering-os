@@ -38,7 +38,21 @@ SKILL_FM_KEYS = {"name", "description", "when_to_use", "argument-hint", "argumen
                  "disable-model-invocation", "user-invocable", "allowed-tools", "disallowed-tools",
                  "model", "effort", "context", "agent", "background", "hooks", "paths", "shell",
                  "metadata", "license", "compatibility"}
-MODEL_ALIASES = {"opus", "sonnet", "haiku", "fable", "inherit"}
+def _model_aliases():
+    """From policies/model-policy.json rather than a second copy here.
+
+    The policy listed them and this file listed them again. They agreed today and
+    nothing compared them, which is how the next model family gets added in one
+    place and rejected by the other.
+    """
+    try:
+        with open(os.path.join(ROOT, "policies", "model-policy.json"), encoding="utf-8") as fh:
+            return set(json.load(fh)["aliases"])
+    except Exception:
+        return {"opus", "sonnet", "haiku", "fable", "inherit"}
+
+
+MODEL_ALIASES = _model_aliases()
 # Every section here must change what the agent does. "Skills" duplicated the
 # frontmatter and "Model policy" was addressed to whoever spawns the agent, stored
 # where only the agent itself would read it -- and a running subagent cannot change
@@ -814,6 +828,48 @@ def check_artifact_model_matches_the_header_schema():
                     % (entry["code"], link))
 
 
+def check_every_predicate_is_exercised():
+    """A predicate must be used by a workflow or covered by a test.
+
+    The definition-of-done grammar is vocabulary, and not every word has to appear
+    in every text -- but a word nothing uses and nothing tests is one whose
+    implementation could rot silently and be reached for years later, by which
+    time it is wrong.
+    """
+    model = load_json("policies/artifact-model.json")
+    if not model:
+        return
+    declared = set(model.get("dod_predicates") or {})
+
+    used = set()
+    for sub in ("workflows", "cycles"):
+        base = os.path.join(ROOT, "sdlc", sub)
+        if not os.path.isdir(base):
+            continue
+        for name in sorted(os.listdir(base)):
+            if not name.endswith((".yaml", ".yml")):
+                continue
+            doc = parse_file(os.path.join(base, name))
+            entries = list(doc.get("definition_of_done") or [])
+            entries += list((doc.get("acceptance") or {}).get("conditions") or [])
+            for stage in doc.get("stages") or []:
+                entries += list(stage.get("definition_of_done") or [])
+            used |= {e.split("(")[0].strip() for e in entries}
+
+    tested = ""
+    tdir = os.path.join(ROOT, "tests")
+    if os.path.isdir(tdir):
+        for name in sorted(os.listdir(tdir)):
+            if name.endswith(".py"):
+                with open(os.path.join(tdir, name), encoding="utf-8") as fh:
+                    tested += fh.read()
+
+    for pred in sorted(declared - used):
+        if pred not in tested:
+            err("policies/artifact-model.json: predicate %r is used by no workflow and covered "
+                "by no test, so nothing would notice if its implementation broke" % pred)
+
+
 def check_hooks():
     cfg = load_json("hooks/hooks.json")
     if cfg is None:
@@ -1376,6 +1432,7 @@ def main():
     check_definitions_of_done()
     check_execution_and_model(registry)
     check_artifact_model()
+    check_every_predicate_is_exercised()
     check_artifact_model_matches_the_header_schema()
     check_coupling()
     check_team_requirements()
