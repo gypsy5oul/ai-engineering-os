@@ -619,6 +619,35 @@ def check_execution_resolution_is_live():
                 "resolve_execution.py" % name)
 
 
+def check_telemetry_policy_is_live():
+    """Every metric the telemetry policy claims is computed, and every one it
+    disclaims is absent.
+
+    Both directions matter. A metric listed as measured that nothing computes is
+    a claim about the organization nobody can check; a metric listed as
+    unmeasured that quietly appears in the output is worse, because the reason it
+    was disclaimed still applies.
+    """
+    pol = load_json("policies/telemetry-policy.json")
+    if not pol:
+        return
+    path = os.path.join(ROOT, "scripts", "telemetry.py")
+    if not os.path.exists(path):
+        err("policies/telemetry-policy.json exists and scripts/telemetry.py does not, so "
+            "nothing computes any of it")
+        return
+    with open(path, encoding="utf-8") as fh:
+        code = fh.read()
+    for name in (pol.get("not_measured") or {}):
+        if '"%s"' % name in code.split("def derive(")[-1].split("def pct(")[0]:
+            err("policies/telemetry-policy.json disclaims %r as unmeasured, and telemetry.py "
+                "derives it anyway. The reason it was disclaimed still applies." % name)
+    for signal in ("human_intervention_rate", "rework_rate", "escalation_rate"):
+        if signal not in code:
+            err("policies/telemetry-policy.json names %r and telemetry.py does not compute it"
+                % signal)
+
+
 def check_control_loop_policy_is_live():
     """Every rule the control loop policy declares must have code behind it.
 
@@ -1268,6 +1297,7 @@ def main():
     check_ci_config()
     check_control_loop_policy_is_live()
     check_execution_resolution_is_live()
+    check_telemetry_policy_is_live()
     check_platform_capabilities()
     check_required_fields_are_written()
     check_marketplace_ref_exists()

@@ -1,0 +1,38 @@
+{
+  "version": "1",
+  "description": "What the organization measures about itself, and what it deliberately does not claim to measure. The purpose is to answer whether this way of working is better than the alternative, which is a question no amount of architecture answers on its own.",
+  "why": [
+    "An engineering organization that cannot say whether it is improving is a set of opinions. The point of a durable record is that these numbers are derivable from it rather than estimated.",
+    "Every metric here is computed from what the work items already record. Nothing is instrumented specially, because a measurement that needs its own bookkeeping is one that stops being kept."
+  ],
+  "the_metric_that_matters": {
+    "name": "human intervention rate",
+    "means": "How many times a human had to act, per unit of work, for it to progress.",
+    "why": "The goal is not zero. A system that never asks a human has either solved engineering or stopped noticing when it should ask, and the second is far more likely. What the number is for is the trend: whether autonomy is increasing while the gates that matter stay in place.",
+    "counts_as_intervention": [
+      "an approval recorded against a work item",
+      "an escalation that reached the human owner",
+      "an open decision the organization refused to guess",
+      "a replan, because it means the plan a human accepted was wrong"
+    ],
+    "does_not_count": [
+      "an agent verdict, which is the organization reviewing itself",
+      "an escalation that a lead or head resolved without a human",
+      "a guard denial, which is the system working rather than a person intervening"
+    ]
+  },
+  "measured": {
+    "throughput": ["work items opened", "work items accepted", "cycle time from open to accepted"],
+    "quality": ["rework rate", "repeated failure rate", "review rejection rate", "tasks escalated"],
+    "planning": ["replans per work item", "tasks per work item", "stages skipped"],
+    "execution": ["subagent stops", "results too thin to attribute", "unattributed results"],
+    "enforcement": ["completions blocked by a failing definition of done"]
+  },
+  "not_measured": {
+    "token_cost": "SubagentStop carries no usage figures. The task-notification block does, and nothing parses it. Reporting an estimate here would be a number people would plan against.",
+    "wall_clock_per_task": "Recorded only as started_at and last_activity, which measure elapsed time rather than work done. A task that sat overnight and one that ran for eight hours look identical.",
+    "defect_escape_rate": "Requires knowing which production defects trace to which change. The link exists in the artifact model and nothing populates it yet.",
+    "agent_utilisation": "Would need a spawn count per role over time. The audit log has the events; nothing aggregates them."
+  },
+  "honesty_rule": "A metric that cannot be computed from the durable record is listed under not_measured with the reason, never estimated. An organization that reports a number it cannot derive teaches its own people not to trust the rest."
+}

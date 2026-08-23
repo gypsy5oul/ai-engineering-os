@@ -43,7 +43,8 @@
           },
           "title": {
             "type": "string",
-            "minLength": 5
+            "minLength": 1,
+            "description": "Human-readable name, from the stage. Minimum length 1 rather than a round number: WF-DEFECT has a stage legitimately called 'Fix', and a schema that rejects it is enforcing a preference rather than a contract."
           },
           "role": {
             "type": "string",

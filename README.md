@@ -144,6 +144,7 @@ from the original design and why each one exists.
 | [docs/project-onboarding.md](docs/project-onboarding.md) | Adopting the OS on a project |
 | [docs/knowledge-structure.md](docs/knowledge-structure.md) | Artifacts and traceability |
 | [docs/evaluation.md](docs/evaluation.md) | The evaluation framework |
+| [docs/telemetry.md](docs/telemetry.md) | What the organization measures about itself, and what it refuses to estimate |
 | [docs/work-items.md](docs/work-items.md) | The durable work item, the task graph, and why this is not a second task list |
 | [docs/lsp.md](docs/lsp.md) | Language intelligence as an extension point, and why this plugin ships no language server |
 | [docs/liveness-and-limits.md](docs/liveness-and-limits.md) | What happens when nothing happens, and how much a role may run at once |
@@ -165,7 +166,7 @@ from the original design and why each one exists.
 
 ## Status
 
-Version 0.20.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
+Version 0.21.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
 evaluated on its deterministic cases, and not yet promoted to `production`.
 Promotion requires a human governance decision per `GOVERNANCE.md`.
 

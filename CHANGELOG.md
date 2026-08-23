@@ -3,6 +3,64 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.21.0] — Measuring the organization
+
+An engineering organization that cannot say whether it is improving is a set of
+opinions. `scripts/telemetry.py` derives the numbers from the durable record
+rather than estimating them, and nothing is instrumented specially — a
+measurement that needs its own bookkeeping is one that stops being kept the first
+busy week.
+
+### The metric that matters
+
+**Human intervention rate: how many times a person had to act, per unit of work,
+for it to progress.**
+
+The goal is not zero. A system that never asks a human has either solved
+engineering or stopped noticing when it should ask, and the second is far more
+likely. The number is for the trend, not the level.
+
+Approvals, escalations that reached the human owner, open decisions and replans
+count. An agent verdict does not — that is the organization reviewing itself. Nor
+does a guard denial, which is the system working rather than a person being
+interrupted.
+
+### Two denominators worth arguing about
+
+**Rework is measured against work attempted, not work planned.** A graph of forty
+tasks with three attempted is not a 7% rework rate.
+
+**Rework comes from the history, not the graph.** This was a real bug in the first
+version: a replan rebuilds the graph and resets attempts to zero, so a change that
+fought hard and was then replanned reported as having gone smoothly. Flattering,
+and exactly backwards. It is why `history.jsonl` is append-only, and
+`tests/test_telemetry.py` keeps it fixed.
+
+### What is not measured, and why
+
+| | Why not |
+| --- | --- |
+| Token cost | `SubagentStop` carries no usage. The `task-notification` block does, and nothing parses it. |
+| Wall clock per task | Only elapsed time is recorded. A task that sat overnight and one that ran for eight hours look identical. |
+| Defect escape rate | Needs production defects traced to their cause. The link exists in the artifact model; nothing populates it. |
+| Agent utilisation | Needs spawn counts per role. The audit log has the events; nothing aggregates them. |
+
+`check_telemetry_policy_is_live()` enforces both directions: a metric the policy
+claims must exist in the code, and a metric it disclaims must **not** quietly
+appear in the output, because the reason it was disclaimed still applies.
+
+A rate of `n/a` is deliberately not a rate of zero. "0%" and "we have not seen one
+yet" are different claims and only one should influence a decision.
+
+### A bug the schema caught while this was being built
+
+Planning a defect crashed: `WF-DEFECT` has a stage legitimately called `Fix`, and
+the task-graph schema demanded a title of at least five characters. That minimum
+was a preference of mine dressed as a contract. Lowered to 1, which is what it was
+always for — catching an empty title, not a short word.
+
+Tests: **364 → 374.**
+
 ## [0.20.0] — Failure identity and execution resolution
 
 ### Added — two failures are the same when their identity matches
