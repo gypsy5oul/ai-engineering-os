@@ -40,28 +40,36 @@ def main():
     try:
         import workitem as W
         project = H.PROJECT_DIR
-        wid = W.current(project)
+        wid = W.active_item(project, data.get("session_id"), H.plugin_data_dir())
         if not wid:
             sys.exit(0)
         graph = W.load_graph(project, wid)
         if not graph:
             sys.exit(0)
 
-        mine = [t for t in graph.get("tasks", [])
-                if t.get("role") == agent_type and t["state"] not in W.TERMINAL]
-        if not mine:
+        # Resolve the lease this agent took at SubagentStart. Never infer from
+        # role: with two tasks sharing a role, one agent's output was written to
+        # both, and the graph then claimed work nobody had done.
+        agent_id = data.get("agent_id")
+        held = W.resolve(project, wid, agent_id) if agent_id else None
+        if held is None:
+            W.record(project, wid, "subagent_stopped_unattributed", agent=agent_type,
+                     agent_id=agent_id,
+                     why="no task was leased to this agent, so its result belongs to nothing")
             sys.exit(0)
 
         message = (data.get("last_assistant_message") or "").strip()
         thin = message.lower() in EMPTY or len(message) < 40
-        for t in mine:
-            t["last_activity"] = W.now()
-            if not t.get("result"):
-                t["result"] = message[:400] or "(the agent stopped without a result)"
+        graph = W.load_graph(project, wid)
+        t = W.task(graph, held["id"])
+        t["last_activity"] = W.now()
+        t["result"] = message[:400] or "(the agent stopped without a result)"
         W.save_graph(project, graph)
+        W.release(project, wid, agent_id)
         W.record(project, wid, "subagent_stopped", agent=agent_type,
-                 agent_id=data.get("agent_id"), tasks=[t["id"] for t in mine],
+                 agent_id=agent_id, task=t["id"],
                  thin_result=thin, transcript=data.get("agent_transcript_path"))
+        mine = [t]
 
         if thin:
             # Say so rather than blocking. The agent has already stopped, and a

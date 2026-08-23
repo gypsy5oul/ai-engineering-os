@@ -3,6 +3,81 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.19.1] — Correlation, a real graph, and a gate that blocks
+
+Four defects from a review of 0.19.0. Two were mine and one was a claim I had
+made too broadly.
+
+### Fixed — one agent's result was written to every task sharing its role
+
+Attribution was inferred from `role`. With two backend tasks in flight, the agent
+finishing one had its output stamped onto both, and the graph then said work was
+done that nobody had done. **Role is not an identity.**
+
+Tasks are now leased against the `agent_id` the platform provides at
+`SubagentStart` and resolved by the same id at `SubagentStop`. One agent holds one
+task; a held task is never offered again; and a result that resolves to no lease
+is recorded as unattributed rather than guessed at. Better for a result to belong
+to nothing than to the wrong task.
+
+### Fixed — the graph was a pipeline wearing a graph's schema
+
+Every task depended on the one before it, so `runnable()` could only ever return
+one task. The coupled-surface exclusion had nothing to exclude and the parallel
+execution modes had nothing to run.
+
+Dependencies now come from **artifact flow**: a stage waits for whatever produces
+the artifacts its definition of done names. Three things still sequence — a
+consumer waits for its producer, everything waits for the human gate ahead of it,
+and two stages on the same coupled surface are ordered rather than parallelised.
+
+On a HIGH-risk feature that is five tasks runnable together after architecture,
+where it was one.
+
+### Fixed — one global pointer decided what every session was working on
+
+`CURRENT` is project-global. Session A sets it to `FEAT-001`, session B to
+`FEAT-002`, and A's next agent is briefed on B's work. Session bindings now take
+precedence and live outside source control; `CURRENT` survives as a convenience
+for the single-session case and is no longer the runtime identity.
+
+### Added — `TaskCompleted` refuses a completion whose work is not done
+
+Dismissing these hooks entirely was too broad. They carry no dependency data and
+offer no `hookSpecificOutput`, so they cannot steer a loop — but an exit-2 veto is
+a poor engine and an excellent gate.
+
+This is the one place the definition of done stops being something the
+organization evaluates when asked and becomes something that must be true before a
+task can close. Narrow on purpose: it blocks on a predicate that **fails**, never
+on evidence that is merely unavailable, because "not yet provable" is not "wrong"
+and a gate that cannot be satisfied offline is a gate people switch off.
+
+### Added — `policies/platform-capabilities.json`
+
+One checked model of what this plugin believes about Claude Code, and how each
+belief was established: `contract`, `empirical`, `documented` or `absent`. A
+capability marked load-bearing must name the code that depends on it, and the
+validator fails if it names a file that does not exist.
+
+This repository has been wrong about the platform in both directions — emitting a
+`permissionDecision` the CLI rejects for ten versions, and documenting `effort` as
+unsupported when it is validated. Both were cheap mistakes because each belief
+lived in prose, in a different file, with no record of how it was checked.
+
+### Corrected — two claims that were wrong
+
+- `SubagentStart.additionalContext` was called **undocumented**. It is a declared
+  field of the hook output schema. The empirical test stays as a regression; the
+  wording was wrong.
+- **"The graph is generated, not fixed"** oversold it. `docs/work-items.md` now
+  carries a maturity table: risk-aware stage selection, artifact-flow
+  dependencies, parallelism and bounded replanning are implemented; task synthesis
+  beyond the declared stages, fan-out sized to the work, and dependencies inferred
+  from the code are **not**.
+
+Tests: **330 → 343.**
+
 ## [0.19.0] — Work items, a task graph, and a bounded control loop
 
 The centre of gravity moves from "which stage are we in" to "what is being built,

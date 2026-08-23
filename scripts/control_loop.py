@@ -27,6 +27,7 @@ Exit codes: 0 proceed, 1 blocked or refused, 2 could not run.
 import argparse
 import json
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -149,15 +150,55 @@ def applicable_stages(wf, cfg, wtype, risk="MEDIUM"):
     return stages, skipped
 
 
+ARTIFACT_IN_PREDICATE = re.compile(r"\b([A-Z][A-Z0-9]{1,9})\b")
+
+
+def artifacts_needed(stage):
+    """Artifact codes a stage depends on, read from its own definition of done.
+
+    The dependency has to come from somewhere real. `inputs` is prose, but the
+    definition of done names artifact codes precisely, because a machine has to
+    evaluate it: `every_linked(REQ, ARCH)` says this stage cannot finish without a
+    REQ, which means it cannot start before whatever produces one.
+    """
+    produced = set(stage.get("produces") or [])
+    needed = set()
+    for entry in stage.get("definition_of_done") or []:
+        for code in ARTIFACT_IN_PREDICATE.findall(entry):
+            if code not in produced and not code.startswith(("CYCLE", "AP")):
+                needed.add(code)
+    return needed
+
+
 def build_graph(project, item, generation=1, reason=None, carry=None):
+    """Generate the graph for this change.
+
+    Dependencies are derived from artifact flow rather than from stage order, so
+    work that genuinely does not depend on other work can run at the same time.
+    The previous version made every task depend on the one before it, which is a
+    pipeline wearing a graph's schema: `runnable()` could only ever return one
+    task, and the coupled-surface exclusion it enforces had nothing to exclude.
+
+    Ordering is not abandoned, though. Three things still sequence:
+      - a stage that consumes an artifact waits for whatever produces it,
+      - a stage behind a human gate waits for everything before that gate, because
+        an approval is a point the whole change passes through,
+      - two stages touching the same coupled surface are sequenced, since that
+        surface has one owner and parallel edits to it are the thing the coupling
+        policy exists to prevent.
+    """
     wf = workflow(item["workflow"])
     if wf is None:
         raise SystemExit("ERROR unknown workflow %s" % item["workflow"])
     cfg = project_config(project)
     stages, skipped = applicable_stages(wf, cfg, item["type"], item.get("risk", "MEDIUM"))
     carry = carry or {}
+    cap = loop_bound(policy("control-loop-policy.json"))
 
-    tasks, prev = [], None
+    tasks, by_stage, producer, surface_last = [], {}, {}, {}
+    gate_barrier = None          # the last human gate every later task must clear
+    ordered = []
+
     for i, s in enumerate(stages, start=1):
         tid = "T-%03d" % i
         done = carry.get(s["id"])
@@ -167,8 +208,8 @@ def build_graph(project, item, generation=1, reason=None, carry=None):
             "state": "accepted" if done else "queued",
             "execution": s.get("execution", "subagent"),
             "risk": s.get("risk", "MEDIUM"),
-            "attempts": 0, "max_attempts": loop_bound(policy("control-loop-policy.json")),
-            "depends_on": [prev] if prev else [],
+            "attempts": 0, "max_attempts": cap,
+            "depends_on": [],
             "definition_of_done": list(s.get("definition_of_done") or []),
         }
         if s.get("produces"):
@@ -179,8 +220,32 @@ def build_graph(project, item, generation=1, reason=None, carry=None):
             t["coupled_surface"] = s["coupled_artifacts"][0]
         if done:
             t["result"] = "carried forward from generation %d" % (generation - 1)
+
+        deps = set()
+        for code in artifacts_needed(s):
+            if code in producer:
+                deps.add(producer[code])
+        if gate_barrier:
+            deps.add(gate_barrier)
+        surface = t.get("coupled_surface")
+        if surface and surface in surface_last:
+            deps.add(surface_last[surface])
+        # A stage that needs nothing yet produced still cannot be a second root:
+        # the change has one entry point, and everything else follows it.
+        if not deps and ordered:
+            deps.add(ordered[0])
+        t["depends_on"] = sorted(deps - {tid})
+
+        for code in (s.get("produces") or []):
+            producer.setdefault(code, tid)
+        if surface:
+            surface_last[surface] = tid
+        if s.get("human_gate"):
+            gate_barrier = tid
+
         tasks.append(t)
-        prev = tid
+        by_stage[s["id"]] = tid
+        ordered.append(tid)
 
     graph = {"work_item": item["id"], "generated_at": W.now(),
              "generation": generation, "tasks": tasks}

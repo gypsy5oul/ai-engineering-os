@@ -276,3 +276,136 @@ class TestThePolicyIsTheAuthority(Loop):
         self.assertEqual(implemented - declared, set(),
                          "implemented but the policy never declares it")
 
+
+class TestAttributionIsExact(Loop):
+    """One agent, one task. Never inferred from the role.
+
+    The first version matched tasks by `role` alone. With two backend tasks in
+    flight, one agent finishing one of them had its result written to both, and
+    the graph then claimed work nobody had done. Role is not an identity.
+    """
+
+    def two_tasks_one_role(self):
+        wid = self.open_item()
+        cl(self.project, "plan", "--item", wid)
+        graph = W.load_graph(self.project, wid)
+        for t in graph["tasks"][:2]:
+            t["role"] = "backend-developer"
+            t["state"] = "queued"
+            t["depends_on"] = []
+        W.save_graph(self.project, graph)
+        return wid
+
+    def test_two_agents_of_one_role_get_different_tasks(self):
+        wid = self.two_tasks_one_role()
+        a = W.claim(self.project, wid, "backend-developer", "agent-A", "S1")
+        b = W.claim(self.project, wid, "backend-developer", "agent-B", "S1")
+        self.assertIsNotNone(a)
+        self.assertIsNotNone(b)
+        self.assertNotEqual(a["id"], b["id"], "two agents were handed the same task")
+
+    def test_a_claim_is_idempotent_for_one_agent(self):
+        wid = self.two_tasks_one_role()
+        first = W.claim(self.project, wid, "backend-developer", "agent-A", "S1")
+        again = W.claim(self.project, wid, "backend-developer", "agent-A", "S1")
+        self.assertEqual(first["id"], again["id"])
+
+    def test_a_result_resolves_to_exactly_one_task(self):
+        wid = self.two_tasks_one_role()
+        a = W.claim(self.project, wid, "backend-developer", "agent-A", "S1")
+        W.claim(self.project, wid, "backend-developer", "agent-B", "S1")
+        self.assertEqual(W.resolve(self.project, wid, "agent-A")["id"], a["id"])
+
+    def test_an_unleased_agent_resolves_to_nothing(self):
+        """Better to attribute a result to nothing than to the wrong task."""
+        wid = self.two_tasks_one_role()
+        self.assertIsNone(W.resolve(self.project, wid, "never-claimed"))
+
+    def test_a_held_task_is_not_offered_again(self):
+        wid = self.two_tasks_one_role()
+        before = {t["id"] for t in W.runnable(W.load_graph(self.project, wid))}
+        held = W.claim(self.project, wid, "backend-developer", "agent-A", "S1")
+        after = {t["id"] for t in W.runnable(W.load_graph(self.project, wid))}
+        self.assertIn(held["id"], before)
+        self.assertNotIn(held["id"], after)
+
+    def test_releasing_puts_it_back(self):
+        wid = self.two_tasks_one_role()
+        held = W.claim(self.project, wid, "backend-developer", "agent-A", "S1")
+        W.release(self.project, wid, "agent-A")
+        self.assertIn(held["id"], {t["id"] for t in W.runnable(W.load_graph(self.project, wid))})
+
+
+class TestSessionScoping(Loop):
+    """CURRENT is a convenience, not the runtime identity.
+
+    One project-global pointer is fine for one engineer in one checkout and wrong
+    the moment there are two: session A sets it to FEAT-001, session B to
+    FEAT-002, and A's next agent is briefed on B's work.
+    """
+
+    def test_a_session_binding_beats_the_global_pointer(self):
+        import tempfile as _tf
+        data = _tf.mkdtemp(prefix="aieos-sess-")
+        self.addCleanup(shutil.rmtree, data, True)
+        self.open_item()
+        W.set_current(self.project, "SFTP-FEAT-001")
+        W.bind_session(data, "session-B", "SFTP-FEAT-999")
+        self.assertEqual(W.active_item(self.project, "session-B", data), "SFTP-FEAT-999")
+        self.assertEqual(W.active_item(self.project, "session-A", data), "SFTP-FEAT-001",
+                         "an unbound session should fall back to CURRENT")
+
+    def test_it_still_works_with_no_session_at_all(self):
+        self.open_item()
+        self.assertEqual(W.active_item(self.project, None, None), "SFTP-FEAT-001")
+
+
+class TestGraphIsAGraph(Loop):
+    """Not a pipeline wearing a graph's schema.
+
+    Deriving every dependency from stage order made runnable() able to return
+    exactly one task, which left the coupled-surface exclusion with nothing to
+    exclude and the parallel execution modes with nothing to run.
+    """
+
+    def test_work_that_does_not_depend_on_other_work_runs_together(self):
+        wid = self.open_item(risk="HIGH")
+        cl(self.project, "plan", "--item", wid)
+        graph = W.load_graph(self.project, wid)
+        arch = next(t for t in graph["tasks"] if t["stage"] == "ARCH")
+        for t in graph["tasks"]:
+            if t["id"] <= arch["id"]:
+                t["state"] = "accepted"
+        W.save_graph(self.project, graph)
+        ready = W.runnable(W.load_graph(self.project, wid))
+        self.assertGreater(len(ready), 1,
+                           "after architecture, nothing could run in parallel: %s"
+                           % [t["id"] for t in ready])
+
+    def test_a_stage_waits_for_what_produces_what_it_consumes(self):
+        wid = self.open_item(risk="HIGH")
+        cl(self.project, "plan", "--item", wid)
+        graph = W.load_graph(self.project, wid)
+        req = next(t for t in graph["tasks"] if t["stage"] == "REQ")
+        arch = next(t for t in graph["tasks"] if t["stage"] == "ARCH")
+        self.assertIn(req["id"], arch["depends_on"],
+                      "architecture does not wait for the requirement it links to")
+
+    def test_the_graph_has_exactly_one_root(self):
+        wid = self.open_item(risk="HIGH")
+        cl(self.project, "plan", "--item", wid)
+        graph = W.load_graph(self.project, wid)
+        roots = [t["id"] for t in graph["tasks"] if not t["depends_on"]]
+        self.assertEqual(len(roots), 1, "a change has one entry point, found %s" % roots)
+
+    def test_no_task_depends_on_itself_and_there_are_no_cycles(self):
+        wid = self.open_item(risk="HIGH")
+        cl(self.project, "plan", "--item", wid)
+        graph = W.load_graph(self.project, wid)
+        order = {t["id"]: i for i, t in enumerate(graph["tasks"])}
+        for t in graph["tasks"]:
+            self.assertNotIn(t["id"], t["depends_on"])
+            for d in t["depends_on"]:
+                self.assertLess(order[d], order[t["id"]],
+                                "%s depends on %s, which comes later" % (t["id"], d))
+

@@ -146,10 +146,26 @@ def save_item(project, item):
 
 
 def load_graph(project, wid):
-    return _read(os.path.join(item_dir(project, wid), "graph.yaml"))
+    graph = _read(os.path.join(item_dir(project, wid), "graph.yaml"))
+    return _normalise_graph(graph) if graph else graph
+
+
+def _normalise_graph(graph):
+    """Keys that must exist even when empty.
+
+    The YAML emitter drops an empty list, so `depends_on: []` disappears on write
+    and comes back as a missing key. Every reader then needs a `.get()` and one of
+    them eventually forgets. Cheaper to make the shape stable than to make thirty
+    call sites defensive.
+    """
+    for t in graph.get("tasks", []):
+        t.setdefault("depends_on", [])
+        t.setdefault("attempts", 0)
+    return graph
 
 
 def save_graph(project, graph):
+    graph = _normalise_graph(graph)
     errors = validate(graph, "task-graph.schema.json")
     if errors:
         raise ValueError("task graph for %s does not satisfy its schema: %s"
@@ -186,6 +202,111 @@ def record(project, wid, kind, **fields):
     with open(path, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
     return entry
+
+
+def claim(project, wid, agent_type, agent_id, session=None):
+    """Bind exactly one task to exactly one running agent, and record it.
+
+    Attribution used to be inferred from the role alone: every non-terminal task
+    whose `role` matched the agent got the same result written to it. With two
+    backend tasks in flight, one agent finishing one of them stamped its output
+    onto both, and the graph then said work was done that nobody had done.
+
+    A lease fixes it because the platform gives us a stable `agent_id` at
+    SubagentStart and the same id at SubagentStop. One agent holds one task; a
+    task already held is never offered again; and the binding is written into the
+    graph, so it survives the gap between the two hook processes.
+
+    Returns the claimed task, or None when there is nothing for this role to take.
+    """
+    graph = load_graph(project, wid)
+    if not graph:
+        return None
+    held = {t.get("owner_agent") for t in graph.get("tasks", []) if t.get("owner_agent")}
+    if agent_id in held:
+        return resolve(project, wid, agent_id)
+    for t in graph.get("tasks", []):
+        if t.get("role") != agent_type or t["state"] in TERMINAL:
+            continue
+        if t.get("owner_agent"):
+            continue
+        t["owner_agent"] = agent_id
+        if session:
+            t["owner_session"] = session
+        t["started_at"] = t.get("started_at") or now()
+        t["last_activity"] = now()
+        save_graph(project, graph)
+        return t
+    return None
+
+
+def resolve(project, wid, agent_id):
+    """The one task this agent holds, or None. Never a guess."""
+    graph = load_graph(project, wid)
+    if not graph:
+        return None
+    for t in graph.get("tasks", []):
+        if t.get("owner_agent") == agent_id:
+            return t
+    return None
+
+
+def release(project, wid, agent_id):
+    graph = load_graph(project, wid)
+    if not graph:
+        return None
+    for t in graph.get("tasks", []):
+        if t.get("owner_agent") == agent_id:
+            t.pop("owner_agent", None)
+            t["last_activity"] = now()
+            save_graph(project, graph)
+            return t
+    return None
+
+
+def active_item(project, session=None, plugin_data=None):
+    """Which work item this session is on.
+
+    Session first, CURRENT second. A single project-global pointer is fine for one
+    engineer in one checkout and wrong the moment there are two: session A sets it
+    to FEAT-001, session B to FEAT-002, and A's next agent is briefed on B's work.
+    CURRENT survives as a convenience for the single-session case; it is not the
+    runtime identity.
+    """
+    if session and plugin_data:
+        path = os.path.join(plugin_data, "state", "session-work.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                mapped = json.load(fh).get(session)
+            if mapped:
+                return mapped
+        except Exception:
+            pass
+    return current(project)
+
+
+def bind_session(plugin_data, session, wid):
+    """Record which work item a session is on, outside source control.
+
+    Runtime state does not belong in the project's history: a session id in a
+    commit is noise, and two engineers would collide on it.
+    """
+    if not (plugin_data and session):
+        return
+    path = os.path.join(plugin_data, "state", "session-work.json")
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        data = {}
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        data[session] = wid
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+        os.replace(tmp, path)
+    except Exception:
+        pass
 
 
 def current(project):
@@ -288,6 +409,8 @@ def runnable(graph):
         if t["state"] not in RUNNABLE_FROM or not dependencies_met(graph, t):
             continue
         if t.get("attempts", 0) >= t.get("max_attempts", 3):
+            continue
+        if t.get("owner_agent"):
             continue
         surface = t.get("coupled_surface")
         if surface:

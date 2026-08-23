@@ -3,41 +3,154 @@
   "title": "Task graph",
   "description": "The dynamic half of the lifecycle. The declarative workflow says what must be true; this says how this particular change gets there. It is generated per work item and rebuilt when a replan happens, so no two changes are forced through an identical sequence.",
   "type": "object",
-  "required": ["work_item", "generated_at", "generation", "tasks"],
+  "required": [
+    "work_item",
+    "generated_at",
+    "generation",
+    "tasks"
+  ],
   "additionalProperties": false,
   "properties": {
-    "work_item": {"type": "string"},
-    "generated_at": {"type": "string"},
-    "generation": {"type": "integer", "minimum": 1, "description": "Incremented on every replan. Generation 3 means this plan is the third the organization has believed in, and history.jsonl says why the first two stopped being true."},
-    "replan_reason": {"type": "string"},
+    "work_item": {
+      "type": "string"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Incremented on every replan. Generation 3 means this plan is the third the organization has believed in, and history.jsonl says why the first two stopped being true."
+    },
+    "replan_reason": {
+      "type": "string"
+    },
     "tasks": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "title", "role", "state"],
+        "required": [
+          "id",
+          "title",
+          "role",
+          "state"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": {"type": "string", "pattern": "^T-[0-9]{3,}$"},
-          "title": {"type": "string", "minLength": 5},
-          "role": {"type": "string", "description": "The agent responsible. Must exist in policies/agent-registry.json."},
-          "stage": {"type": "string"},
-          "depends_on": {"type": "array", "items": {"type": "string", "pattern": "^T-[0-9]{3,}$"}},
-          "state": {"type": "string", "enum": ["queued", "assigned", "working", "waiting", "blocked", "review", "rework", "accepted", "rejected", "escalated", "abandoned"]},
-          "execution": {"type": "string", "enum": ["inline", "subagent", "background", "team", "worktree", "dynamic-workflow"]},
-          "risk": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"]},
-          "produces": {"type": "array", "items": {"type": "string"}},
-          "definition_of_done": {"type": "array", "items": {"type": "string"}},
-          "reviewer": {"type": "string"},
-          "attempts": {"type": "integer", "minimum": 0},
-          "max_attempts": {"type": "integer", "minimum": 1, "description": "A loop without a bound is a hang. On exhaustion the task escalates rather than retrying, because the same failure three times is information about the plan, not about the attempt."},
-          "owner_session": {"type": "string"},
-          "started_at": {"type": "string"},
-          "last_activity": {"type": "string"},
-          "blocked_reason": {"type": "string"},
-          "escalation_target": {"type": "string"},
-          "evidence": {"type": "array", "items": {"type": "string"}},
-          "result": {"type": "string"},
-          "coupled_surface": {"type": "string", "description": "The surface this task touches, from policies/coupling-policy.json. Two runnable tasks naming the same surface are never handed out together."}
+          "id": {
+            "type": "string",
+            "pattern": "^T-[0-9]{3,}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 5
+          },
+          "role": {
+            "type": "string",
+            "description": "The agent responsible. Must exist in policies/agent-registry.json."
+          },
+          "stage": {
+            "type": "string"
+          },
+          "depends_on": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^T-[0-9]{3,}$"
+            }
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "assigned",
+              "working",
+              "waiting",
+              "blocked",
+              "review",
+              "rework",
+              "accepted",
+              "rejected",
+              "escalated",
+              "abandoned"
+            ]
+          },
+          "execution": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "subagent",
+              "background",
+              "team",
+              "worktree",
+              "dynamic-workflow"
+            ]
+          },
+          "risk": {
+            "type": "string",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ]
+          },
+          "produces": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "definition_of_done": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reviewer": {
+            "type": "string"
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "max_attempts": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "A loop without a bound is a hang. On exhaustion the task escalates rather than retrying, because the same failure three times is information about the plan, not about the attempt."
+          },
+          "owner_session": {
+            "type": "string"
+          },
+          "started_at": {
+            "type": "string"
+          },
+          "last_activity": {
+            "type": "string"
+          },
+          "blocked_reason": {
+            "type": "string"
+          },
+          "escalation_target": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "result": {
+            "type": "string"
+          },
+          "coupled_surface": {
+            "type": "string",
+            "description": "The surface this task touches, from policies/coupling-policy.json. Two runnable tasks naming the same surface are never handed out together."
+          },
+          "owner_agent": {
+            "type": "string",
+            "description": "The agent_id currently holding this task, from SubagentStart. One agent holds one task and a held task is never offered again, so a result can be attributed to exactly one task rather than to every task sharing its role."
+          }
         }
       }
     }

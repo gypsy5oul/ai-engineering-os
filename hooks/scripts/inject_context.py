@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """SubagentStart: give the agent its work, and only its work.
 
-Verified empirically against Claude Code 2.1.237: SubagentStart fires with
-`agent_type` and `agent_id`, and an `additionalContext` returned here reaches the
-subagent. That is what lets the organization keep its agent definitions small.
+`additionalContext` is a declared field of the SubagentStart hook output schema,
+and it reaches the subagent -- confirmed both in the CLI's own zod contract and on
+the wire. That is what lets the organization keep its agent definitions small.
+
+The agent is briefed on exactly one task, claimed against its `agent_id`. Matching
+on role alone briefed an agent on every task its role owned, and briefed two
+concurrent agents on the same one.
 
 The alternative -- baking the project's configuration, the current stage, the
 risk and the constraints into thirty agent files -- was the shape this repository
@@ -29,9 +33,9 @@ import hooklib as H  # noqa: E402
 sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts", "lib"))
 
 
-def build(project, agent_type):
+def build(project, agent_type, agent_id=None, session=None):
     import workitem as W
-    wid = W.current(project)
+    wid = W.active_item(project, session, H.plugin_data_dir())
     if not wid:
         return None
     item = W.load_item(project, wid)
@@ -47,8 +51,10 @@ def build(project, agent_type):
              "**Objective, as the organization understood it:** %s" % item["objective"],
              ""]
 
-    mine = [t for t in graph.get("tasks", [])
-            if t.get("role") == agent_type and t["state"] not in W.TERMINAL]
+    # Claim exactly one task for this agent. Matching on role alone briefed an
+    # agent on every task its role owned, and two agents on the same one.
+    claimed = W.claim(project, wid, agent_type, agent_id, session) if agent_id else None
+    mine = [claimed] if claimed else []
     if mine:
         lines.append("## Your task")
         lines.append("")
@@ -92,7 +98,8 @@ def main():
     if not agent_type:
         sys.exit(0)
     try:
-        context = build(H.PROJECT_DIR, agent_type)
+        context = build(H.PROJECT_DIR, agent_type, data.get("agent_id"),
+                        data.get("session_id"))
     except Exception:
         # A context injector that breaks a spawn is worse than one that stays
         # quiet. The agent definition alone is a workable, if larger, fallback.

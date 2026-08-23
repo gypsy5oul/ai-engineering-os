@@ -45,11 +45,42 @@ understood. They are separate fields because a plan that solves the wrong proble
 is invisible when the only record is the restatement — and both are given to
 every agent, so the agent can notice the gap rather than inheriting it.
 
+## How dynamic this actually is
+
+Worth stating plainly, because the word oversells easily:
+
+| | Status |
+| --- | --- |
+| Risk-aware stage selection | implemented |
+| Dependencies derived from artifact flow | implemented |
+| Parallel execution where work is independent | implemented |
+| Coupled surfaces sequenced automatically | implemented |
+| Bounded replanning that carries accepted work forward | implemented |
+| Task synthesis beyond the workflow's stages | **not implemented** |
+| Fan-out sized to the work (N stories, N tasks) | **not implemented** |
+| Dependencies inferred from the code being changed | **not implemented** |
+
+So: the graph is generated per change and genuinely parallel, and it is still
+derived from a declared set of stages. It does not yet invent tasks the workflow
+did not name.
+
 ## The graph is generated, not fixed
 
 The declarative workflow says **what must be true**. The graph says **how this
 change gets there**. It is built per work item from the workflow's stages, and a
 stage that declares `optional_when` is dropped with its reason recorded.
+
+Dependencies come from **artifact flow, not stage order**. A stage waits for
+whatever produces the artifacts its definition of done names, so work that does
+not depend on other work runs at the same time. Three things still sequence: a
+consumer waits for its producer, everything waits for the human gate ahead of it,
+and two stages touching the same coupled surface are ordered rather than
+parallelised.
+
+An earlier version made every task depend on the one before it. That is a pipeline
+wearing a graph's schema: `runnable()` could only ever return one task, which left
+the coupled-surface exclusion with nothing to exclude and the parallel execution
+modes with nothing to run.
 
 One judgement is worth stating. `optional_when` is prose — no planner can read
 *"the change ships no running service"* out of a sentence of intent. On a LOW or
@@ -80,20 +111,34 @@ known.
 
 Verified empirically against the installed CLI before either was built:
 
-- **`SubagentStart`** returns `additionalContext`, and it reaches the subagent.
-  This is undocumented and it works. `inject_context.py` uses it to hand each
-  agent its work item and *its own* task — which is what lets the agent
+- **`SubagentStart`** returns `additionalContext`. This is a **declared field of
+  the hook output schema**, not a discovered accident — an earlier version of this
+  document called it undocumented, which was wrong. `inject_context.py` uses it to
+  hand each agent its work item and *its own* task, which is what lets the agent
   definitions stay small instead of carrying the project's whole configuration in
   thirty files that drift apart.
+
+  The agent is briefed on **one** task, claimed against its `agent_id`. Matching
+  on role alone briefed an agent on every task its role owned, and two concurrent
+  agents on the same one.
 - **`SubagentStop`** carries `last_assistant_message`. `observe_subagent.py`
   records the result against the task, and says so when an agent stops having
   produced nothing — because a subagent that stops silently looks identical to one
   that succeeded, unless something outside it is watching.
 
-**`TaskCreated` and `TaskCompleted` are deliberately unused.** They exist and they
-fire, but they carry no dependency information and offer no `hookSpecificOutput` —
-the only lever is an exit-2 veto. Building the loop on them would have produced
-something that looks like control and cannot steer.
+- **`TaskCompleted`** refuses the completion when a bound task's definition of
+  done has a failing predicate. This is the one place the definition of done stops
+  being something the organization evaluates when asked and becomes something that
+  must be true before a task can close.
+
+  It is not the orchestrator. `TaskCreated` and `TaskCompleted` carry no dependency
+  information and offer no `hookSpecificOutput`, so they cannot steer a loop — an
+  earlier version of this document read that as a reason to ignore them entirely,
+  which was too broad. An exit-2 veto is a poor engine and an excellent gate.
+
+  Narrow on purpose: it blocks on a predicate that **fails**, never on evidence
+  that is merely unavailable. "Not yet provable" is not "wrong", and a gate that
+  cannot be satisfied offline is a gate people switch off.
 
 ## What this does not do
 

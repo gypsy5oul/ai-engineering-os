@@ -106,10 +106,30 @@ class TestContextInjection(Hooked):
 
 
 class TestSubagentObservation(Hooked):
-    def stop(self, agent_type, message):
+    def start(self, agent_type, agent_id="a1"):
+        return self.hook("inject_context.py",
+                         {"hook_event_name": "SubagentStart", "agent_type": agent_type,
+                          "agent_id": agent_id, "session_id": "S1"})
+
+    def stop(self, agent_type, message, agent_id="a1", claim=True):
+        # A stop resolves the lease the start took. Without one there is nothing
+        # to attribute the result to, which is the point: role is not an identity.
+        if claim:
+            self.start(agent_type, agent_id)
         return self.hook("observe_subagent.py",
                          {"hook_event_name": "SubagentStop", "agent_type": agent_type,
-                          "agent_id": "a1", "last_assistant_message": message})
+                          "agent_id": agent_id, "session_id": "S1",
+                          "last_assistant_message": message})
+
+    def test_a_result_with_no_lease_is_attributed_to_nothing(self):
+        """Better to record that a result belongs nowhere than to guess a task
+        for it. Guessing is what wrote one agent's output onto three tasks."""
+        self.assertIsNone(self.stop("product-manager", "Produced something substantial "
+                                    "with enough detail to not look thin at all.",
+                                    agent_id="never-started", claim=False))
+        unattributed = [h for h in W.history(self.project, "SFTP-FEAT-001")
+                        if h["kind"] == "subagent_stopped_unattributed"]
+        self.assertTrue(unattributed)
 
     def test_a_thin_result_is_called_out(self):
         """A subagent that stops without saying anything useful looks identical to
@@ -129,10 +149,13 @@ class TestSubagentObservation(Hooked):
                   "Produced SFTP-REQ-001 with four acceptance criteria and the "
                   "non-functional target quantified at 99.5% over 30 days.")
         graph = W.load_graph(self.project, "SFTP-FEAT-001")
-        self.assertIn("SFTP-REQ-001", W.task(graph, "T-002")["result"])
+        claimed = [t for t in graph["tasks"] if t.get("result")]
+        self.assertEqual(len(claimed), 1,
+                         "one agent's result landed on %d tasks" % len(claimed))
+        self.assertIn("SFTP-REQ-001", claimed[0]["result"])
         stops = [h for h in W.history(self.project, "SFTP-FEAT-001")
                  if h["kind"] == "subagent_stopped"]
-        self.assertEqual(stops[0]["tasks"], ["T-002"])
+        self.assertEqual(stops[0]["task"], claimed[0]["id"])
 
     def test_it_never_blocks_a_stop(self):
         for msg in ("", "done", "x" * 5000):

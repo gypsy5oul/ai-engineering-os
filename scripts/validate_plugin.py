@@ -623,6 +623,32 @@ def check_control_loop_policy_is_live():
                     "does not exist" % token)
 
 
+def check_platform_capabilities():
+    """Every load-bearing platform belief names the code that depends on it.
+
+    This repository has been wrong about the platform in both directions, and
+    both times the belief lived in prose with no record of how it was checked.
+    A capability the code depends on has to say what depends on it, or the next
+    platform refresh cannot tell which beliefs matter.
+    """
+    caps = load_json("policies/platform-capabilities.json")
+    if not caps:
+        return
+    for name, cap in (caps.get("capabilities") or {}).items():
+        if cap.get("evidence") not in caps.get("evidence_levels", {}) and \
+                not all(part in caps.get("evidence_levels", {})
+                        for part in str(cap.get("evidence", "")).split("+")):
+            err("policies/platform-capabilities.json: %s has evidence %r, which is not one of %s"
+                % (name, cap.get("evidence"), sorted(caps.get("evidence_levels", {}))))
+        if cap.get("load_bearing") and not cap.get("used_by"):
+            err("policies/platform-capabilities.json: %s is load-bearing but names nothing that "
+                "uses it. A belief with no dependant cannot be re-verified meaningfully." % name)
+        for token in str(cap.get("used_by", "")).split():
+            if token.endswith(".py") and not os.path.exists(os.path.join(ROOT, token)):
+                err("policies/platform-capabilities.json: %s says %r uses it, and that file does "
+                    "not exist" % (name, token))
+
+
 def check_hooks():
     cfg = load_json("hooks/hooks.json")
     if cfg is None:
@@ -1171,6 +1197,7 @@ def main():
     check_hooks()
     check_ci_config()
     check_control_loop_policy_is_live()
+    check_platform_capabilities()
     check_marketplace_ref_exists()
     check_permission_rules_are_effective()
     check_schemas()
