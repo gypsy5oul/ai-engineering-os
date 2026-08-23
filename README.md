@@ -8,14 +8,65 @@ contains the **organization**: the roles, the lifecycle they follow, the rules
 they operate under, the guards that enforce those rules, and the evaluations
 that prove any of it works.
 
+## How the pieces fit
+
+Claude Code is the execution engine. This plugin is the organization that decides
+what should be executed, by whom, and whether the result counts.
+
 ```
-GitLab  →  ai-engineering-os plugin  →  Claude Code
-                                          ├── agents (29 organizational roles)
-                                          ├── skills (31 capabilities)
-                                          ├── hooks  (safety and governance guards)
-                                          └── policies, workflows, evaluations
-                                        →  your project repository  →  GitLab
+  a human states an intent
+            │
+            ▼
+  WORK ITEM ─────────────────────────────── durable, in the project's git
+   intent · objective · risk · owner        (delete every session; this survives)
+            │
+            ▼
+  TASK GRAPH ────────────────────────────── generated per change, not fixed
+   dependencies from artifact flow          (independent work runs in parallel)
+            │
+            ▼
+  ┌─────────┴──────────┐
+  │  for each task     │
+  │                    ▼
+  │        EXECUTION RESOLVER ───────────── inline · subagent · worktree · team
+  │                    │                    (chosen from runtime facts)
+  │                    ▼
+  │            CLAUDE CODE ──────────────── spawns and runs the agent
+  │                    │
+  │        ┌───────────┴───────────┐
+  │        │ SubagentStart         │ ◄── injects this agent's work item and task
+  │        │ SubagentStop          │ ◄── records the result against that task
+  │        │ TaskCompleted         │ ◄── refuses to close if the DoD fails
+  │        └───────────┬───────────┘
+  │                    ▼
+  │            DEFINITION OF DONE ───────── machine-checkable predicates
+  │                    │
+  │        ┌───────────┴───────────┐
+  │        ▼                       ▼
+  │     ACCEPT                  FAILED
+  │        │                       │
+  │        │        ┌──────────────┼──────────────┐
+  │        │        ▼              ▼              ▼
+  │        │     RETRY          REWORK        ESCALATE
+  │        │        │              │       (bounded: 3 attempts,
+  │        └────────┴──────────────┘        2 replans, or the same
+  │                 │                        failure twice)
+  └─────────────────┘
+            │
+            ▼
+  ACCEPTED  ──────────────────────────────  artifacts in git, GitLab is the record
 ```
+
+Three separations do the real work:
+
+- **The workflow says what must be true. The task graph says how this change gets
+  there. Claude Code says how execution happens.** Change any one without
+  touching the others.
+- **An agent verdict is not a human approval.** Reviewers are structurally
+  incapable of approving: they hold no write tools.
+- **Guards are mechanical; contracts are not.** What must hold regardless of what
+  a model decides is enforced by a hook. Everything else is written down and
+  followed, and `docs/limitations.md` says which is which.
 
 ## What it gives you
 
@@ -23,12 +74,12 @@ GitLab  →  ai-engineering-os plugin  →  Claude Code
 | --- | --- |
 | **30 agents** | An optimized organization: product, architecture, UX, engineering, data, QA, security, platform, release, SRE, incident, documentation, AI governance, and five independent specialist reviewers. |
 | **32 skills** | Reusable capabilities from requirements engineering to root cause analysis. Technology-neutral. |
-| **4 hook guards** | Command, write, spawn and session guards. 39 command rules, **risk-tiered failure** so a broken policy file cannot open the guard, and a self-test at session start. |
+| **7 hook events** | Command, write and spawn guards, context injection, result observation, a completion gate and a session self-test. 45 command rules, **risk-tiered failure** so a broken policy file cannot open the guard, and a self-test at session start. |
 | **7 department cycles** | Level 2: human owner → agent head → lead → worker → peer review → rework → accept → rollup. A macro stage cannot advance until its department's internal loop reaches ACCEPTED. |
-| **7 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
-| **21 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution mode, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
+| **9 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
+| **26 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution mode, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
 | **68 evaluation cases** | 45 deterministic checks that run in CI, plus 23 behavioural cases with rubrics that are never auto-passed. |
-| **21 artifact types** | Full contracts: who creates, modifies, reviews and approves each, where it is stored, what it depends on. Plus 21 definition-of-done predicates. |
+| **28 artifact types** | Full contracts: who creates, modifies, reviews and approves each, where it is stored, what it depends on. Plus 26 definition-of-done predicates. |
 | **Zero runtime dependencies** | Everything runs on Python 3.8+ with no `pip install`. |
 
 ## Technology neutrality
@@ -123,40 +174,68 @@ from the original design and why each one exists.
 
 ## Documentation
 
+Read in this order and each one builds on the last.
+
+**Understand it**
+
 | | |
 | --- | --- |
-| [docs/getting-started.md](docs/getting-started.md) | **Start here.** Day one: building a new app, end to end |
-| [docs/architecture.md](docs/architecture.md) | How the plugin is put together and why |
-| [docs/organization.md](docs/organization.md) | The agent catalogue |
-| [docs/agent-model.md](docs/agent-model.md) | Role contracts, risk, ownership, lifecycle |
-| [docs/skills.md](docs/skills.md) | The skill catalogue |
-| [docs/hooks.md](docs/hooks.md) | Guard model, rules and how to change them |
-| [docs/agent-teams.md](docs/agent-teams.md) | When teams help, and their real limits |
-| [docs/approvals.md](docs/approvals.md) | Agent verdicts versus human approvals |
-| [docs/execution.md](docs/execution.md) | Inline, subagent or team, and why |
-| [docs/communications.md](docs/communications.md) | Event-driven notifications and digests |
-| [docs/organization-freeze.md](docs/organization-freeze.md) | Why the agent set is frozen at 29 |
-| [docs/sdlc.md](docs/sdlc.md) | The lifecycle and its workflows (Level 1) |
-| [docs/department-cycles.md](docs/department-cycles.md) | The delegation loop inside each stage (Level 2) |
-| [docs/governance.md](docs/governance.md) | Who may change what |
-| [docs/security.md](docs/security.md) | Security model |
-| [docs/model-policy.md](docs/model-policy.md) | Model routing and escalation |
-| [docs/project-onboarding.md](docs/project-onboarding.md) | Adopting the OS on a project |
-| [docs/knowledge-structure.md](docs/knowledge-structure.md) | Artifacts and traceability |
-| [docs/evaluation.md](docs/evaluation.md) | The evaluation framework |
-| [docs/telemetry.md](docs/telemetry.md) | What the organization measures about itself, and what it refuses to estimate |
-| [docs/work-items.md](docs/work-items.md) | The durable work item, the task graph, and why this is not a second task list |
-| [docs/lsp.md](docs/lsp.md) | Language intelligence as an extension point, and why this plugin ships no language server |
-| [docs/liveness-and-limits.md](docs/liveness-and-limits.md) | What happens when nothing happens, and how much a role may run at once |
-| [docs/enterprise-deployment.md](docs/enterprise-deployment.md) | Making the plugin non-bypassable via managed settings |
-| [docs/gitlab.md](docs/gitlab.md) | GitLab usage, CE compatibility, CI |
-| [docs/mcp.md](docs/mcp.md) | The MCP extension model (nothing implemented in V1) |
-| [docs/development.md](docs/development.md) | Working on this repository |
-| [docs/release.md](docs/release.md) | Versioning and release |
-| [docs/production-readiness.md](docs/production-readiness.md) | The end-to-end audit, and what it found |
-| [docs/limitations.md](docs/limitations.md) | What V1 cannot do |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | When something misbehaves |
-| [docs/examples/](docs/examples/) | Three worked end-to-end scenarios |
+| [getting-started.md](docs/getting-started.md) | **Start here.** Day one on a real project, end to end |
+| [architecture.md](docs/architecture.md) | How the plugin is put together, and what it deliberately is not |
+| [work-items.md](docs/work-items.md) | The durable work item, the task graph, the bounded control loop |
+| [sdlc.md](docs/sdlc.md) | The nine workflows and what each stage must produce |
+| [department-cycles.md](docs/department-cycles.md) | The loop inside a stage: worker → peer → lead → accept |
+
+**The organization**
+
+| | |
+| --- | --- |
+| [organization.md](docs/organization.md) | The 30 agents, and what each one owns |
+| [agent-model.md](docs/agent-model.md) | Role contracts: authority, tools, risk, lifecycle |
+| [skills.md](docs/skills.md) | The 32 skills and who loads them |
+| [organization-freeze.md](docs/organization-freeze.md) | Why the agent set does not grow |
+
+**The rules, and what actually enforces them**
+
+| | |
+| --- | --- |
+| [governance.md](docs/governance.md) | Who decides what, and how that changes |
+| [approvals.md](docs/approvals.md) | An agent verdict is never a human approval |
+| [hooks.md](docs/hooks.md) | The guards, the 45 command rules, risk-tiered failure |
+| [model-policy.md](docs/model-policy.md) | Risk floors, and why a model cannot be downgraded past one |
+| [security.md](docs/security.md) | Threat model and the boundaries that hold |
+| [limitations.md](docs/limitations.md) | **What is not enforced.** Read this before trusting anything |
+
+**Running it**
+
+| | |
+| --- | --- |
+| [execution.md](docs/execution.md) | Inline, subagent, background, team, worktree — and how one is chosen |
+| [liveness-and-limits.md](docs/liveness-and-limits.md) | What happens when nothing happens; concurrency caps |
+| [knowledge-structure.md](docs/knowledge-structure.md) | The 28 artifact types and their traceability |
+| [communications.md](docs/communications.md) | Events, routing, digests |
+| [gitlab.md](docs/gitlab.md) | GitLab as the system of record |
+| [enterprise-deployment.md](docs/enterprise-deployment.md) | Managed settings, and what they do not prevent |
+| [project-onboarding.md](docs/project-onboarding.md) | Configuring a project |
+| [troubleshooting.md](docs/troubleshooting.md) | When something does not work |
+
+**Proving it works**
+
+| | |
+| --- | --- |
+| [evaluation.md](docs/evaluation.md) | Agent, workflow and organization evaluations; fault injection |
+| [telemetry.md](docs/telemetry.md) | What is measured, and what is refused as unmeasurable |
+| [production-readiness.md](docs/production-readiness.md) | The end-to-end simulation and what it proves |
+
+**Extending and changing it**
+
+| | |
+| --- | --- |
+| [development.md](docs/development.md) | Working on the plugin itself |
+| [agent-teams.md](docs/agent-teams.md) | When teams help, and their real limits |
+| [mcp.md](docs/mcp.md) | The extension model, and why nothing ships yet |
+| [lsp.md](docs/lsp.md) | Language intelligence, and why no server ships |
+| [release.md](docs/release.md) | Versioning, tagging, migration notes |
 
 ## Requirements
 
@@ -166,7 +245,7 @@ from the original design and why each one exists.
 
 ## Status
 
-Version 0.21.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
+Version 0.21.1. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
 evaluated on its deterministic cases, and not yet promoted to `production`.
 Promotion requires a human governance decision per `GOVERNANCE.md`.
 

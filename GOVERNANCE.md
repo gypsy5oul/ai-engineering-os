@@ -41,7 +41,7 @@ lifecycle status, a review frequency and an evaluation suite in
 `policies/agent-registry.json`. `scripts/validate_plugin.py` fails if any is
 missing.
 
-**All 29 agents are currently at `pilot`.** Promotion to `production` requires a
+**All 30 agents are currently at `pilot`.** Promotion to `production` requires a
 human decision per the lifecycle in `docs/governance.md`.
 
 ## Review cadence

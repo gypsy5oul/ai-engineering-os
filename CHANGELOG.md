@@ -3,6 +3,55 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.21.1] — Documentation that is true, and connected
+
+### Fixed — the counts, and the reason they were wrong
+
+Eleven numbers across five documents disagreed with the repository, several
+contradicting each other inside one file: 39 command rules where there are 45,
+7 workflows where there are 9, 21 artifact types where there are 28, 29 agents in
+a file that says 30 four lines later.
+
+They were wrong because they were typed. `scripts/repo_stats.py` derives them, and
+`check_stated_counts()` now compares twelve counted nouns — agents, skills,
+policies, workflows, cycles, artifact types, predicates, command rules, evaluation
+cases, approval categories — against the real thing. A stale number fails the
+build.
+
+```
+$ python3 scripts/repo_stats.py
+  agents                 30      workflow stages        73
+  skills                 32      artifact types         28
+  policies               26      dod predicates         26
+  workflows               9      command rules          45
+  department cycles       7      evaluation cases       68
+```
+
+One false positive left alone: `docs/communications.md` says "41 scenarios" inside
+a sample chat notification. That is a message, not a claim about the repository.
+
+### Changed — the README shows how the pieces fit
+
+The old diagram was a box labelled "plugin" with arrows to GitLab. It said nothing
+about how a request becomes accepted work. The new one traces the whole path —
+intent, work item, task graph, execution resolution, the three hooks, the
+definition of done, and the bounded loop back through retry, rework and escalate —
+and names the three separations that carry the design:
+
+- the workflow says *what must be true*, the graph says *how this change gets
+  there*, Claude Code says *how execution happens*
+- an agent verdict is never a human approval, enforced structurally
+- guards are mechanical, contracts are not, and `limitations.md` says which
+
+### Changed — 31 documents became a reading path
+
+Grouped into *understand it*, *the organization*, *the rules and what enforces
+them*, *running it*, *proving it works*, *extending it*. Nothing was removed.
+
+`check_docs_are_reachable()` fails the build when a document is not linked from
+the README, or when the README links one that does not exist. Both `lsp.md` and
+`work-items.md` nearly shipped invisible.
+
 ## [0.21.0] — Measuring the organization
 
 An engineering organization that cannot say whether it is improving is a set of

@@ -81,11 +81,11 @@ escalation path the executive should not sit on, as security already has.
 ## Result
 
 ```
-7 scenarios · 43 stages · 173 predicates
-  → 156 pass · 0 fail · 17 require evidence outside the repository
+10 scenarios · 57 stages · 257 predicates
+  → 232 pass · 0 fail · 25 require evidence outside the repository
 ```
 
-The 17 are `pipeline_passed`, `tests_pass` and `human_approval_recorded` —
+The 25 are `pipeline_passed`, `tests_pass` and `human_approval_recorded` —
 things that live in GitLab and in the project's own test run. They report
 `REQUIRES-EVIDENCE` and are **never** counted as passing.
 

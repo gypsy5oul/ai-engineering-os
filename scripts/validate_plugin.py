@@ -318,20 +318,33 @@ def check_frontmatter_is_strict_yaml():
 # Counts stated in prose drift silently every time a component is added. A plugin
 # whose subject is consistency cannot claim five different totals across four
 # documents, which is what happened before this check existed.
-COUNT_CLAIM = re.compile(r"\b(\d+)\s+(agents|skills|evaluation cases)\b")
+# Every noun the documentation counts. Hand-written numbers drifted in about
+# twenty-five places, several contradicting each other inside one file, so they
+# are derived from the repository and compared here.
+COUNTED_NOUNS = {
+    "agents": "agents", "skills": "skills", "policies": "policies",
+    "workflows": "workflows", "SDLC workflows": "workflows",
+    "department cycles": "department_cycles", "artifact types": "artifact_types",
+    "definition-of-done predicates": "dod_predicates", "DoD predicates": "dod_predicates",
+    "command rules": "command_rules", "evaluation cases": "evaluation_cases",
+    "approval categories": "approval_categories",
+}
+COUNT_CLAIM = re.compile(r"\b(\d+)\s+(%s)\b"
+                         % "|".join(sorted(COUNTED_NOUNS, key=len, reverse=True)))
 VERSION_CLAIM = re.compile(r"\bVersion (\d+\.\d+\.\d+)\b")
 AGENT_SET_CLAIM = re.compile(r"agent set is fixed at (\d+)")
 
 
 def check_stated_counts():
     manifest_version = (load_json(".claude-plugin/plugin.json") or {}).get("version", "")
-    actual = {
-        "agents": len([f for f in os.listdir(os.path.join(ROOT, "agents")) if f.endswith(".md")]),
-        "skills": len([d for d in os.listdir(os.path.join(ROOT, "skills"))
-                       if os.path.exists(os.path.join(ROOT, "skills", d, "SKILL.md"))]),
-        "evaluation cases": sum(len([f for f in files if f.endswith(".json")])
-                                for _, _, files in os.walk(os.path.join(ROOT, "evaluations"))),
-    }
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    try:
+        import repo_stats
+        derived = repo_stats.stats()
+    except Exception as exc:                                   # pragma: no cover
+        err("scripts/repo_stats.py could not run (%r), so no stated count can be checked" % exc)
+        return
+    actual = {noun: derived[key] for noun, key in COUNTED_NOUNS.items() if key in derived}
     docs = [("README.md", os.path.join(ROOT, "README.md"))]
     docs_dir = os.path.join(ROOT, "docs")
     docs += [("docs/%s" % f, os.path.join(docs_dir, f))
@@ -746,6 +759,28 @@ def check_required_fields_are_written():
                     "neither sets nor stamps it. A required field nothing writes makes every "
                     "predicate that reads it vacuous." % (entry["code"], field))
             return
+
+
+def check_docs_are_reachable():
+    """Every document is listed in the README, and every listing exists.
+
+    Thirty-one documents with no index is a pile, not documentation: a reader
+    cannot tell what to read first or whether they have missed something. This
+    also catches the quieter failure, a document written and never linked, which
+    is how docs/lsp.md and docs/work-items.md each nearly shipped invisible.
+    """
+    readme = os.path.join(ROOT, "README.md")
+    docs_dir = os.path.join(ROOT, "docs")
+    if not (os.path.exists(readme) and os.path.isdir(docs_dir)):
+        return
+    with open(readme, encoding="utf-8") as fh:
+        text = fh.read()
+    listed = set(re.findall(r"\((?:\./)?docs/([a-z0-9-]+\.md)\)", text))
+    actual = {f for f in os.listdir(docs_dir) if f.endswith(".md")}
+    for missing in sorted(actual - listed):
+        err("docs/%s exists and the README does not link it, so nobody will find it" % missing)
+    for ghost in sorted(listed - actual):
+        err("README.md links docs/%s, which does not exist" % ghost)
 
 
 def check_hooks():
@@ -1292,6 +1327,7 @@ def main():
     check_agent_frontmatter_is_effective()
     check_frontmatter_is_strict_yaml()
     check_stated_counts()
+    check_docs_are_reachable()
     check_spawn_edges_are_executable()
     check_hooks()
     check_ci_config()

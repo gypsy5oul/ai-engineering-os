@@ -61,7 +61,7 @@ rewritten is not evidence. `WF-INCIDENT MITIGATE` cannot complete without
 
 ## The artifact contract
 
-`policies/artifact-model.json` defines 21 artifact types. Each declares the full
+`policies/artifact-model.json` defines 28 artifact types. Each declares the full
 contract:
 
 | Contract field | Answers |

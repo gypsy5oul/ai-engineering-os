@@ -17,10 +17,10 @@ An engineering organization, not a tool.
 | **30 agents** | Roles with contracts: authority, forbidden actions, inputs, outputs, escalation. Frozen — see [organization freeze](organization-freeze.md). |
 | **32 skills** | Shared capabilities. Technology-neutral. |
 | **4 guards** | Hooks that deny, escalate or audit every command, write and spawn. Tiered so a broken policy file cannot open them. |
-| **21 policies** | Model routing, risk, approvals, artifacts, execution mode, coupling, system of record. |
-| **7 workflows** | Level 1: stage to stage. |
+| **26 policies** | Model routing, risk, approvals, artifacts, execution mode, coupling, system of record. |
+| **9 workflows** | Level 1: stage to stage. |
 | **7 department cycles** | Level 2: the delegation loop inside a stage. |
-| **21 artifact types** | The state model. Each with an owner, a lifecycle and a review path. |
+| **28 artifact types** | The state model. Each with an owner, a lifecycle and a review path. |
 
 It mandates no technology. Python, Go, React, Postgres, Kubernetes — all project
 decisions, recorded by a human.
