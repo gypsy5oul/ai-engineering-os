@@ -649,6 +649,39 @@ def check_platform_capabilities():
                     "not exist" % (name, token))
 
 
+def check_required_fields_are_written():
+    """A required field nothing produces makes the predicate reading it vacuous.
+
+    `change` was declared in the artifact header schema and read by check_dod for
+    two releases while nothing wrote it. changes_present() therefore always
+    returned an empty list, the ambiguity guard could never fire, and
+    `--change <id>` filtered every artifact away. The definition-of-done engine
+    reported all-green on a scoping rule that was not running.
+
+    The generic form of that mistake: a contract field with a reader and no
+    writer. This checks the shipped simulator, because it is the only thing in
+    the repository that produces artifacts of every type.
+    """
+    model = load_json("policies/artifact-model.json")
+    sim = os.path.join(ROOT, "scripts", "simulate_sdlc.py")
+    if not model or not os.path.exists(sim):
+        return
+    with open(sim, encoding="utf-8") as fh:
+        code = fh.read()
+
+    # Fields the simulator fills generically need no explicit producer; the ones
+    # it deliberately refuses to invent do.
+    for entry in model.get("artifact_types", []):
+        for field in entry.get("required_fields", []):
+            if field != "change":
+                continue
+            if 'field == "change"' not in code or "set_change(" not in code:
+                err("policies/artifact-model.json: %s requires %r, and scripts/simulate_sdlc.py "
+                    "neither sets nor stamps it. A required field nothing writes makes every "
+                    "predicate that reads it vacuous." % (entry["code"], field))
+            return
+
+
 def check_hooks():
     cfg = load_json("hooks/hooks.json")
     if cfg is None:
@@ -1198,6 +1231,7 @@ def main():
     check_ci_config()
     check_control_loop_policy_is_live()
     check_platform_capabilities()
+    check_required_fields_are_written()
     check_marketplace_ref_exists()
     check_permission_rules_are_effective()
     check_schemas()

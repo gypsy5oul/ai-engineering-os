@@ -3,6 +3,72 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.19.2] — The scoping field nothing wrote
+
+`change` was declared in the artifact header schema and read by `check_dod.py` for
+two releases. Nothing ever wrote it.
+
+So `changes_present()` always returned an empty list, the ambiguity guard
+`if len(spanning) > 1` was unreachable, and `--change <id>` filtered every
+artifact away. The definition-of-done engine reported all-green on a scoping rule
+that was not running — and the ten-scenario simulation was partly measuring
+nothing.
+
+### The fix has a natural owner now
+
+A work item **is** a change. `change` is the work item's id, and the two systems
+that were built separately are the same thing seen from either end.
+
+- Required on all 27 artifact types produced by a workflow stage. `DEC` is exempt:
+  an open decision can outlive the change that raised it, and can be raised with
+  no change in flight at all.
+- The simulator stamps it per scenario, and **never invents one**. The generic
+  required-field filler writes `"simulated <field>"` for anything missing, which
+  for an identity would be worse than nothing: every artifact would carry a
+  different plausible value and group nothing.
+- `check_dod.py` defaults its scope to the project's active work item, so the
+  common case needs no flag.
+
+### What that changes in practice
+
+```
+scope=(none)           2 artifact(s)  FAIL not approved: SIM-REQ-002
+scope=ACME-FEAT-001    1 artifact(s)  PASS all REQ are approved
+scope=ACME-FEAT-002    1 artifact(s)  FAIL not approved: SIM-REQ-002
+```
+
+Unscoped, a finished change is dragged down by an unrelated one in flight. That
+starvation is what the field was for.
+
+And the ambiguity guard fires for the first time:
+
+```
+FAIL  cycle_accepted(CYCLE-DEV)
+      2 units of work carry a CYCLE-DEV rollup (ACME-FEAT-001, ACME-FEAT-002).
+      Re-run with --change to say which one is being evaluated.
+```
+
+### Added — the general form of the mistake
+
+`check_required_fields_are_written()` fails the build when a contract declares a
+required field that nothing produces. A field with a reader and no writer makes
+every predicate reading it vacuous, and nothing else notices because everything
+still passes.
+
+`F-25` covers the behaviour: two units of work in one project, the unscoped
+evaluation must refuse and name both, the scoped one must pass. Mutation-tested by
+removing the stamp.
+
+### The harness caught itself again
+
+Adding the field broke `F-12`, which tests that a dead notification channel does
+not stop delivery. It was failing on `required_fields_present` — nothing to do
+with notifications. That is precisely the "a refusal for the wrong reason is still
+a bug" rule the fault suite was built around, applied to its own runner: each
+fault now scopes to its own change.
+
+Tests: **343 → 346.** Faults: **24 → 25.**
+
 ## [0.19.1] — Correlation, a real graph, and a gate that blocks
 
 Four defects from a review of 0.19.0. Two were mine and one was a claim I had

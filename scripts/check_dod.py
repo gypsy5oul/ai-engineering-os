@@ -572,10 +572,20 @@ def main():
     ap.add_argument("--workflow")
     ap.add_argument("--stage")
     ap.add_argument("--cycle", help="evaluate a department cycle's acceptance conditions")
-    ap.add_argument("--change", help="the unit of work to evaluate: an EPIC, DEF, INC or REL id. "
-                                     "Without it, predicates match every artifact in the project.")
+    ap.add_argument("--change", help="the unit of work to evaluate. Defaults to the project's "
+                                     "active work item; without either, predicates match every "
+                                     "artifact in the project.")
     ap.add_argument("--project", default=".")
     args = ap.parse_args()
+    if not args.change:
+        # A work item is a change. When one is active, scope to it rather than
+        # silently evaluating every artifact in the project -- which is what made
+        # a finished change vacuously satisfy a new one.
+        try:
+            import workitem
+            args.change = workitem.current(os.path.abspath(args.project))
+        except Exception:
+            pass
     if args.cycle:
         return run_cycle(args.cycle, os.path.abspath(args.project), args.change)
     if args.grammar or not args.workflow:

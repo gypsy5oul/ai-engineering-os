@@ -46,7 +46,7 @@ class TestFaultsAreHandled(unittest.TestCase):
                        "untested rollback", "dimension unanswered",
                        "readiness still not ready", "no runbook",
                        "nothing that can measure it", "no objective at all",
-                       "skipped a rung"):
+                       "skipped a rung", "satisfy a new one"):
             with self.subTest(case=needed):
                 self.assertIn(needed, listing)
 
@@ -87,6 +87,9 @@ class TestFaultsDetectRemovedControls(unittest.TestCase):
          "      - every_linked(NFR, SLO)\n", ""),
         ("F-24", "deploy stops checking the promotion ladder", "sdlc/workflows/release.yaml",
          "      - promoted_through(production)\n", ""),
+        ("F-25", "artifacts stop carrying the change they belong to",
+         "scripts/simulate_sdlc.py",
+         'supplied = over.pop("change", None) or CURRENT_CHANGE["id"]', "supplied = None"),
     ]
 
     def test_removing_a_control_makes_its_fault_fail(self):

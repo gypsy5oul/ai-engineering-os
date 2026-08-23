@@ -104,6 +104,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -165,6 +166,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -226,6 +228,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -280,6 +283,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -338,6 +342,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -399,6 +404,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -456,6 +462,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -515,6 +522,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -569,6 +577,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -619,6 +628,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -681,6 +691,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -741,6 +752,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -793,6 +805,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -849,6 +862,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -909,6 +923,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -972,6 +987,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1029,6 +1045,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1086,6 +1103,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1147,6 +1165,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1202,6 +1221,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1263,6 +1283,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1325,6 +1346,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1388,6 +1410,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1448,6 +1471,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1507,6 +1531,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1565,6 +1590,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1620,6 +1646,7 @@
       ],
       "required_fields": [
         "id",
+        "change",
         "type",
         "title",
         "status",
@@ -1844,5 +1871,6 @@
     "consumed_by": "Downstream artifact codes that reference it.",
     "immutable_after_creation": "True for evidence: appended to, never rewritten.",
     "append_only": "True where the artifact grows but is never rewritten: the incident record gains timeline entries during the incident and is never edited afterwards."
-  }
+  },
+  "notes_change_field": "Every artifact produced by a workflow stage carries `change`: the id of the work item it belongs to. Without it, definition-of-done predicates match every artifact in the project, so a finished change vacuously satisfies a new one and two changes in flight starve each other. The field was declared and read for two releases before anything wrote it, which made check_dod's scoping guard unreachable and its all-green results partly meaningless."
 }

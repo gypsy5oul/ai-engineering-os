@@ -1065,3 +1065,67 @@ class TestPluginAgentFrontmatter(unittest.TestCase):
                 with self.subTest(agent=role):
                     self.assertEqual(fm.get("effort"), expected)
 
+
+class TestChangeScopingIsLive(unittest.TestCase):
+    """The scoping field must be written, not merely declared and read.
+
+    `change` was in the header schema and read by check_dod for two releases while
+    nothing wrote it. changes_present() always returned [], so the ambiguity guard
+    could never fire and `--change <id>` filtered every artifact away. The engine
+    reported all-green on a rule that was not running.
+    """
+
+    def project_with_two_changes(self):
+        import tempfile, shutil
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import simulate_sdlc as S
+        d = tempfile.mkdtemp(prefix="aieos-scope-")
+        self.addCleanup(shutil.rmtree, d, True)
+        S.make_project(d)
+        S.set_change("ACME-FEAT-001")
+        S.write_artifact(d, "REQ", status="approved", reviewers=[S.verdict("qa-lead")])
+        S.set_change("ACME-FEAT-002")
+        S.write_artifact(d, "REQ", status="draft")
+        return d
+
+    def evaluate(self, project, predicate, change=None):
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import check_dod
+        arts = check_dod.scope_to_change(check_dod.load_artifacts(project), change)
+        fn, args = check_dod.parse_predicate(predicate)
+        return check_dod.evaluate(fn, args, arts, project)[0]
+
+    def test_every_workflow_artifact_carries_its_change(self):
+        d = self.project_with_two_changes()
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import check_dod
+        arts = check_dod.load_artifacts(d)
+        self.assertTrue(arts)
+        for a in arts:
+            with self.subTest(artifact=a["id"]):
+                self.assertTrue(a.get("change"),
+                                "%s carries no change, so it scopes to nothing" % a["id"])
+
+    def test_a_finished_change_is_not_dragged_down_by_an_unrelated_one(self):
+        d = self.project_with_two_changes()
+        self.assertEqual(self.evaluate(d, "artifact_status(REQ, approved)", "ACME-FEAT-001"),
+                         "PASS")
+        self.assertEqual(self.evaluate(d, "artifact_status(REQ, approved)", "ACME-FEAT-002"),
+                         "FAIL")
+
+    def test_the_change_id_is_never_invented(self):
+        """A made-up change id is worse than a missing one: it looks scoped and
+        groups nothing."""
+        import tempfile, shutil
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import simulate_sdlc as S
+        d = tempfile.mkdtemp(prefix="aieos-scope-")
+        self.addCleanup(shutil.rmtree, d, True)
+        S.make_project(d)
+        S.set_change(None)
+        aid = S.write_artifact(d, "REQ", status="draft")
+        import check_dod
+        art = [a for a in check_dod.load_artifacts(d) if a["id"] == aid][0]
+        self.assertNotIn("simulated", str(art.get("change", "")))
+

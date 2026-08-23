@@ -557,6 +557,39 @@ def f24(project):
     return True, why
 
 
+
+@fault("F-25", "A finished change is used to satisfy a new one",
+       "the predicate refuses to answer rather than passing on someone else's work")
+def f25(project):
+    # Two units of work in one project: one finished, one barely started. This is
+    # the case `change` exists for, and for two releases nothing wrote the field,
+    # so the guard below could never fire and every evaluation silently mixed them.
+    S.set_change("SIM-FEAT-900")
+    S.write_artifact(project, "STORY", status="done",
+                     rollup=S.rollup("CYCLE-DEV", status="ACCEPTED"))
+    S.set_change("SIM-FEAT-901")
+    S.write_artifact(project, "STORY", status="in-progress",
+                     rollup=S.rollup("CYCLE-DEV", status="IN_PROGRESS"))
+
+    arts = check_dod.load_artifacts(project)
+    if not [a for a in arts if a.get("change")]:
+        return False, "no artifact carries a change id, so scoping cannot work at all"
+
+    fn, args_ = check_dod.parse_predicate("cycle_accepted(CYCLE-DEV)")
+    status, detail = check_dod.evaluate(fn, args_, arts, project)
+    if status != "FAIL":
+        return False, ("an unscoped evaluation across two units of work returned %s. "
+                       "It cannot answer the question that was asked." % status)
+    if "SIM-FEAT-900" not in detail or "SIM-FEAT-901" not in detail:
+        return False, "refused, but did not name the units of work involved: %s" % detail[:80]
+
+    scoped = check_dod.scope_to_change(arts, "SIM-FEAT-900")
+    st2, _ = check_dod.evaluate(fn, args_, scoped, project)
+    if st2 != "PASS":
+        return False, "the finished change does not pass even when scoped to it (%s)" % st2
+    return True, "unscoped refuses and names both; scoped to the finished one, passes"
+
+
 # ------------------------------------------------------------------- runner
 
 def run(selected=None, verbose=False):
@@ -566,6 +599,11 @@ def run(selected=None, verbose=False):
         project = tempfile.mkdtemp(prefix="aieos-fault-")
         try:
             S.make_project(project)
+            # Each fault is one unit of work, so its artifacts carry one change id.
+            # Without this every artifact fails required_fields_present and the
+            # fault appears to fail for a reason that has nothing to do with what
+            # it tests -- which is the exact mistake this harness exists to catch.
+            S.set_change("SIM-%s" % fid.replace("-", ""))
             S.COUNTERS.clear() if hasattr(S, "COUNTERS") else None
             try:
                 ok, detail = fn(project)

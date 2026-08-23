@@ -66,6 +66,18 @@ def next_id(code):
     return "%s-%s-%03d" % (KEY, code, COUNTER[code])
 
 
+# The unit of work the current scenario is producing artifacts for. Set per
+# scenario, because a change id is an identity: inventing one the way the generic
+# required-field filler invents prose would make every artifact carry a different
+# plausible-looking value and scope nothing.
+CURRENT_CHANGE = {"id": None}
+
+
+def set_change(wid):
+    CURRENT_CHANGE["id"] = wid
+    return wid
+
+
 def write_artifact(project, code, **over):
     """Create an artifact satisfying its contract in policies/artifact-model.json."""
     spec = MODEL[code]
@@ -82,6 +94,14 @@ def write_artifact(project, code, **over):
     # required_fields_present can actually be satisfied.
     for field in spec["required_fields"]:
         if field in header:
+            continue
+        if field == "change":
+            # Never filled generically. A change id says which unit of work this
+            # belongs to, and a made-up one is worse than a missing one: it looks
+            # scoped and groups nothing.
+            supplied = over.pop("change", None) or CURRENT_CHANGE["id"]
+            if supplied:
+                header["change"] = supplied
             continue
         header[field] = over.pop(field, "simulated %s" % field.replace("_", " "))
     header.update(over)
@@ -192,6 +212,7 @@ def promote(project, source, upto, version="1.4.0"):
 # both are correct at their own moment.
 
 def scenario_feature(project, log):
+    set_change("SIM-FEAT-001")
     st = {}
 
     def idea():
@@ -395,6 +416,7 @@ def scenario_feature(project, log):
 
 
 def scenario_defect(project, log):
+    set_change("SIM-DEF-001")
     st = {}
 
     def triage():
@@ -444,6 +466,7 @@ def scenario_defect(project, log):
 
 
 def scenario_incident(project, log):
+    set_change("SIM-INC-001")
     st = {}
 
     def evidence():
@@ -490,6 +513,7 @@ def scenario_incident(project, log):
 
 
 def scenario_security_block(project, log):
+    set_change("SIM-FEAT-002")
     st = {}
 
     def classify():
@@ -517,6 +541,7 @@ def scenario_security_block(project, log):
 
 
 def scenario_release_rollback(project, log):
+    set_change("SIM-REL-001")
     st = {}
 
     def assemble():
@@ -570,6 +595,7 @@ def scenario_release_rollback(project, log):
 
 
 def scenario_agent_change(project, log):
+    set_change("SIM-CHG-001")
     st = {}
 
     def design():
@@ -658,6 +684,7 @@ def patch_status(project, aid, status):
 
 
 def scenario_onboarding(project, log):
+    set_change("SIM-FEAT-003")
     st = {}
 
     def discover():
@@ -686,6 +713,7 @@ def scenario_onboarding(project, log):
 
 
 def scenario_change_request(project, log):
+    set_change("SIM-CHG-002")
     """Retention goes from 30 days to 90. One sentence, seven dimensions."""
     st = {}
 
@@ -744,6 +772,7 @@ def scenario_change_request(project, log):
 
 
 def scenario_migration(project, log):
+    set_change("SIM-MIG-001")
     """A schema change that transforms existing rows, rehearsed before it runs."""
     st = {}
 
@@ -822,6 +851,7 @@ def scenario_migration(project, log):
 
 
 def scenario_migration_rollback(project, log):
+    set_change("SIM-MIG-002")
     """Verification finds rows that did not transform, so it goes back.
 
     The happy path proves the migration can run. This proves the organization can
