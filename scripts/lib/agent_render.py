@@ -9,23 +9,21 @@ import os
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-SECTIONS = [
-    "Role contract",
-    "Purpose",
-    "Responsibilities",
-    "Not your responsibility",
-    "Authority",
-    "Allowed actions",
-    "Forbidden actions",
-    "Required inputs",
-    "Expected outputs",
-    "Skills",
-    "Model policy",
-    "Escalation",
-    "Review requirements",
-    "Handoff",
-    "Definition of done",
-]
+def _sections():
+    """The canonical section order, from policies/agent-registry.json.
+
+    Read rather than restated. This file used to carry its own copy, which drifted
+    two sections out of date and made scaffold_agent.py emit a definition the
+    validator refused -- the documented way to create an agent failing the build.
+    """
+    import json
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(os.path.dirname(here))
+    with open(os.path.join(root, "policies", "agent-registry.json"), encoding="utf-8") as fh:
+        return json.load(fh)["role_contract_sections"]
+
+
+SECTIONS = _sections()
 
 
 def load_policies():
@@ -45,7 +43,10 @@ def render(entry, body, profiles, scope):
     fm = [
         "---",
         "name: %s" % entry["name"],
-        "description: %s" % body["description"],
+        # Always quoted. A description containing ": " is a syntax error to any
+        # strict YAML parser, and validate_plugin.py rejects it -- the renderer
+        # emitting one meant the scaffold produced a file that failed the build.
+        'description: "%s"' % body["description"].replace('"', '\\"'),
         "tools: %s" % tools,
         "model: %s" % entry["default_model"],
     ]
@@ -129,15 +130,9 @@ def render(entry, body, profiles, scope):
         "",
         _bullets(body["outputs"]),
         "",
-        "## Skills",
-        "",
-        _bullets(["`%s`" % s for s in body.get("skills", [])] or ["None preloaded."]) +
-        "\n\nSkills listed in frontmatter are preloaded when this definition runs as a subagent. Claude Code does **not** apply the `skills` field when the same definition runs as an agent-team teammate, so when you are a teammate, invoke the skills you need explicitly.",
-        "",
-        "## Model policy",
-        "",
-        body["model_policy"],
-        "",
+        # No Skills or Model policy section: v0.8.0 removed both. Skills duplicated
+        # the frontmatter, and Model policy addressed the caller from a file only
+        # the callee reads -- a running subagent cannot change its own model.
         "## Escalation",
         "",
         _bullets(body["escalation"]),

@@ -16,7 +16,7 @@ contract complete down the whole chain:
 
 ```
 Agent
- ↓ role contract      15 sections, enforced by validation
+ ↓ role contract      13 sections, enforced by validation
  ↓ skills             preloaded, and named explicitly for teammates
  ↓ tools              one of six profiles, exactly
  ↓ permissions        write scope, spawn authority

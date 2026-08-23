@@ -1,5 +1,21 @@
 {
   "version": "1",
+  "role_contract_sections": [
+    "Role contract",
+    "Purpose",
+    "Responsibilities",
+    "Not your responsibility",
+    "Authority",
+    "Allowed actions",
+    "Forbidden actions",
+    "Required inputs",
+    "Expected outputs",
+    "Escalation",
+    "Review requirements",
+    "Handoff",
+    "Definition of done"
+  ],
+  "role_contract_sections_note": "The section order every agent definition follows, in order. One list, read by scripts/lib/agent_render.py when it writes a file and by scripts/validate_plugin.py when it checks one. There used to be four copies: the renderer still emitted the Skills and Model policy sections that v0.8.0 removed, so scaffold_agent.py -- the documented way to create an agent -- produced a file the validator rejected. Every section here must change what the agent does; Skills duplicated the frontmatter and Model policy addressed the caller, which is why both went.",
   "description": "Authoritative registry of every agent in the AI Engineering OS. scripts/validate_plugin.py enforces that agents/*.md and this file agree on name, tool profile and model, and that every agent has an owner, risk class and evaluation suite.",
   "lifecycle_states": [
     "draft",

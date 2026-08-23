@@ -18,9 +18,12 @@ are one agent with two tasks.
 
 ## The role contract
 
-Every agent file carries the same fifteen sections, in the same order.
-`scripts/validate_plugin.py` fails if any is missing or out of order, which is
-how the structure survives thirty contributors.
+Every agent file carries the same thirteen sections, in the same order. The list
+lives once, in `policies/agent-registry.json` under `role_contract_sections`, and
+is read by both the renderer that writes a definition and the validator that
+checks one. It used to exist in four places, and the renderer's copy drifted two
+sections out of date — so `scaffold_agent.py`, the documented way to create an
+agent, produced files the build rejected.
 
 | Section | What it establishes |
 | --- | --- |
@@ -33,12 +36,16 @@ how the structure survives thirty contributors.
 | Forbidden actions | Hard limits, including every human-approval item that applies |
 | Required inputs | What must exist before it can work |
 | Expected outputs | What it produces, concretely |
-| Skills | Preloaded capabilities |
-| Model policy | Default and escalation, referencing `policies/model-policy.json` |
 | Escalation | Where each kind of blockage goes |
 | Review requirements | Who checks its output |
 | Handoff | Who receives what |
 | Definition of done | The completion test |
+
+Two sections were removed in v0.8.0 and are worth knowing about, because their
+absence is deliberate. **Skills** duplicated the frontmatter, which is what
+actually preloads them. **Model policy** told the caller how to escalate, in a
+file only the callee reads — and a running subagent cannot change its own model.
+Every section that remains changes what the agent does.
 
 "You are a backend developer" is not a role definition. It states a persona and
 nothing else: no authority, no limits, no inputs, no completion criterion.

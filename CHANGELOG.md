@@ -3,6 +3,46 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.21.2] — The documented way to create an agent failed the build
+
+`scripts/scaffold_agent.py` is the flow both `docs/development.md` and
+`skills/agent-development/SKILL.md` prescribe. It emitted a definition
+`validate_plugin.py` rejected, and had done since v0.8.0.
+
+```
+$ python3 scripts/scaffold_agent.py contract-reviewer
+Wrote agents/contract-reviewer.md
+
+$ python3 scripts/validate_plugin.py
+ERROR agents/contract-reviewer.md: role contract sections wrong.
+      unexpected=['Skills', 'Model policy']
+```
+
+Two causes, both the same shape.
+
+**The section order existed in four places.** v0.8.0 removed `Skills` and
+`Model policy` from the contract and updated the validator, the agents and the
+docs — but not the renderer, which kept its own copy. The list now lives once, in
+`policies/agent-registry.json` under `role_contract_sections`, read by the
+renderer that writes a definition and the validator that checks one.
+
+**The renderer emitted an unquoted description.** The placeholder text contains
+`": "`, which is a syntax error to any strict YAML parser — and v0.8.0 added a
+check for exactly that. Descriptions are quoted now.
+
+Neither was caught because no test ran the two together. `tests/test_scaffold_agent.py`
+does: it adds a registry entry, scaffolds, and validates, which is the flow a
+contributor actually follows. Its other four tests assert the renderer and the
+validator read the same list, that every shipped agent matches it, and that a
+section dropped from the contract disappears from the renderer's output.
+
+Also corrected: `docs/agent-model.md` and `docs/organization-freeze.md` still said
+fifteen sections. The agent-model table now says why the two are gone — `Skills`
+duplicated the frontmatter that actually preloads them, and `Model policy`
+addressed the caller from a file only the callee reads.
+
+Tests: **374 → 380.**
+
 ## [0.21.1] — Documentation that is true, and connected
 
 ### Fixed — the counts, and the reason they were wrong
