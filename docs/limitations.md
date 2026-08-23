@@ -5,8 +5,7 @@ like it works.
 
 ## Platform limits
 
-**Agent teams are experimental.** Disabled by default, interactive sessions only,
-no nested teams, no session resumption for in-process teammates, model and
+**Agent teams are experimental.** Disabled by default, no nested teams, no session resumption for in-process teammates, model and
 model fixed at spawn, and `skills`/`mcpServers` frontmatter not applied to
 teammates. Team composition therefore lives in prompts, not configuration.
 
@@ -93,6 +92,29 @@ calls proceed — fail-open, by design, but worth knowing.
 
 **Windows is untested.** The scripts are POSIX-oriented Python and should work,
 but no one has run them there.
+
+**Cycle acceptance is re-checked, but not entirely determinable.** Every cycle
+declares `determined_by: scripts/check_dod.py`, and until v0.22 that determiner
+was never consulted: acceptance was whatever the lead wrote into the rollup.
+`cycle_accepted` now re-evaluates the cycle's own conditions and refuses to
+accept over any it can see is false, and it reads `rollup.streams` so a cycle
+cannot be declared accepted with work still in `CHANGES_REQUESTED`. What remains:
+a condition needing evidence from outside the repository — a pipeline result — is
+still the head's word. The predicate says so in its own output rather than
+counting it as satisfied.
+
+**`WF-RELEASE` has not been migrated to the split release authority.** `WF-FEATURE`
+separates content approval (`AP-01`) from deployment authorization (`AP-14`) and
+has no separate gate on `DEPLOY`. `sdlc/workflows/release.yaml` and
+`policies/release-authority.json` still use `AP-01` for both and `DEPLOY` still
+carries its own gate. Two deploying workflows, two models.
+
+**A task lease expires after an hour; it is not a liveness signal.** An agent that
+crashes never releases its task, and a leased task is skipped, so one dead session
+would strand everything behind it. The lease now expires and `next` names whoever
+is holding a task. An hour is a compromise: shorter risks handing a live agent's
+task to a second one, longer leaves the graph stuck. Nothing observes the agent
+itself.
 
 **Agent counts are a judgement.** 30 agents is an argued optimum, not a proven
 one. Some boundaries will turn out wrong, and `docs/organization.md` records

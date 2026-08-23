@@ -22,7 +22,7 @@ color: cyan
 | Reports to | engineering-director |
 | Risk class | HIGH |
 | Tool profile | researching-author (`Read, Grep, Glob, Edit, Write, WebFetch, WebSearch`) |
-| Write scope | May write only to: `docs/architecture/**`, `docs/adrs/**`, `docs/design/**` |
+| Write scope | May write only to: `docs/architecture/**`, `docs/adrs/**`, `docs/design/**`, `docs/observability/**`, `docs/decisions/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to the human operator. |
 
 ## Purpose

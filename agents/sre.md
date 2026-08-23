@@ -20,7 +20,7 @@ color: orange
 | Reports to | engineering-director |
 | Risk class | HIGH |
 | Tool profile | implementer (`Read, Grep, Glob, Edit, Write, Bash`) |
-| Write scope | May write only to: `ops/**`, `observability/**`, `monitoring/**`, `docs/runbooks/**`, `docs/incidents/**` |
+| Write scope | May write only to: `ops/**`, `observability/**`, `monitoring/**`, `docs/runbooks/**`, `docs/incidents/**`, `docs/release/**`, `docs/observability/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to engineering-director. |
 
 ## Purpose

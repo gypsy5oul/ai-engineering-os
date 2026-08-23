@@ -127,8 +127,9 @@ rollup:
     - next_gate
 acceptance:
   conditions:
-    - artifact_exists(TESTREPORT)
-    - every_linked(REQ, TEST)
+  # Department-generic only. An artifact-shaped condition belongs to the workflow
+  # stage that produces that artifact, not to the department: the same cycle runs
+  # inside WF-MIGRATION and WF-ONBOARDING, which produce no ARCH and no REQ.
     - agent_verdict(test-reviewer, pass)
     - no_unresolved_findings(high)
   requested_by: head

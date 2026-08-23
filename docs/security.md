@@ -53,11 +53,13 @@ because it destroys the audit trail while creating an illusion of cleanup.
 
 ## High-risk operations
 
-`policies/approval-policy.json` lists eleven categories requiring a human:
+`policies/approval-policy.json` lists fifteen categories requiring a human:
 production deployment, architecture-changing decisions, technology selection,
 security exceptions, destructive migrations, breaking API changes, major
 infrastructure changes, credential changes, protected-branch writes, changes to
-this repository's control plane, and production data access.
+this repository's control plane, production data access, scope acceptance
+(AP-12), acceptance of residual quality risk (AP-13), deployment authorization
+(AP-14), and a change to an existing commitment (AP-15).
 
 Everything else is explicitly autonomous, and the policy says so, because a
 system that asks for approval on trivial work gets approved without being read.

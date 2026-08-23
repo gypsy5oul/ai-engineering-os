@@ -123,9 +123,9 @@ rollup:
     - next_gate
 acceptance:
   conditions:
-    - artifact_status(ARCH, approved)
-    - every_linked(REQ, ARCH)
+  # Department-generic only. An artifact-shaped condition belongs to the workflow
+  # stage that produces that artifact, not to the department: the same cycle runs
+  # inside WF-MIGRATION and WF-ONBOARDING, which produce no ARCH and no REQ.
     - agent_verdict(architecture-reviewer, pass)
-    - artifact_status(ADR, accepted)
   requested_by: head
   determined_by: scripts/check_dod.py against acceptance.conditions

@@ -284,7 +284,16 @@ def path_matches(path, patterns):
     if not path:
         return False
     norm = path.replace("\\", "/")
-    candidates = {norm, os.path.basename(norm)}
+    # Collapsed before matching. `src/../../../etc/passwd` matched no deny glob
+    # and still satisfied `src/**`, so the traversal was invisible to the deny
+    # list and legible to the allow list -- exactly backwards.
+    flat = os.path.normpath(norm).replace("\\", "/")
+    candidates = {flat, os.path.basename(flat)}
+    # The raw spelling is only a candidate when it has no traversal in it. Keeping
+    # it otherwise is what let `docs/requirements/../src/app.js` satisfy an allow
+    # glob for `docs/requirements/**` while actually writing to src/.
+    if ".." not in norm.split("/"):
+        candidates.add(norm)
     try:
         rel = os.path.relpath(os.path.abspath(path), PROJECT_DIR).replace("\\", "/")
         if not rel.startswith(".."):
@@ -335,3 +344,19 @@ def is_protected(branch):
     if not branch:
         return False
     return any(fnmatch.fnmatch(branch, p) for p in protected_branches())
+
+
+def escapes_project(path):
+    """Whether the path resolves outside the project directory.
+
+    An allow-list is a statement about paths inside the project. A candidate that
+    leaves it cannot be satisfied by one, however it is spelled.
+    """
+    if not path:
+        return False
+    try:
+        target = os.path.abspath(os.path.join(PROJECT_DIR, path))
+        root = os.path.abspath(PROJECT_DIR)
+        return os.path.commonpath([target, root]) != root
+    except Exception:
+        return True

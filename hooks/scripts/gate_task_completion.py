@@ -30,7 +30,7 @@ import hooklib as H  # noqa: E402
 sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts", "lib"))
 
 
-def failing_predicates(project, task):
+def failing_predicates(project, task, change=None):
     """Predicates of this task's definition of done that FAIL right now.
 
     Evidence that cannot be seen from here is not a failure. A GitLab pipeline
@@ -43,6 +43,10 @@ def failing_predicates(project, task):
     sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts"))
     import check_dod
     artifacts = check_dod.load_artifacts(project)
+    if change:
+        # The one gate that actually blocks was the one place that never scoped.
+        # Unscoped, a finished change's artifacts satisfy a new change's task.
+        artifacts = check_dod.scope_to_change(artifacts, change)
     out = []
     for entry in dod:
         fn, args = check_dod.parse_predicate(entry)
@@ -81,7 +85,7 @@ def main():
         if held is None:
             sys.exit(0)
 
-        failing = failing_predicates(project, held)
+        failing = failing_predicates(project, held, change=wid)
         if not failing:
             W.record(project, wid, "task_completion_allowed", task=held["id"],
                      native_task=task_id)

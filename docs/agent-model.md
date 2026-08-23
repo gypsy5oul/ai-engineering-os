@@ -86,10 +86,23 @@ Tool profiles in `policies/tool-permissions.json`:
 | --- | --- | --- |
 | `analysis-readonly` | Read, Grep, Glob, WebFetch, WebSearch | Reviewers who need external references |
 | `review-readonly` | Read, Grep, Glob, Bash | Reviewers who need to run diffs and analysers |
+| `operator-readonly` | Read, Grep, Glob, Bash, WebFetch | Read-only investigation of running systems and telemetry |
 | `author` | Read, Grep, Glob, Edit, Write | Roles that produce documents, never execute |
+| `researching-author` | author plus WebFetch, WebSearch | Authoring whose correctness depends on facts outside the repository |
 | `implementer` | Read, Grep, Glob, Edit, Write, Bash | Roles that change code and run tests |
 | `orchestrator` | Read, Grep, Glob, Bash, Agent | Pure coordination |
+| `delegating-author` | author plus Agent | A department lead that authors and delegates, without executing commands |
+| `delegating-researcher` | author plus Agent, WebFetch, WebSearch | A department lead that authors, delegates, and must verify facts outside the repository |
 | `lead` | orchestrator plus Edit, Write | Coordination that also authors planning artifacts |
+
+Ten profiles, two of which no role currently holds: `orchestrator` and
+`operator-readonly`. Every coordinating role turned out to author something as
+well, so they hold `lead`, `delegating-author` or `delegating-researcher`
+instead; and the roles that investigate production also write or run diffs, so
+they hold `implementer` or `review-readonly`. A profile nobody holds grants
+nothing. Both stay because `lead` is defined as `orchestrator` plus Edit and
+Write, and because the shape they name is what a new role would be measured
+against.
 
 Tool lists cannot express *where* a role may write, so `policies/write-scope.json`
 adds that, enforced by `hooks/scripts/guard_write.py`:

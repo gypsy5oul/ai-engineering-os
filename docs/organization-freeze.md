@@ -18,7 +18,7 @@ contract complete down the whole chain:
 Agent
  ↓ role contract      13 sections, enforced by validation
  ↓ skills             preloaded, and named explicitly for teammates
- ↓ tools              one of six profiles, exactly
+ ↓ tools              one of ten profiles, exactly
  ↓ permissions        write scope, spawn authority
  ↓ model policy       role default + risk + complexity, resolvable per stage
  ↓ artifacts          what it creates, modifies, reviews, approves

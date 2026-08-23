@@ -140,5 +140,10 @@
       "on_no_tokens": "no-signature, which never matches anything, including itself. Deciding two failures are the same on no evidence is worse than deciding they differ: a wrong 'same' escalates work that was making progress."
     },
     "comparison": "Same class AND same signature means the same failure. Class alone is too coarse -- two unrelated test failures are both test_failure -- and signature alone would collide across kinds."
+  },
+  "lease": {
+    "ttl_seconds": 3600,
+    "why": "A task claimed by an agent that never stopped is held forever: runnable() skips a leased task, so one crashed session strands every task behind it and the graph looks busy while being finished. The concurrency ledger already expires its slots on the same reasoning -- a stuck slot is worse than a missed one -- and the task lease, which costs more when it sticks, had no such rule.",
+    "on_expiry": "The lease is dropped and the task becomes runnable again. Its attempts are unchanged, so a task that keeps being claimed and abandoned still reaches its cap and escalates rather than cycling."
   }
 }

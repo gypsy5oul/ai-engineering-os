@@ -495,7 +495,11 @@
       ],
       "immutable_after_creation": false,
       "notes": "An exception without an expiry is a policy change in disguise.",
-      "append_only": false
+      "append_only": false,
+      "optional_fields": [
+        "findings"
+      ],
+      "findings_shape": "A list of {id, severity, status}. severity is one of info, low, medium, high, critical; status defaults to open. no_unresolved_findings(severity) reads it."
     },
     {
       "code": "DES",
@@ -835,7 +839,11 @@
       ],
       "immutable_after_creation": false,
       "notes": "Carries agent verdicts AND the human merge approval, in separate fields.",
-      "append_only": false
+      "append_only": false,
+      "optional_fields": [
+        "findings"
+      ],
+      "findings_shape": "A list of {id, severity, status}. severity is one of info, low, medium, high, critical; status defaults to open. no_unresolved_findings(severity) reads it."
     },
     {
       "code": "TESTREPORT",
@@ -1200,12 +1208,12 @@
       "type": "dependency-assessment",
       "workflow": "WF-DEPENDENCY",
       "produced_by_stage": "CLASSIFY",
-      "owner_role": "dependency-reviewer",
+      "owner_role": "security-architect",
       "may_modify": [
-        "dependency-reviewer",
-        "backend-developer"
+        "security-architect"
       ],
       "may_review": [
+        "dependency-reviewer",
         "security-reviewer"
       ],
       "may_approve": {
@@ -1250,7 +1258,11 @@
       ],
       "immutable_after_creation": false,
       "notes": "Urgency from exploitability in THIS deployment, or a support end date. Never CVSS alone.",
-      "append_only": false
+      "append_only": false,
+      "optional_fields": [
+        "findings"
+      ],
+      "findings_shape": "A list of {id, severity, status}. severity is one of info, low, medium, high, critical; status defaults to open. no_unresolved_findings(severity) reads it."
     },
     {
       "code": "CR",

@@ -48,6 +48,23 @@ def self_test():
     return failures
 
 
+def uncompilable_project_rules():
+    """Project overrides that will not compile, named at session start.
+
+    A dropped rule is the safety net getting smaller, and it happens when a
+    project is trying to make the net bigger. Silence is the wrong response.
+    """
+    try:
+        sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "hooks", "scripts"))
+        import guard_bash  # noqa: E402
+        dropped = []
+        guard_bash.compile_rules(H.policy("hook-policy.json") or {},
+                                 H.project_overrides() or {}, dropped)
+        return dropped
+    except Exception:
+        return []
+
+
 def teams_line(cfg):
     """Reconciles what the project expects about agent teams with what is actually set.
 
@@ -115,6 +132,14 @@ def main():
     note = teams_line(cfg if (has_yaml or has_json) else {})
     if note:
         lines.append(note)
+
+    dropped = uncompilable_project_rules()
+    if dropped:
+        lines.insert(0, "SAFETY RULES ARE MISSING. These did not compile and are not being "
+                        "applied: %s. Fix .ai-engineering/security.json -- production_markers "
+                        "are literal environment names and extra_deny_patterns must be valid "
+                        "regular expressions." % ", ".join(dropped))
+        H.audit({"type": "rules_dropped", "rules": dropped})
 
     failures = self_test()
     if failures:

@@ -38,6 +38,33 @@ class Hooked(unittest.TestCase):
                         "plan", "--project", self.project, "--item", "SFTP-FEAT-001"],
                        capture_output=True, timeout=120)
 
+    def unblock(self, task_id):
+        """Mark everything the task waits on as accepted.
+
+        These tests used to reach an agent's task straight after plan, which only
+        worked while claim() handed out tasks with unmet dependencies. It no
+        longer does, so the graph has to actually be advanced.
+        """
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        pending, done = [task_id], set()
+        while pending:
+            current = pending.pop()
+            for dep in W.task(graph, current).get("depends_on") or []:
+                if dep not in done:
+                    done.add(dep)
+                    pending.append(dep)
+        for t in graph["tasks"]:
+            if t["id"] in done:
+                t["state"] = "accepted"
+        W.save_graph(self.project, graph)
+
+    def unblock_role(self, role):
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        for t in graph["tasks"]:
+            if t["role"] == role:
+                return self.unblock(t["id"])
+        return None
+
     def hook(self, script, payload):
         env = dict(os.environ, CLAUDE_PLUGIN_ROOT=ROOT, CLAUDE_PROJECT_DIR=self.project)
         proc = subprocess.run(
@@ -48,7 +75,9 @@ class Hooked(unittest.TestCase):
 
 
 class TestContextInjection(Hooked):
-    def start(self, agent_type):
+    def start(self, agent_type, unblock=None):
+        if unblock:
+            self.unblock(unblock)
         return self.hook("inject_context.py",
                          {"hook_event_name": "SubagentStart", "agent_type": agent_type,
                           "agent_id": "a1"})
@@ -61,7 +90,7 @@ class TestContextInjection(Hooked):
         self.assertIn("Partners time out", ctx)
 
     def test_it_receives_its_own_task_and_not_the_whole_graph(self):
-        ctx = self.start("product-manager")["hookSpecificOutput"]["additionalContext"]
+        ctx = self.start("product-manager", unblock="T-002")["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Requirement discovery", ctx)
         self.assertNotIn("Release planning", ctx,
                          "the product manager was handed the release manager's task")
@@ -79,7 +108,7 @@ class TestContextInjection(Hooked):
                         "--task", "T-002", "--outcome", "failed",
                         "--detail", "the target has no measurable indicator"],
                        capture_output=True, timeout=120)
-        ctx = self.start("product-manager")["hookSpecificOutput"]["additionalContext"]
+        ctx = self.start("product-manager", unblock="T-002")["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Attempt 2 of 3", ctx)
         self.assertIn("no measurable indicator", ctx)
 
@@ -89,7 +118,7 @@ class TestContextInjection(Hooked):
         t["coupled_surface"] = "api-contract"
         role = t["role"]
         W.save_graph(self.project, graph)
-        ctx = self.start(role)["hookSpecificOutput"]["additionalContext"]
+        ctx = self.start(role, unblock=t["id"])["hookSpecificOutput"]["additionalContext"]
         self.assertIn("api-contract", ctx)
         self.assertIn("raise it rather than changing it", ctx)
 
@@ -107,6 +136,7 @@ class TestContextInjection(Hooked):
 
 class TestSubagentObservation(Hooked):
     def start(self, agent_type, agent_id="a1"):
+        self.unblock_role(agent_type)
         return self.hook("inject_context.py",
                          {"hook_event_name": "SubagentStart", "agent_type": agent_type,
                           "agent_id": agent_id, "session_id": "S1"})

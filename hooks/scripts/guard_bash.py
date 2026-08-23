@@ -37,27 +37,39 @@ def marker_alternation(pol, overrides):
     seen = [m for m in dict.fromkeys(markers) if m]
     if not seen:
         return MARKER_TOKEN
-    return "|".join(sorted(seen, key=len, reverse=True))
+    # Escaped, because a marker is the literal name of an environment. Unescaped,
+    # `prod-eu(1` is an unbalanced group that fails to compile, and every rule
+    # carrying the token was dropped -- five of the seven production rules gone
+    # because a project made a typo while trying to tighten its own policy.
+    return "|".join(re.escape(m) for m in sorted(seen, key=len, reverse=True))
 
 
-def compile_rules(pol, overrides):
+def compile_rules(pol, overrides, dropped=None):
+    """Compile the rule set. `dropped` collects anything that would not compile.
+
+    The policy says projects may tighten freely and that loosening is never
+    silent. A rule discarded here is loosening, so it has to be reported the way
+    a rejected waiver is -- in the decision, in the audit record and at session
+    start -- rather than vanishing.
+    """
     rules = []
+    dropped = [] if dropped is None else dropped
     alternation = marker_alternation(pol, overrides)
     for r in pol.get("rules", []):
         flags = re.I if "i" in (r.get("flags") or "") else 0
         pattern = r["pattern"].replace(MARKER_TOKEN, alternation)
         try:
             rules.append((re.compile(pattern, flags), r))
-        except re.error:
-            continue
+        except re.error as exc:
+            dropped.append("%s (%s)" % (r.get("id", "?"), exc))
     for i, pat in enumerate(overrides.get("extra_deny_patterns", []) or []):
         try:
             rules.append((re.compile(pat, re.I), {
                 "id": "PROJ-%02d" % (i + 1), "category": "project-defined", "action": "deny",
                 "message": "Blocked by a project-defined rule in .ai-engineering/security.json.",
                 "remediation": "Ask the project owner why this rule exists before working around it."}))
-        except re.error:
-            continue
+        except re.error as exc:
+            dropped.append("extra_deny_patterns[%d] (%s)" % (i, exc))
     return rules
 
 
@@ -95,7 +107,10 @@ def push_targets(command):
         toks = [t for t in rest.split() if not t.startswith("-")]
         # git push <remote> <refspec>...
         for tok in toks[1:] if len(toks) > 1 else []:
-            ref = tok.split(":")[-1]
+            # `git push origin "main"` and `git push origin +main` both land on
+            # main. Matched literally, neither looked like main at all.
+            ref = tok.strip("\"'").lstrip("+")
+            ref = ref.split(":")[-1].strip("\"'")
             ref = re.sub(r"^refs/heads/", "", ref)
             if ref and ref not in ("HEAD",):
                 targets.append(ref)
@@ -158,7 +173,8 @@ def main():
     waived, rejected_waivers = active_waivers(overrides)
 
     hits = []
-    for rx, rule in compile_rules(pol, overrides):
+    dropped_rules = []
+    for rx, rule in compile_rules(pol, overrides, dropped_rules):
         if rule.get("id") in waived:
             H.audit({"type": "waived", "rule": rule.get("id"), "command": command[:400]})
             continue
@@ -171,7 +187,20 @@ def main():
         hits.append({"id": rid, "category": "protected-branch", "action": decision,
                      "message": msg, "remediation": remedy})
 
+    if dropped_rules:
+        # Reported on the very next decision even when nothing matched, because
+        # the rule that would have matched may be one of the dropped ones.
+        H.audit({"type": "rules_dropped", "rules": dropped_rules,
+                 "session": data.get("session_id")})
+
     if not hits:
+        if dropped_rules:
+            H.decide(EVENT, "escalate",
+                     "Some safety rules could not be compiled, so this command was not fully "
+                     "checked: %s\nWhat to do instead: fix the malformed entry in "
+                     ".ai-engineering/security.json -- production_markers are literal environment "
+                     "names and extra_deny_patterns must be valid regular expressions."
+                     % ", ".join(dropped_rules), rule_id="POLICY-BROKEN")
         H.allow_silently()
 
     hits.sort(key=lambda r: SEVERITY_ORDER.get(r.get("action", "warn"), 3))
@@ -186,6 +215,9 @@ def main():
     note = ""
     if rejected_waivers:
         note = " Ignored invalid waivers: %s." % ", ".join(rejected_waivers)
+    if dropped_rules:
+        note += (" Warning: these rules did not compile and were NOT applied: %s."
+                 % ", ".join(dropped_rules))
 
     reason = "%s %s\nWhat to do instead: %s%s" % (
         top.get("message", "Blocked."), "(rules: %s)" % ids if len(hits) > 1 else "",

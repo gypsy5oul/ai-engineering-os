@@ -41,7 +41,7 @@ class TestFaultsAreHandled(unittest.TestCase):
             capture_output=True, text=True, timeout=60).stdout
         for needed in ("Architecture is rejected", "QA fails", "rework limit",
                        "escalation is still open", "withdrawn", "Agent teams are unavailable",
-                       "notification channel", "GitLab is unreachable", "hook policy",
+                       "notification channel", "Evidence outside the repository", "hook policy",
                        "required model", "nobody moves it", "concurrency limit",
                        "untested rollback", "dimension unanswered",
                        "readiness still not ready", "no runbook",
@@ -59,8 +59,20 @@ class TestFaultsDetectRemovedControls(unittest.TestCase):
     """
 
     MUTATIONS = [
+        # F-05, F-12 and F-13 were rebuilt after a review found all three
+        # certifying controls they never exercised. They are mutation-tested first
+        # because a fault that tests nothing is worse than a missing one: it is
+        # counted as coverage.
+        ("F-05", "the findings severity argument is ignored again", "scripts/check_dod.py",
+         "if order.get(sev, -1) < floor:", "if True:"),
+        ("F-12", "a broken channel file reports a send anyway", "scripts/route_event.py",
+         """decision.update({"send": False, "severity": "policy-error",""",
+         """decision.update({"send": True, "severity": "policy-error","""),
+        ("F-13", "an unreachable pipeline reports success", "scripts/check_dod.py",
+         'if fn in ("pipeline_passed",):\n        return "REQUIRES-EVIDENCE"',
+         'if fn in ("pipeline_passed",):\n        return "PASS"'),
         ("F-07", "the rework limit stops being enforced", "scripts/check_dod.py",
-         'if r.get("rework_rounds", 0) > limit]', "if False]"),
+         'if r.get("rework_rounds", 0) >= limit]', "if False]"),
         ("F-10", "withdrawing an item counts as accepting it", "sdlc/cycles/dev.yaml",
          "    withdrawn: WITHDRAWN\n", "    withdrawn: ACCEPTED\n"),
         ("F-15", "an unavailable model downgrades instead of blocking",

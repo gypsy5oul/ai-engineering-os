@@ -425,3 +425,128 @@ class TestGraphIsAGraph(Loop):
                 self.assertLess(order[d], order[t["id"]],
                                 "%s depends on %s, which comes later" % (t["id"], d))
 
+
+class TestClaimEnforcesTheSameGatesAsNext(Loop):
+    """The binding path must enforce what the advisory path enforces.
+
+    `next` is output a model reads; `claim` is the binding SubagentStart performs.
+    claim() used to iterate every task matching the role, so it handed out tasks
+    with unmet dependencies, tasks past their attempt cap, and both halves of a
+    coupled surface -- while `next` correctly refused all three. Every bound in
+    the graph was real in the report and absent from the path a spawn takes.
+
+    These tests exist because the previous ones only ever exercised runnable().
+    """
+
+    def planned(self, risk="HIGH"):
+        wid = self.open_item(risk=risk)
+        cl(self.project, "plan", "--item", wid)
+        return wid
+
+    def test_a_task_with_unmet_dependencies_is_not_claimable(self):
+        wid = self.planned()
+        graph = W.load_graph(self.project, wid)
+        blocked = next(t for t in graph["tasks"] if t["depends_on"])
+        self.assertIsNone(W.claim(self.project, wid, blocked["role"], "agent-A"),
+                          "claim handed out %s, whose dependencies are unmet" % blocked["id"])
+
+    def test_an_exhausted_task_is_not_claimable(self):
+        wid = self.planned()
+        for i in range(3):
+            cl(self.project, "observe", "--item", wid, "--task", "T-002",
+               "--outcome", "failed", "--detail", "cause %d" % i)
+        graph = W.load_graph(self.project, wid)
+        role = W.task(graph, "T-002")["role"]
+        claimed = W.claim(self.project, wid, role, "agent-A")
+        self.assertNotEqual(getattr(claimed, "get", lambda k: None)("id"), "T-002",
+                            "claim handed out a task at 3 of 3 attempts")
+
+    def test_two_agents_never_hold_one_coupled_surface(self):
+        wid = self.planned()
+        graph = W.load_graph(self.project, wid)
+        for t in graph["tasks"][:2]:
+            t["role"], t["state"] = "backend-developer", "queued"
+            t["depends_on"], t["coupled_surface"] = [], "api-contract"
+        W.save_graph(self.project, graph)
+        first = W.claim(self.project, wid, "backend-developer", "agent-A")
+        second = W.claim(self.project, wid, "backend-developer", "agent-B")
+        self.assertIsNotNone(first)
+        self.assertIsNone(second,
+                          "two agents were handed the same contract to redefine")
+
+    def test_claim_and_next_agree_on_what_is_available(self):
+        """The invariant behind all three: anything claimable is runnable."""
+        wid = self.planned()
+        graph = W.load_graph(self.project, wid)
+        runnable_ids = {t["id"] for t in W.runnable(graph)}
+        for role in sorted({t["role"] for t in graph["tasks"]}):
+            claimed = W.claim(self.project, wid, role, "probe-%s" % role)
+            if claimed is not None:
+                with self.subTest(role=role):
+                    self.assertIn(claimed["id"], runnable_ids,
+                                  "claim offered %s, which runnable() excludes" % claimed["id"])
+                W.release(self.project, wid, "probe-%s" % role)
+
+
+
+class TestAnAbandonedLeaseDoesNotStrandTheGraph(Loop):
+    """An agent that crashes never calls release(). Without expiry, the task it
+    held is skipped by runnable() forever and everything behind it starves."""
+
+    def setUp(self):
+        Loop.setUp(self)
+        self.item = self.open_item()
+        cl(self.project, "plan", "--item", self.item)
+
+    def _held(self):
+        W.claim(self.project, self.item, "engineering-director", "agent-CRASHED")
+        graph = W.load_graph(self.project, self.item)
+        held = [t for t in graph["tasks"] if t.get("owner_agent")][0]
+        return graph, held
+
+    def test_a_fresh_lease_is_respected(self):
+        graph, held = self._held()
+        self.assertNotIn(held["id"], [t["id"] for t in W.runnable(graph)])
+        self.assertFalse(W.lease_expired(held))
+
+    def test_a_stale_lease_expires_and_the_task_returns(self):
+        graph, held = self._held()
+        held["last_activity"] = "2020-01-01T00:00:00"
+        self.assertTrue(W.lease_expired(held))
+        self.assertIn(held["id"], [t["id"] for t in W.runnable(graph)])
+
+    def test_expiry_does_not_reset_attempts(self):
+        """A task claimed and abandoned repeatedly must still reach its cap and
+        escalate, rather than cycling forever on a fresh lease each time."""
+        graph, held = self._held()
+        held["attempts"] = held.get("max_attempts", 3)
+        held["last_activity"] = "2020-01-01T00:00:00"
+        self.assertTrue(W.lease_expired(held))
+        self.assertNotIn(held["id"], [t["id"] for t in W.runnable(graph)])
+
+    def test_a_stale_lease_releases_its_coupled_surface(self):
+        """A dead lease must not hold a shared contract hostage either. The
+        surface stays single-owner afterwards -- it returns to circulation, it
+        does not become free-for-all."""
+        graph, held = self._held()
+        held["coupled_surface"] = "api-contract"
+        other = [t for t in graph["tasks"] if t["id"] != held["id"]][0]
+        other["coupled_surface"], other["depends_on"] = "api-contract", []
+        other["state"] = "queued"
+        self.assertEqual([], W.runnable(graph), "the surface is held and nothing moves")
+        held["last_activity"] = "2020-01-01T00:00:00"
+        offered = [t["id"] for t in W.runnable(graph)]
+        self.assertEqual(1, len(offered), "one surface, one owner: %s" % offered)
+        self.assertTrue(offered, "the surface stayed locked behind a dead agent")
+
+    def test_next_names_the_task_that_is_holding_the_graph(self):
+        self._held()
+        out = cl(self.project, "next", "--item", self.item).stdout
+        self.assertIn("held by agent-CRASHED", out)
+
+    def test_the_ttl_comes_from_policy_not_from_a_literal(self):
+        policy = json.load(open(os.path.join(ROOT, "policies", "control-loop-policy.json")))
+        self.assertIn("ttl_seconds", policy.get("lease", {}))
+        graph, held = self._held()
+        held["last_activity"] = "2020-01-01T00:00:00"
+        self.assertFalse(W.lease_expired(held, ttl=10 ** 12))

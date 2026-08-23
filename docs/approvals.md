@@ -45,7 +45,7 @@ they approved. Durable approval is a GitLab artifact; see
 
 ## The approval categories
 
-Eleven, in `policies/approval-policy.json`, each with an id, a reason and the
+Fifteen, in `policies/approval-policy.json`, each with an id, a reason and the
 mechanism that enforces it. A stage that names an `AP-nn` must carry a
 `human_gate`; validation warns when it does not.
 
@@ -75,7 +75,7 @@ agent. The named humans come from `.ai-engineering/project.yaml` under
 `approval:`, and a category with no named human cannot be satisfied — validation
 says so rather than letting it pass.
 
-## Release: three acts, not one
+## Release: four acts, not one
 
 `policies/release-authority.json` splits what 0.2.0 collapsed:
 
@@ -91,19 +91,27 @@ carried standing permission to deploy on Friday against a production that had
 since changed. `AUTHORIZE` is a separate stage in both deploying workflows, and a
 rollback needs the same authorization.
 
-The two acts now carry **different approval ids**. Until 0.9.0 both were `AP-01`,
-which meant the release approval already satisfied the authorization's own
-definition of done: the separation the table describes existed in prose and not
-in anything a machine checked. Content approval is `AP-01`; authorizing
-deployment now is `AP-14`.
+In `WF-FEATURE` the two acts carry **different approval ids**. Until 0.9.0 both
+were `AP-01`, which meant the release approval already satisfied the
+authorization's own definition of done: the separation the table describes
+existed in prose and not in anything a machine checked. There, content approval
+is `AP-01` and authorizing deployment now is `AP-14`.
 
-**Execution is not a third decision.** `DEPLOY` used to carry its own human gate
-with the same approver and the same policy reference as `AUTHORIZE`, deciding
-nothing that had not just been decided. It now depends on the authorization
-being recorded, and the production commands themselves still reach the human
-through `guard_bash`. A gate that asks a question whose answer is already
-determined teaches people to approve without reading, and then the gates that
-matter get the same reflex.
+**`WF-RELEASE` has not been migrated.** Its `APPROVE`, `AUTHORIZE`, `DEPLOY` and
+`ROLLBACK` stages all still declare `AP-01`, and so does
+`deployment_authorization` in `policies/release-authority.json`. In that
+workflow the separation is still prose. Read the table as the design and
+`sdlc/workflows/feature-delivery.yaml` as the only place it is currently
+enforced.
+
+**Execution is not a separate decision.** In `WF-FEATURE`, `DEPLOY` used to
+carry its own human gate with the same approver and the same policy reference as
+`AUTHORIZE`, deciding nothing that had not just been decided. It now depends on
+the authorization being recorded, and the production commands themselves still
+reach the human through `guard_bash`. `WF-RELEASE/DEPLOY` still carries that
+gate. A gate that asks a question whose answer is already determined teaches
+people to approve without reading, and then the gates that matter get the same
+reflex.
 
 ## Where approval lives
 

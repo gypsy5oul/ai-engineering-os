@@ -141,15 +141,36 @@ python3 scripts/resolve_model.py --all   # model routing for every stage
 2. **Place the work.** `/ai-engineering-os:sdlc-navigator` tells you which
    workflow and stage the request belongs to, what is missing, and which
    approvals apply.
-3. **Work.** Delegate to the roles, or spawn an agent team using the patterns in
-   `/ai-engineering-os:team-patterns`.
+3. **Open the work item.** This is the step that turns the diagram above into
+   something running. Until a work item exists, the hooks that inject context and
+   gate completion have nothing to attach to and stay silent.
+
+   ```bash
+   python3 scripts/control_loop.py open  --project . --type feature \
+       --intent "Partners time out on large transfers"
+   python3 scripts/control_loop.py plan  --project . --item ACME-FEAT-001
+   python3 scripts/control_loop.py next  --project . --item ACME-FEAT-001
+   ```
+4. **Work.** Delegate to the roles, or spawn an agent team using the patterns in
+   `/ai-engineering-os:team-patterns`. Each spawned agent is handed its own task
+   automatically. Record what came back, and let the loop decide:
+
+   ```bash
+   python3 scripts/control_loop.py observe --project . --item ACME-FEAT-001 \
+       --task T-003 --outcome accepted
+   python3 scripts/control_loop.py decide  --project . --item ACME-FEAT-001 --task T-003
+   python3 scripts/control_loop.py status  --project . --item ACME-FEAT-001
+   ```
+
+   `docs/work-items.md` is the full account: what the loop decides, what bounds
+   it, and what happens when it runs out of moves.
 
 ## Repository layout
 
 ```
 .claude-plugin/plugin.json       Plugin manifest
 .claude-plugin/marketplace.json  Private marketplace catalogue
-agents/                          29 role definitions
+agents/                          30 role definitions
 skills/                          32 skills
 hooks/hooks.json                 Hook registration
 hooks/scripts/                   Guard implementations
@@ -240,12 +261,12 @@ Read in this order and each one builds on the last.
 ## Requirements
 
 - Claude Code (recent version; agent teams additionally require
-  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and an interactive session)
+  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`)
 - Python 3.8 or later on PATH as `python3`, for the hooks and the tooling
 
 ## Status
 
-Version 0.21.4. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
+Version 0.22.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
 evaluated on its deterministic cases, and not yet promoted to `production`.
 Promotion requires a human governance decision per `GOVERNANCE.md`.
 

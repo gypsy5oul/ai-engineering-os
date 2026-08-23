@@ -6,9 +6,10 @@ as documents.
 
 ## Method
 
-`scripts/simulate_sdlc.py` executes seven scenarios against throwaway projects:
+`scripts/simulate_sdlc.py` executes ten scenarios against throwaway projects:
 feature, defect, incident, security-block, release-rollback, agent-change,
-onboarding. Each creates real artifacts with real headers, emits real events,
+onboarding, change-request, migration and migration-rollback. Each creates real
+artifacts with real headers, emits real events,
 produces real rollups, and evaluates every stage's machine-checkable definition
 of done **at the moment that stage completes**.
 
@@ -81,8 +82,8 @@ escalation path the executive should not sit on, as security already has.
 ## Result
 
 ```
-10 scenarios · 57 stages · 257 predicates
-  → 232 pass · 0 fail · 25 require evidence outside the repository
+10 scenarios · 57 stages · 261 predicates
+  → 236 pass · 0 fail · 25 require evidence outside the repository
 ```
 
 The 25 are `pipeline_passed`, `tests_pass` and `human_approval_recorded` —
@@ -93,7 +94,7 @@ things that live in GitLab and in the project's own test run. They report
 
 - **Behaviour.** The simulation proves the process can be completed. It does not
   prove an agent will follow it. That is what the evaluation suites test, and 23
-  of 58 cases still need a model run.
+  of 68 cases still need a model run.
 - **Real projects.** Every scenario runs against a synthetic project built from
   the shipped template.
 - **Guard coverage under adversarial use.** The guards have their own tests; the

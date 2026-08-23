@@ -138,3 +138,59 @@ class TestBehaviour(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTheRoleNameActuallyResolves(unittest.TestCase):
+    """A plugin agent's type arrives namespaced. Matched whole, no role in
+    write-scope.json was ever found, so every per-role scope was decoration."""
+
+    def test_a_namespaced_role_is_still_scoped(self):
+        self.assertEqual(
+            write("src/main.go", "x", agent="ai-engineering-os:docs-writer")[0], "deny")
+
+    def test_the_bare_and_namespaced_forms_agree(self):
+        for path, agent in (("src/main.go", "docs-writer"),
+                            ("docs/architecture/hld.md", "backend-developer"),
+                            ("src/payments/service.py", "qa-engineer")):
+            bare = write(path, "x", agent=agent)[0]
+            spaced = write(path, "x", agent="ai-engineering-os:" + agent)[0]
+            self.assertEqual(bare, spaced, "%s disagreed for %s" % (agent, path))
+
+
+class TestPathTraversalCannotSatisfyAnAllowList(unittest.TestCase):
+    """An allow-list is a claim about paths inside the project. No spelling of a
+    path may satisfy it while landing somewhere else."""
+
+    def test_traversal_out_of_the_project_is_denied(self):
+        decision, reason, _, _ = write("docs/requirements/../../../../etc/passwd", "x",
+                                       agent="product-manager")
+        self.assertEqual(decision, "deny")
+        self.assertIn("outside the project", reason)
+
+    def test_traversal_into_another_role_scope_is_denied(self):
+        self.assertEqual(
+            write("docs/requirements/../src/app.js", "x", agent="product-manager")[0], "deny")
+
+    def test_traversal_within_scope_still_works(self):
+        """Normalising must not break a legitimate relative path."""
+        self.assertIsNone(
+            write("docs/architecture/../requirements/r2.md", "x", agent="product-manager")[0])
+
+    def test_a_deny_mode_role_cannot_spell_its_way_around_the_deny_list(self):
+        self.assertEqual(
+            write("docs/stories/../architecture/hld.md", "x", agent="backend-developer")[0],
+            "deny")
+
+
+class TestTheSettingsFileIsClosedOnBothRoutes(unittest.TestCase):
+    """OS-01/OS-04 deny these through the shell. The Write tool is the same door."""
+
+    def test_settings_files_are_hard_denied(self):
+        for path in ("/root/.claude/settings.json", ".claude/settings.json",
+                     ".claude/settings.local.json", ".claude/managed-settings.json",
+                     "/home/u/.claude/settings.json"):
+            with self.subTest(path=path):
+                self.assertEqual(write(path, "{}")[0], "deny", path)
+
+    def test_the_plugin_state_directory_is_hard_denied(self):
+        self.assertEqual(write("/root/.claude/ai-engineering-os/audit.jsonl", "x")[0], "deny")

@@ -88,9 +88,18 @@ def _key(event, fields):
 
 
 def route(event, project=None):
-    pol, cat, chans = policy(), catalogue(), channels()
     decision = {"event_id": event.get("id"), "event": event.get("type"),
                 "subject": event.get("subject")}
+    try:
+        pol, cat, chans = policy(), catalogue(), channels()
+    except Exception as exc:
+        # A routing configuration that cannot be read is a refusal, not a crash
+        # and never a send. The traceback was technically loud, but a stack trace
+        # is not a decision anyone can act on, and a caller that ignores exit
+        # codes would have seen nothing at all.
+        decision.update({"send": False, "severity": "policy-error",
+                         "reason": "notification configuration is unreadable: %s" % exc})
+        return decision
 
     spec = cat.get(event["type"])
     if spec is None:
@@ -420,8 +429,9 @@ def main():
         print(json.dumps({"send": False, "severity": "policy-error",
                           "reason": "unparseable event: %s" % exc}))
         return 1
-    print(json.dumps(route(event, args.project), indent=2))
-    return 0
+    decision = route(event, args.project)
+    print(json.dumps(decision, indent=2))
+    return 1 if decision.get("severity") == "policy-error" else 0
 
 
 if __name__ == "__main__":

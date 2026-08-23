@@ -17,16 +17,23 @@ identically.
 
 ## The gate
 
-Run all of it before proposing a change, or just `./scripts/check_all.sh`:
+Run this before proposing a change:
 
 ```bash
-python3 scripts/validate_plugin.py        # structure, frontmatter, cross-document consistency
-python3 scripts/validate_schemas.py       # JSON/YAML validity, policy/schema agreement
-python3 scripts/secret_scan.py .          # secret material
-python3 -m unittest discover -s tests -v  # guards, libraries, repository invariants
-python3 scripts/run_evaluations.py        # deterministic evaluation cases
-claude plugin validate .                  # Claude Code's own structural check
+./scripts/check_all.sh
 ```
+
+It runs everything CI runs, in the order CI runs it, and fails fast on the first
+problem because a broken manifest makes every later result meaningless. The
+thirteen steps are plugin structure, schemas and the shipped project template,
+stage contracts and model routing, department execution cycles, notification
+routing, documentation links, the secret scan, the tests, the end-to-end SDLC
+simulation, fault injection, the liveness checker, the deterministic
+evaluations, and Claude Code's own structural validation.
+
+The script is the list. Keeping a copy of it here is how the two drift, so run
+individual commands from it while iterating and let the script decide whether a
+change is ready to propose.
 
 ### A wrinkle in `claude plugin validate`
 
@@ -44,8 +51,9 @@ python3 scripts/simulate_sdlc.py --scenario feature -v
 python3 scripts/simulate_sdlc.py --scenario incident --keep   # leave the project to inspect
 ```
 
-Seven scenarios — feature, defect, incident, security-block, release-rollback,
-agent-change, onboarding — each run against a throwaway project. They create real
+Ten scenarios — feature, defect, incident, security-block, release-rollback,
+agent-change, onboarding, change-request, migration, migration-rollback — each
+run against a throwaway project. They create real
 artifacts with real headers, emit real events, produce real rollups, and evaluate
 each stage's definition of done **at the moment that stage completes**.
 

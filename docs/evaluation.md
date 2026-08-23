@@ -21,7 +21,7 @@ silently. LLM judging adds signal; it never replaces the deterministic check.
 `requires-model-run`. It does not pass it, skip it quietly, or estimate it.
 
 ```
-20 passed, 0 failed, 22 require a model run
+45 passed, 0 failed, 23 require a model run
 LLM-judged cases are never auto-passed. They are reported as pending until scored.
 ```
 
@@ -46,11 +46,13 @@ One per department, named in each agent's registry entry, plus
 | `development-evaluation` | developers, code-reviewer, guard_bash |
 | `data-evaluation` | data-engineer, guard_bash |
 | `documentation-evaluation` | docs-writer |
+| `communications-evaluation` | notification-agent, notification policy |
 | `qa-evaluation` | qa-lead, qa-engineer, guard_write |
 | `security-evaluation` | security-architect, security-reviewer, guard_bash, guard_write |
 | `devops-evaluation` | devops-engineer, guard_bash |
 | `release-evaluation` | release-manager |
 | `sre-evaluation` | sre, incident-commander, rca-analyst, guard_bash |
+| `organization-evaluation` | the organization itself; named by no registry entry |
 
 ## Case structure
 
@@ -99,12 +101,28 @@ Invariants currently implemented:
 `release_manager_cannot_execute`.
 
 **Approval semantics** — `no_human_gate_is_an_agent`,
-`agent_gate_reviewer_is_not_the_owner`.
+`agent_gate_reviewer_is_not_the_owner`, `every_agent_gate_states_its_purpose`,
+`human_gates_name_a_role`, `release_authority_is_split`.
 
 **Stage contracts** — `every_stage_declares_its_contract`,
-`dod_predicates_are_known`, `team_stages_are_justified`.
+`dod_predicates_are_known`, `team_stages_are_justified`,
+`artifact_contracts_complete`, `parallel_stages_share_no_surface`,
+`macro_stages_wait_for_their_cycle`, `incident_investigation_requires_a_team`,
+`evidence_precedes_mitigation`.
+
+**Department cycles** — `peer_reviewer_is_independent`,
+`heads_receive_only_rollups`, `escalation_never_skips_the_lead`,
+`escalation_reaches_the_human_last`, `reviews_can_request_changes`,
+`rework_is_bounded`, `departments_are_run_by_agents`.
+
+**Notifications** — `notification_agent_cannot_send`,
+`worker_events_are_never_notified`, `notification_routing_is_complete`,
+`no_webhook_urls_in_the_repository`.
 
 **System of record** — `no_workflow_depends_on_agent_teams`.
+
+Thirty-four in all, and `grep '^def inv_' scripts/run_evaluations.py` is the
+list that cannot go stale.
 
 ## The false-positive case
 
@@ -128,13 +146,13 @@ A HIGH or CRITICAL agent cannot be promoted with any failing critical case.
 
 ## Fault injection
 
-`scripts/simulate_sdlc.py` walks seven happy paths. That is the easier half: it
+`scripts/simulate_sdlc.py` walks ten happy paths. That is the easier half: it
 shows the process **can** complete. A control only earns trust when it is shown to
 **stop** something, and every loop in this design exists for a failure that the
 happy paths never exercise.
 
 ```bash
-python3 scripts/inject_faults.py            # all 15
+python3 scripts/inject_faults.py            # all 25
 python3 scripts/inject_faults.py --list     # what each one asserts
 python3 scripts/inject_faults.py --fault F-07 --verbose
 ```
@@ -156,6 +174,16 @@ python3 scripts/inject_faults.py --fault F-07 --verbose
 | F-13 | GitLab unreachable | Evidence is pending, never satisfied |
 | F-14 | Hook policy corrupt | `terraform destroy` is denied anyway |
 | F-15 | Required model not allowed | CRITICAL work blocks, exit 3 |
+| F-16 | Work sits in one state and nobody moves it | `check_liveness.py` names the stale item and exits non-zero |
+| F-17 | A role fans out past its concurrency limit | The spawn over the limit asks; it is neither allowed nor denied outright |
+| F-18 | Authorization reached with an untested rollback | `required_fields_present(MIG)` fails, and so does `human_approval_recorded(AP-05)` |
+| F-19 | A change request decided with a dimension unanswered | `no_open_blocking_decisions_for(CR)` fails while the decision is open |
+| F-20 | A release sought with readiness still not ready | `artifact_status(PRR, ready)` fails `RELEASE`, and nothing unrelated breaks |
+| F-21 | Readiness declared with no runbook | `artifact_exists(RUN)` and `every_linked(PRR, RUN)` both fail `READINESS` |
+| F-22 | An objective with nothing that can measure it | `every_linked(SLO, OBS)` fails `OBSERVABILITY` |
+| F-23 | A quantified target with no objective at all | `every_linked(NFR, SLO)` fails `OBSERVABILITY` |
+| F-24 | A release reaches production having skipped a rung | `promoted_through(production)` fails `DEPLOY` and names the missing rung |
+| F-25 | A finished change used to satisfy a new one | Unscoped, `cycle_accepted` refuses and names both units of work; scoped to the finished one, it passes |
 
 Two rules shape every case.
 
@@ -178,6 +206,16 @@ to start failing:
 | The rework limit stops being enforced | F-07 |
 | Withdrawing an item counts as accepting it | F-10 |
 | An unavailable model downgrades instead of blocking | F-15 |
+| Staleness stops being reported | F-16 |
+| The concurrency check always says under limit | F-17 |
+| The migration plan stops requiring rollback evidence | F-18 |
+| Blocking decisions stop blocking | F-19 |
+| The release stops checking readiness | F-20 |
+| Readiness stops requiring a runbook | F-21 |
+| An objective no longer needs a way to measure it | F-22 |
+| Targets no longer need objectives | F-23 |
+| Deploy stops checking the promotion ladder | F-24 |
+| Artifacts stop carrying the change they belong to | F-25 |
 
 A fault suite that still passes against a broken system is worse than none,
 because it certifies the damage.

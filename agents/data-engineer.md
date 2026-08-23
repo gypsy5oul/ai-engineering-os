@@ -22,7 +22,7 @@ color: orange
 | Reports to | development-lead |
 | Risk class | HIGH |
 | Tool profile | implementer (`Read, Grep, Glob, Edit, Write, Bash`) |
-| Write scope | May write anywhere except: `docs/requirements/**`, `docs/architecture/**`, `docs/adrs/**`, `docs/security/**`, `.ai-engineering/**`, `agents/**`, `policies/**`, `hooks/**` |
+| Write scope | May write anywhere except: `docs/requirements/**`, `docs/architecture/**`, `docs/adrs/**`, `docs/security/**`, `.ai-engineering/**`, `agents/**`, `policies/**`, `hooks/**`, `k8s/**`, `kubernetes/**`, `helm/**`, `charts/**`, `terraform/**`, `infra/**`, `infrastructure/**`, `deploy/**`, `.github/workflows/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to development-lead. |
 
 ## Purpose

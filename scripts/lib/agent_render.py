@@ -37,6 +37,26 @@ def _bullets(items):
     return "\n".join("- " + i for i in items) if items else "- None."
 
 
+def write_scope_line(name, scope, tools):
+    """The `| Write scope |` cell, from policies/write-scope.json.
+
+    The only place this string is built. Seven agents' tables had drifted from
+    the policy: two did not know they were allowed to write the artifacts they
+    own, and three planned infrastructure edits the guard rejects. The body table
+    is what the agent itself reads; the policy is what the hook enforces. They
+    have to be the same sentence.
+    """
+    role_scope = (scope.get("roles") or {}).get(name)
+    if role_scope is None:
+        return ("Not applicable (no write tools)." if "Write" not in tools
+                else "Unscoped: governed only by the global deny list.")
+    if role_scope["mode"] == "allow":
+        return "May write only to: `%s`" % "`, `".join(role_scope["allow"])
+    if not role_scope["deny"]:
+        return "Unscoped within this repository."
+    return "May write anywhere except: `%s`" % "`, `".join(role_scope["deny"])
+
+
 def render(entry, body, profiles, scope):
     prof = profiles["profiles"][entry["tool_profile"]]
     tools = ", ".join(prof["tools"])
@@ -58,13 +78,7 @@ def render(entry, body, profiles, scope):
         fm.append("color: %s" % body["color"])
     fm.append("---")
 
-    role_scope = scope["roles"].get(entry["name"])
-    if role_scope is None:
-        scope_line = "Not applicable (no write tools)." if "Write" not in prof["tools"] else "Unscoped: governed only by the global deny list."
-    elif role_scope["mode"] == "allow":
-        scope_line = "May write only to: `%s`" % "`, `".join(role_scope["allow"])
-    else:
-        scope_line = "May write anywhere except: `%s`" % "`, `".join(role_scope["deny"]) if role_scope["deny"] else "Unscoped within this repository."
+    scope_line = write_scope_line(entry["name"], scope, prof["tools"])
 
     spawn = entry["may_spawn"]
     spawn_line = ("May spawn: `%s`" % "`, `".join(spawn)) if spawn else "May not spawn other agents. Delegation requests go to %s." % (

@@ -71,8 +71,10 @@ def main():
     tool_input = data.get("tool_input") or {}
     path, content = extract(tool_input)
     _SUBJECT[0] = path
-    _SUBJECT[0] = path
-    agent = data.get("agent_type") or ""
+    # Plugin agents arrive as "ai-engineering-os:solution-architect". Matched
+    # whole, no role in write-scope.json was ever found and every per-role scope
+    # was inert. Every other hook already strips it; this one did not.
+    agent = (data.get("agent_type") or "").split(":")[-1]
     scope = H.policy_required("write-scope.json", "roles")
     overrides = H.project_overrides()
 
@@ -107,6 +109,14 @@ def main():
     # 4. per-role scope
     role = scope.get("roles", {}).get(agent)
     if role:
+        if role.get("mode") == "allow" and H.escapes_project(path):
+            H.audit({"type": "write_guard", "decision": "deny", "rule": "WS-ESCAPE",
+                     "path": path, "agent": agent})
+            H.decide(EVENT, "deny",
+                     "'%s' resolves outside the project directory. Role '%s' is scoped to paths "
+                     "inside the project, and no spelling of a path escapes that.\n"
+                     "What to do instead: write inside the project, or ask the human to move the "
+                     "file in." % (path, agent), rule_id="WS-ESCAPE")
         if role.get("mode") == "allow" and not H.path_matches(path, role.get("allow", [])):
             H.audit({"type": "write_guard", "decision": "deny", "rule": "WS-SCOPE", "path": path, "agent": agent})
             H.decide(EVENT, "deny",

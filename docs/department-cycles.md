@@ -158,8 +158,8 @@ The staffing:
 | `CYCLE-DEVOPS` | engineering-owner | `engineering-director` | `devops-engineer` | `devops-engineer` | `reliability-reviewer` |
 | `CYCLE-SRE` | on-call-owner | `engineering-director` | `sre` | `sre` | `reliability-reviewer` |
 
-Four cycles have the lead and the worker as the same agent — small departments
-genuinely do. In those, the peer reviewer **must** be a different agent, or the
+Three cycles — `CYCLE-ARCH`, `CYCLE-DEVOPS` and `CYCLE-SRE` — have the lead and
+the worker as the same agent. Small departments genuinely do. In those, the peer reviewer **must** be a different agent, or the
 cycle has no independent check at all. `check_cycle.py` fails otherwise.
 
 `CYCLE-SEC` uses `mutual`: the two security workers review each other's items,

@@ -81,8 +81,7 @@ write where its artifact lives. That last check found a real gap:
 `development-lead` owned `DEBT` but its write scope did not include
 `docs/technical-debt/`.
 
-Every artifact carries these fields, validated by
-`schemas/artifact-header.schema.json`:
+`schemas/artifact-header.schema.json` requires ten fields of every artifact:
 
 | Field | Why it is required |
 | --- | --- |
@@ -90,10 +89,18 @@ Every artifact carries these fields, validated by
 | `version` | Incremented on every material change |
 | `created_at`, `updated_at` | When, and when last touched |
 | `source` | Where this came from. **An artifact with no source was invented.** |
+| `links` | Traceability edges |
+
+Three more are optional in the schema, because an artifact can legitimately have
+none of them and an empty field is not the same as an absent one. Where the
+artifact model or a stage's definition of done calls for them, they are required
+there instead:
+
+| Field | What it holds |
+| --- | --- |
 | `reviewers` | **Agent** verdicts: who reviewed, what verdict, when, how many findings |
 | `approvals` | **Human** decisions: who, which policy reference, where it is recorded |
 | `dependencies` | Artifact ids this one cannot be completed without |
-| `links` | Traceability edges |
 
 `reviewers` and `approvals` are separate fields and never merge. That separation
 is the artifact-level form of the rule in [approvals](approvals.md).

@@ -7,8 +7,9 @@ below was checked against the current documentation; check again before building
 on it.
 
 - Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings or environment.
-- Teammates spawn only in **interactive** sessions. Under `-p`, a named subagent
-  runs as an ordinary subagent.
+- Teammates are **not** interactive-only. `-p` carries a full teammate lifecycle
+  and `--teammate-mode in-process` needs no TTY, so the earlier reading no longer
+  holds at 2.1.241. It is a contract reading, not an end-to-end run here.
 - **No nested teams.** A teammate cannot spawn teammates.
 - A teammate's model is **fixed at spawn**. Permission mode is not: every teammate starts in the lead's mode, and individual teammate modes can be changed after spawning, but not set per teammate at spawn time.
 - When a teammate uses a subagent definition, its `tools` and `model` apply, but
@@ -28,19 +29,19 @@ This is the failure mode most likely to surprise you, and it runs in the opposit
 direction to the one the workflows model.
 
 With `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` set, **any subagent Claude names
-from the main conversation launches as a teammate**, not only in the four stages
+from the main conversation launches as a teammate**, not only in the five stages
 that declare `execution: team`. Forks are exempt, as is an explicit `isolation`
 argument on the call.
 
 That matters because an idle notification carries no output. A stage written as
 an orchestration — spawn a reviewer, wait for its findings, act on them — becomes
 a spawn whose result never returns, and the stage stalls rather than failing. The
-24 stages that declare `execution: subagent` are all written that way.
+32 stages that declare `execution: subagent` are all written that way.
 
 So the environment variable is a project-level decision, not a per-stage one:
 
-- Setting it for the whole session buys you teams in `ARCH`, `DEV`, `INVESTIGATE`
-  and `STAGING`, and exposes every other stage to conversion.
+- Setting it for the whole session buys you teams in `ARCH`, `DEV`, `INVESTIGATE`,
+  `REHEARSE` and `STAGING`, and exposes every other stage to conversion.
 - The safer posture is to leave it unset by default and enable it for a session
   that is deliberately doing team work, which is what `ai.agent_teams_available`
   in `project.yaml` records.

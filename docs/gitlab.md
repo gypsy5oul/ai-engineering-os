@@ -89,18 +89,29 @@ A merge request that does not say how it was verified is not ready for review.
 | --- | --- | --- |
 | validate | `plugin-structure` | Manifest, frontmatter, registry/policy drift, hook wiring |
 | validate | `schemas` | Invalid JSON or YAML, policy/schema mismatch, invalid shipped template |
+| validate | `contracts` | An unknown definition-of-done predicate, model routing that does not resolve for a stage, an unreachable cycle state, an event that does not route |
+| validate | `strict-structure` | Warnings, on the default branch and on a tag: a placeholder marketplace URL, a hook script that is not executable |
 | validate | `claude-plugin-validate` | Claude Code's own structural check, when the CLI is available |
+| validate | `markdown-links` | A link between documents that does not resolve |
 | security | `secret-scan` | Any critical secret finding |
+| security | `guard-failure-behaviour` | The tiered failure path, exercised on every pipeline because it matters most when something else has already gone wrong |
+| security | `hook-permissions` | A hook script that is not executable, or is world-writable |
 | test | `unit-tests` | Guard, library and repository tests |
+| evaluate | `sdlc-simulation` | A workflow that cannot be completed end to end |
+| evaluate | `fault-injection` | A fault the controls no longer stop; also runs the liveness checker |
 | evaluate | `deterministic-evaluations` | Any critical or major deterministic case |
-| evaluate | `documentation` | Missing documentation, uncatalogued agent or skill |
+| evaluate | `llm-evaluation-bundle` | Emitting the bundle on the default branch and on tags. It never scores a case |
+| evaluate | `release-readiness` | Tag only: `check_release.py` |
 
 The pipeline fails fast on a malformed component: `validate` runs before anything
 else, because a broken manifest makes every later result meaningless.
 
-`claude-plugin-validate` is `allow_failure: true` because the Claude Code CLI is
-not guaranteed to be present on a runner. When it is present its result is real;
-when it is not, the job says so rather than passing silently.
+`claude-plugin-validate` is `allow_failure: true` on merge requests and feature
+branches, because the Claude Code CLI is not guaranteed to be present on a
+runner. On the default branch and on a tag it is mandatory: shipping a plugin
+that Claude Code's own validator rejects is the one failure this repository
+cannot argue its way out of. When the CLI is absent the job exits non-zero and
+says so rather than passing silently.
 
 ## Releases
 

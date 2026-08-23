@@ -17,7 +17,7 @@ starves a subtle concurrency defect of the reasoning it needs.
 | `policies/model-policy.json` | How task properties move off that default | Model economics or capability changes |
 
 Separating them means model routing can be revised on its own release cadence
-without touching 29 role definitions.
+without touching 30 role definitions.
 
 ## Aliases only
 

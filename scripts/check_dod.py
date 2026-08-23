@@ -125,6 +125,70 @@ def check_grammar():
 
 # ---------------------------------------------------------------- evaluation
 
+# The states a stream may be in for its cycle to be accepted, and the ones that
+# mean the work is still open. Both come from policies/department-cycle.json's
+# stream lifecycle; anything unrecognised is treated as not-done, because an
+# unknown state is not evidence of completion.
+# Ordered so a predicate asking for `high` also refuses a `critical`. An unknown
+# severity ranks below everything, because guessing it upward would block work on
+# a typo and guessing it downward would hide a real one -- and the finding is
+# still visible in the artifact either way.
+SEVERITY_ORDER = {"info": 0, "low": 1, "minor": 1, "medium": 2, "major": 3,
+                  "high": 3, "critical": 4, "blocker": 4}
+RESOLVED_FINDING_STATES = {"resolved", "closed", "fixed", "accepted", "waived", "mitigated"}
+
+ACCEPTABLE_STREAM_STATES = {"READY_FOR_INTEGRATION", "ACCEPTED", "DONE", "INTEGRATED"}
+REWORK_STREAM_STATES = {"CHANGES_REQUESTED", "REWORK", "ESCALATED"}
+
+
+def _acceptance_conditions(cycle_id, artifacts, project):
+    """Re-evaluate a cycle's own acceptance conditions.
+
+    Returns (failing, needs_evidence). Recursion is not possible: no cycle lists
+    cycle_accepted among its conditions, and this refuses to follow one if a
+    cycle ever does.
+    """
+    cyc = cycles().get(cycle_id) or {}
+    failing, unseen = [], []
+    for entry in (cyc.get("acceptance") or {}).get("conditions", []):
+        fn, args = parse_predicate(entry)
+        if fn is None or fn == "cycle_accepted":
+            continue
+        try:
+            status, detail = evaluate(fn, args, artifacts, project)
+        except Exception:
+            continue
+        if status == "FAIL":
+            failing.append("%s (%s)" % (entry, detail[:60]))
+        elif status == "REQUIRES-EVIDENCE":
+            unseen.append(entry)
+    return failing, unseen
+
+
+def _stream_states(rollup):
+    """(name, state) for each stream in a rollup, however the rollup spells it.
+
+    Written by hand in a markdown header, so it arrives as a list of records, a
+    mapping, or a list of bare strings. A shape this reader does not understand
+    yields nothing rather than a false pass -- and `streams` had no reader at all
+    before this, which is why a rollup could claim ACCEPTED over open work.
+    """
+    streams = rollup.get("streams")
+    out = []
+    if isinstance(streams, dict):
+        for name, v in streams.items():
+            state = v.get("state") if isinstance(v, dict) else v
+            out.append((name, str(state or "UNKNOWN").upper()))
+    elif isinstance(streams, list):
+        for i, v in enumerate(streams):
+            if isinstance(v, dict):
+                out.append((v.get("name") or v.get("stream") or "#%d" % i,
+                            str(v.get("state") or v.get("verdict") or "UNKNOWN").upper()))
+            else:
+                out.append(("#%d" % i, str(v).upper()))
+    return out
+
+
 def scope_to_change(artifacts, change):
     """Narrow a project's artifacts to one unit of work.
 
@@ -136,7 +200,41 @@ def scope_to_change(artifacts, change):
     """
     if not change:
         return artifacts
-    return [a for a in artifacts if a.get("change") == change]
+    exempt = change_exempt_types()
+    return [a for a in artifacts
+            if a.get("change") == change
+            # An open decision can precede the work item it unblocks, so DEC is
+            # the one type the model does not require a change on. Scoping it out
+            # made every DEC predicate fail the moment scoping was switched on.
+            or (not a.get("change") and (a.get("type_code") or a.get("type")) in exempt)]
+
+
+_EXEMPT = []
+
+
+def change_exempt_types():
+    """Artifact types the model does not require a `change` on.
+
+    Read from the model rather than listed here, so adding an exempt type is one
+    edit rather than two that can disagree.
+    """
+    if _EXEMPT:
+        return _EXEMPT[0]
+    codes = set()
+    try:
+        m = model()
+        types = m.get("artifact_types") or {}
+        if isinstance(types, list):
+            types = {t.get("code"): t for t in types}
+        for code, spec in types.items():
+            if "change" not in (spec.get("required_fields") or []):
+                codes.add(code)
+                if spec.get("type"):
+                    codes.add(spec["type"])
+    except Exception:
+        pass
+    _EXEMPT.append(codes)
+    return codes
 
 
 def changes_present(artifacts):
@@ -440,11 +538,42 @@ def evaluate(fn, args, artifacts, project):
         if fn == "cycle_accepted":
             notdone = ["%s=%s" % (a["id"], r["status"]) for a, r in rollups
                        if r.get("status") != "ACCEPTED"]
-            return ("PASS" if not notdone else "FAIL"), (
-                "%s accepted" % cycle_id if not notdone else "not accepted: " + ", ".join(notdone))
+            # The head declares the status. The streams are the evidence. Reading
+            # only the status let a rollup say ACCEPTED with half its work still
+            # in flight -- exactly the accept-by-assertion the cycle policy names
+            # as the thing it exists to prevent.
+            notdone += ["%s stream %s=%s" % (a["id"], name, state)
+                        for a, r in rollups
+                        for name, state in _stream_states(r)
+                        if state not in ACCEPTABLE_STREAM_STATES]
+            # And the conditions the cycle itself declares. Every cycle says it is
+            # `determined_by: scripts/check_dod.py against acceptance.conditions`,
+            # and that determiner was never consulted from here: the head wrote
+            # ACCEPTED and this predicate read it back. A condition the repository
+            # can see is false now outranks the assertion.
+            broken, unseen = _acceptance_conditions(cycle_id, artifacts, project)
+            notdone += broken
+            if notdone:
+                return "FAIL", "not accepted: " + ", ".join(notdone)
+            if unseen:
+                # Honest residue: some conditions cannot be judged from the
+                # repository, so for those the head's word is all there is. Said
+                # out loud rather than counted as satisfied.
+                return "PASS", ("%s accepted; %d condition(s) rest on the head's assertion "
+                                "because they need evidence from outside the repository (%s)"
+                                % (cycle_id, len(unseen), ", ".join(unseen)))
+            return "PASS", "%s accepted; every acceptance condition re-checked" % cycle_id
         limit = _cycle_rework_limit(cycle_id)
+        # The policy counts entries INTO changes-requested and escalates on
+        # reaching the limit, so the round that triggers the escalation is the
+        # limit-th one. `>` let that round pass.
         over = ["%s=%d" % (a["id"], r.get("rework_rounds", 0)) for a, r in rollups
-                if r.get("rework_rounds", 0) > limit]
+                if r.get("rework_rounds", 0) >= limit]
+        # "No work item sits in CHANGES_REQUESTED" is half of this predicate's
+        # stated meaning and was not implemented at all.
+        in_rework = ["%s stream %s" % (a["id"], name) for a, r in rollups
+                     for name, state in _stream_states(r)
+                     if state in REWORK_STREAM_STATES]
         def unresolved(entry):
             # A bare string is an open escalation; a record is open until it is
             # resolved. The list was previously read as open in its entirety, so
@@ -453,7 +582,7 @@ def evaluate(fn, args, artifacts, project):
 
         open_esc = [a["id"] for a, r in rollups
                     if any(unresolved(e) for e in (r.get("escalations") or []))]
-        problems = over + ["%s has open escalations" % i for i in open_esc]
+        problems = over + in_rework + ["%s has open escalations" % i for i in open_esc]
         return ("PASS" if not problems else "FAIL"), (
             "no open rework, limit %d" % limit if not problems else "; ".join(problems))
 
@@ -461,6 +590,25 @@ def evaluate(fn, args, artifacts, project):
         return "REQUIRES-EVIDENCE", "pipeline status lives in GitLab, not in the repository"
 
     if fn == "no_unresolved_findings":
+        # This ignored its severity argument entirely and answered from the
+        # presence of an AP-04 approval alone, so `no_unresolved_findings(high)`
+        # and `(low)` were the same question and neither ever read a finding.
+        want = (args[0] if args else "high").lower()
+        order = SEVERITY_ORDER
+        floor = order.get(want, order["high"])
+        open_findings, saw_any = [], False
+        for a in artifacts:
+            for f in a.get("findings") or []:
+                if not isinstance(f, dict):
+                    continue
+                saw_any = True
+                sev = str(f.get("severity", "")).lower()
+                if order.get(sev, -1) < floor:
+                    continue
+                if str(f.get("status", "open")).lower() in RESOLVED_FINDING_STATES:
+                    continue
+                open_findings.append("%s on %s (%s)" % (f.get("id", "?"), a["id"], sev))
+
         # A granted security exception IS the resolution of the finding it covers.
         # Without this, CYCLE-SEC contradicted itself: RELEASE_BLOCKED offers an
         # exception_granted edge so a human can accept a standing risk under AP-04,
@@ -472,9 +620,14 @@ def evaluate(fn, args, artifacts, project):
                 if ap.get("policy_ref") == "AP-04":
                     accepted.append("%s (%s, %s)" % (a["id"], ap.get("approver_id", "?"),
                                                      ap.get("recorded_in", "?")))
+        if open_findings and not accepted:
+            return "FAIL", ("%d finding(s) at or above %s are open: %s"
+                            % (len(open_findings), want, ", ".join(open_findings[:4])))
         if accepted:
             return "PASS", ("risk accepted under AP-04 on %s. The finding stands; a named human "
                             "owns it." % ", ".join(accepted))
+        if saw_any:
+            return "PASS", "no finding at or above %s is open" % want
         return "REQUIRES-EVIDENCE", ("needs the project's own findings list, or a security "
                                      "exception recorded under AP-04")
 

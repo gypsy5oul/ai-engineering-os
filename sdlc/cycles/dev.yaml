@@ -122,10 +122,12 @@ rollup:
     - next_gate
 acceptance:
   conditions:
+  # Department-generic only. An artifact-shaped condition belongs to the workflow
+  # stage that produces that artifact, not to the department: the same cycle runs
+  # inside WF-MIGRATION and WF-ONBOARDING, which produce no ARCH and no REQ.
     - tests_pass(unit)
     - tests_pass(integration)
     - agent_verdict(code-reviewer, pass)
     - no_unresolved_findings(high)
-    - every_linked(STORY, TEST)
   requested_by: head
   determined_by: scripts/check_dod.py against acceptance.conditions

@@ -69,7 +69,7 @@ In every case the platform won, and the deviation is recorded rather than hidden
 | `workflows/` at the plugin root for SDLC definitions | `sdlc/workflows/` | **Verified against the current docs.** `workflows/` at a plugin root is where Claude Code loads *dynamic workflow* JavaScript scripts, namespaced as `/<plugin>:<meta.name>`. Declarative YAML there would not load. The two are different things and the names would collide. |
 | `settings.json` at the plugin root carrying settings | Not shipped; a template for the project's own `.claude/settings.json` instead | A plugin-root `settings.json` supports only `agent` and `subagentStatusLine`. Anything else is silently ignored — the worst possible failure mode for a governance control. |
 | `.mcp.json` in the plugin | Absent by design | V1 ships no MCP servers. An empty or speculative `.mcp.json` would be fake functionality. The extension model is in `docs/mcp.md` and `policies/mcp-extension.json`. |
-| Agent frontmatter carrying owner, risk, version, status | `policies/agent-registry.json` | Claude Code defines the frontmatter fields it supports. Adding organizational fields there risks them being dropped or flagged. A registry is also queryable and diffable, which frontmatter spread across 29 files is not. |
+| Agent frontmatter carrying owner, risk, version, status | `policies/agent-registry.json` | Claude Code defines the frontmatter fields it supports. Adding organizational fields there risks them being dropped or flagged. A registry is also queryable and diffable, which frontmatter spread across 30 files is not. |
 | Agent Team definitions as files | Prompt patterns in `skills/team-patterns/` | There is no team definition format. `~/.claude/teams/*/config.json` is runtime state that Claude Code writes and overwrites; pre-authoring it would be a fiction. |
 | `senior-*` developer agents | Seniority as a task property | See `docs/organization.md`. Two agents differing only in the word "senior" is the duplication the design explicitly warns against. |
 
@@ -117,7 +117,7 @@ Three layers, deliberately different in strength:
 Anything that must hold regardless of model behaviour is in the first two layers.
 The role contracts carry judgement, not safety.
 
-## Dynamic workflows: evaluated, not used
+## Dynamic workflows: not shipped, but used here
 
 Claude Code has a second, unrelated thing called a workflow: a **JavaScript
 script** that orchestrates many subagents, which a plugin may ship in
@@ -125,21 +125,21 @@ script** that orchestrates many subagents, which a plugin may ship in
 rather than in Claude's turn-by-turn judgement, and it can apply repeatable
 quality patterns such as adversarial cross-checking.
 
-This plugin does not ship one, deliberately:
+This plugin does not ship one in the lifecycle, deliberately:
 
 - The SDLC definitions in `sdlc/workflows/` are **declarative state**, read by
   agents and by the validators. They are not orchestration and would not benefit
   from being code.
 - A dynamic workflow is a good fit for a **fan-out over many items** — audit
-  every route handler, migrate 500 files. The closest candidate here is routed
-  code review, which already works as subagents at a scale that does not need
-  the runtime.
+  every route handler, migrate 500 files. Routed code review inside a workflow
+  stage already works as subagents at a scale that does not need the runtime.
 - Shipping both would put `workflows/` and `sdlc/workflows/` in one repository,
   meaning two different things.
 
-The honest summary: the capability exists, it does not fit the current shape, and
-if a fan-out at that scale appears — a repository-wide audit against the
-architecture, say — that is what it is for.
+The honest summary: the capability is real and it is used here, for review
+fan-out over this repository, which is exactly the shape it suits. What it is
+not is part of the shipped lifecycle, and `policies/platform-capabilities.json`
+records it that way.
 
 ## Extension points
 

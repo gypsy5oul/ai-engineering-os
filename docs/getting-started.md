@@ -174,31 +174,48 @@ sdlc:
 
 Skipping is normal. Skipping silently is not.
 
+Then open the work item, which is what makes the rest of this page a thing the
+organization is tracking rather than a description of one:
+
+```bash
+python3 scripts/control_loop.py open --project . --type feature --risk HIGH \
+    --intent "Partners time out on large transfers"
+python3 scripts/control_loop.py plan --project . --item SFTP-FEAT-001
+```
+
+The plan below is what `plan` generates for this change. Until the work item
+exists, the hooks that hand an agent its task and refuse a premature completion
+have nothing to attach to and do nothing at all -- correctly, because a session
+without a work item is an ordinary session. `docs/work-items.md` has the full
+sequence and what the loop does with each outcome.
+
 ---
 
 ## Step 4 — The lifecycle
 
-`WF-FEATURE`, 17 stages. Eleven of them run a department cycle internally.
+`WF-FEATURE`, 19 stages. Thirteen of them run a department cycle internally.
 
 ```
-STAGE       OWNER                  EXEC      CYCLE         PRODUCES      GATES
-IDEA        engineering-director   inline    —             —             —
-REQ         product-manager        subagent  CYCLE-PROD    REQ,NFR       A:qa-lead  H:requester
-FEAS        solution-architect     subagent  CYCLE-ARCH    FEAS          A:arch-reviewer  H:eng-owner/AP-03
-ARCH        solution-architect     TEAM      CYCLE-ARCH    ARCH,ADR,SEC  A:arch-reviewer  H:arch-owner/AP-02
-UX          ux-designer            subagent  —             DES           A:product-manager
-STORY       development-lead       inline    —             EPIC,STORY    A:qa-lead
-QADESIGN    qa-lead                subagent  CYCLE-QA      TP,TEST       A:test-reviewer
-DEV         development-lead       TEAM      CYCLE-DEV     —             —
-REVIEW      code-reviewer          subagent  CYCLE-SEC     REVIEW        A:routed  H:merge-approver/AP-09
-CI          devops-engineer        inline    CYCLE-DEVOPS  —             —
-QA          qa-lead                subagent  CYCLE-QA      TESTREPORT    A:test-reviewer  H:qa-owner
-RELEASE     release-manager        subagent  —             REL           A:sre  H:release-approver/AP-01
-AUTHORIZE   release-manager        inline    —             —             H:release-approver/AP-01
-DEPLOY      devops-engineer        inline    CYCLE-DEVOPS  —             H:release-approver/AP-01
-VERIFY      release-manager        inline    CYCLE-SRE     —             —
-OPS         sre                    inline    CYCLE-SRE     —             —
-INC         incident-commander     inline    —             INC,RCA       —
+STAGE         OWNER                  EXEC      CYCLE         PRODUCES      GATES
+IDEA          engineering-director   inline    —             —             —
+REQ           product-manager        subagent  CYCLE-PROD    REQ,NFR       A:qa-lead  H:requester
+FEAS          solution-architect     subagent  CYCLE-ARCH    FEAS          A:arch-reviewer  H:eng-owner/AP-03
+ARCH          solution-architect     TEAM      CYCLE-ARCH    ARCH,ADR,SEC  A:arch-reviewer  H:arch-owner/AP-02
+OBSERVABILITY sre                    subagent  CYCLE-SRE     SLO,OBS       A:reliability-reviewer
+UX            ux-designer            subagent  —             DES           A:product-manager
+STORY         development-lead       inline    —             EPIC,STORY    A:qa-lead
+QADESIGN      qa-lead                subagent  CYCLE-QA      TP,TEST       A:test-reviewer
+DEV           development-lead       TEAM      CYCLE-DEV     —             —
+REVIEW        code-reviewer          subagent  CYCLE-SEC     REVIEW        A:routed  H:merge-approver/AP-09
+CI            devops-engineer        inline    CYCLE-DEVOPS  —             —
+QA            qa-lead                subagent  CYCLE-QA      TESTREPORT    A:test-reviewer  H:qa-owner/AP-13
+READINESS     sre                    subagent  CYCLE-SRE     PRR,RUN       A:reliability-reviewer
+RELEASE       release-manager        subagent  —             REL           A:sre  H:release-approver/AP-01
+AUTHORIZE     release-manager        inline    —             —             H:release-approver/AP-14
+DEPLOY        devops-engineer        inline    CYCLE-DEVOPS  —             —
+VERIFY        release-manager        inline    CYCLE-SRE     —             —
+OPS           sre                    inline    CYCLE-SRE     —             —
+INC           incident-commander     inline    —             INC,RCA       —
 ```
 
 `A:` is an **agent gate** — blocks, never approves. `H:` is a **human gate** —
@@ -218,7 +235,7 @@ pressure to invent a number is real.
 ### Architecture — a team, deliberately
 
 `solution-architect` authors; `security-architect`, `sre` and
-`architecture-reviewer` participate. This is one of only four team stages,
+`architecture-reviewer` participate. This is one of only five team stages,
 because security, operability and design need to **challenge each other** rather
 than review in sequence.
 
@@ -292,14 +309,17 @@ Different reviewer sets per change:
 
 Requiring every reviewer on every change is how review becomes a formality.
 
-### Release — three acts
+### Release — four acts
 
 ```
 RELEASE    content accepted        REL: in-review → approved     [H] AP-01
-AUTHORIZE  deployment permitted    REL: approved → authorized    [H] AP-01
-DEPLOY     executed by devops      against an authorized release [H] AP-01
+AUTHORIZE  deployment permitted    REL: approved → authorized    [H] AP-14
+DEPLOY     executed by devops      against an authorized release
 VERIFY     confirmed by a third party
 ```
+
+Those are the ids `WF-FEATURE` declares. `WF-RELEASE` still uses `AP-01` for all
+of them and still gates `DEPLOY`; see [approvals](approvals.md).
 
 `release-manager` has **no Bash**. It plans, assembles evidence and asks a human;
 it cannot deploy. And a release approved on Monday does not carry standing

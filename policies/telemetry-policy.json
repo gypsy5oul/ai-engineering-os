@@ -22,17 +22,75 @@
     ]
   },
   "measured": {
-    "throughput": ["work items opened", "work items accepted", "cycle time from open to accepted"],
-    "quality": ["rework rate", "repeated failure rate", "review rejection rate", "tasks escalated"],
-    "planning": ["replans per work item", "tasks per work item", "stages skipped"],
-    "execution": ["subagent stops", "results too thin to attribute", "unattributed results"],
-    "enforcement": ["completions blocked by a failing definition of done"]
+    "throughput": [
+      {
+        "name": "work items opened",
+        "key": "work_items"
+      },
+      {
+        "name": "work items accepted",
+        "key": "accepted"
+      },
+      {
+        "name": "cycle time from open to accepted",
+        "key": "median_cycle_time_hours"
+      }
+    ],
+    "quality": [
+      {
+        "name": "rework rate",
+        "key": "rework_rate"
+      },
+      {
+        "name": "repeated failure rate",
+        "key": "repeated_failure_rate"
+      },
+      {
+        "name": "tasks escalated",
+        "key": "tasks_escalated"
+      }
+    ],
+    "planning": [
+      {
+        "name": "replans per work item",
+        "key": "replans_per_work_item"
+      },
+      {
+        "name": "tasks per work item",
+        "key": "tasks"
+      }
+    ],
+    "execution": [
+      {
+        "name": "subagent stops",
+        "key": "subagent_stops"
+      },
+      {
+        "name": "results too thin to attribute",
+        "key": "thin_result_rate"
+      },
+      {
+        "name": "unattributed results",
+        "key": "unattributed_results"
+      }
+    ],
+    "enforcement": [
+      {
+        "name": "completions blocked by a failing definition of done",
+        "key": "completion_block_rate"
+      }
+    ]
   },
   "not_measured": {
     "token_cost": "SubagentStop carries no usage figures. The task-notification block does, and nothing parses it. Reporting an estimate here would be a number people would plan against.",
     "wall_clock_per_task": "Recorded only as started_at and last_activity, which measure elapsed time rather than work done. A task that sat overnight and one that ran for eight hours look identical.",
     "defect_escape_rate": "Requires knowing which production defects trace to which change. The link exists in the artifact model and nothing populates it yet.",
-    "agent_utilisation": "Would need a spawn count per role over time. The audit log has the events; nothing aggregates them."
+    "agent_utilisation": "Would need a spawn count per role over time. The audit log has the events; nothing aggregates them.",
+    "human_approvals": "Recorded on artifacts, not on the work item, and nothing writes an approvals field there. It was being summed into the human intervention rate as a structural zero, which made the rate look better the more it was trusted.",
+    "open_decisions": "Same: the work item has no decisions field and no writer for one. A DEC artifact is where an open decision lives.",
+    "review_rejection_rate": "A reviewer's verdict lives on the artifact header, which the work item store does not read. Listed under quality below as an intention, not a number this produces.",
+    "stages_skipped": "The graph records the stages it planned, not the ones the organization chose not to plan, so there is nothing to count against."
   },
-  "honesty_rule": "A metric that cannot be computed from the durable record is listed under not_measured with the reason, never estimated. An organization that reports a number it cannot derive teaches its own people not to trust the rest."
+  "honesty_rule": "A metric that cannot be computed from the durable record is listed under not_measured with the reason, never estimated. An organization that reports a number it cannot derive teaches its own people not to trust the rest.",
+  "why_keys": "Every measured entry names the identifier the tool must produce, so validate_plugin can check that the policy and the code agree in both directions. The check used to read the policy's existence and not its contents."
 }

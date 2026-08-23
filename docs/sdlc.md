@@ -109,7 +109,7 @@ workflow declares entry and exit conditions and its failure paths.
 
 | Workflow | Entry | Teams | Key gates | Exit |
 | --- | --- | --- | --- | --- |
-| `WF-FEATURE` feature delivery | A human states a business intent | feature-engineering-team | Scope acceptance (AP-12), Architecture (AP-02), QA design (independent), Merge (AP-09), Residual risk when criteria are unmet (AP-13), Release content (AP-01), Deployment authorization (AP-14) | Running in production, verified, traceable |
+| `WF-FEATURE` feature delivery | A human states a business intent | feature-engineering-team | Scope acceptance (AP-12), Feasibility and technology selection (AP-03), Architecture (AP-02), QA design (independent), Merge (AP-09), Residual risk when criteria are unmet (AP-13), Release content (AP-01), Deployment authorization (AP-14) | Running in production, verified, traceable |
 | `WF-DEFECT` defect fix | A defect record with a reproduction | single-agent | Review (human), Release (AP-01) | Original reproduction gone, regression test exists |
 | `WF-INCIDENT` incident and RCA | An alert or credible report | incident-response-team | Every mitigation (AP-01), RCA (human) | Service verified recovered, RCA with owned actions |
 | `WF-DEPENDENCY` dependency change | A dependency change, advisory, end-of-life notice or licence change | single-agent | Classification, Security/licence (AP-04 where an exception is needed), Review (human), Release (AP-01) | Merged with the route, urgency and assessment recorded |
@@ -117,7 +117,7 @@ workflow declares entry and exit conditions and its failure paths.
 | `WF-ONBOARDING` project onboarding | A project with no configuration | single-agent | Human decision capture, Configuration approval | Valid, human-approved `project.yaml` |
 | `WF-AGENT-CHANGE` OS change | A gap or governance finding in this plugin | single-agent | Evaluation, Security, Governance (AP-10) | Merged, versioned, released with a migration note |
 | `WF-CHANGE` change request | A commitment the organization already made is to change | single-agent | Impact assessment (independent), Decision (AP-15) | Every affected artifact updated or recorded as unaffected |
-| `WF-MIGRATION` data migration | Existing data must be transformed, moved or backfilled | single-agent | Design (independent), Rehearsal (independent), Authorization (AP-05) | Executed and verified, with the rollback path open or explicitly closed |
+| `WF-MIGRATION` data migration | Existing data must be transformed, moved or backfilled | single-agent, except `REHEARSE`, which runs as a team | Design (independent), Rehearsal (independent), Authorization (AP-05) | Executed and verified, with the rollback path open or explicitly closed |
 
 ## Stages that are dimensions, not stages
 

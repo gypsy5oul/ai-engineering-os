@@ -58,7 +58,12 @@ failure_paths:
 stages:
   - id: CLASSIFY
     name: Classification and routing
-    owner: dependency-reviewer
+    # dependency-reviewer classifies; security-architect records. The reviewer
+    # holds no write tool by design, so it cannot own a stage whose definition of
+    # done requires it to produce the DEPA.
+    owner: security-architect
+    participants:
+      - dependency-reviewer
     skills:
       - security-assessment
       - change-review

@@ -10,6 +10,7 @@ Exit code 0 on success, 1 on error. Warnings do not fail unless --strict.
 import argparse
 import json
 import os
+import glob
 import re
 import subprocess
 import sys
@@ -646,6 +647,26 @@ def check_execution_resolution_is_live():
                 "resolve_execution.py" % name)
 
 
+def telemetry_keys():
+    """Every identifier telemetry.py actually emits.
+
+    Read by running the module's own collect/derive over an empty project rather
+    than by grepping, so a metric that is named in the source but never reaches
+    the output cannot satisfy the check.
+    """
+    import tempfile
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+    try:
+        import telemetry
+        with tempfile.TemporaryDirectory() as d:
+            counters = telemetry.collect(d)
+            return set(counters) | set(telemetry.derive(counters))
+    except Exception as exc:
+        err("scripts/telemetry.py could not be evaluated: %r" % exc)
+        return set()
+
+
 def check_telemetry_policy_is_live():
     """Every metric the telemetry policy claims is computed, and every one it
     disclaims is absent.
@@ -669,6 +690,20 @@ def check_telemetry_policy_is_live():
         if '"%s"' % name in code.split("def derive(")[-1].split("def pct(")[0]:
             err("policies/telemetry-policy.json disclaims %r as unmeasured, and telemetry.py "
                 "derives it anyway. The reason it was disclaimed still applies." % name)
+    # The forward direction, which this used to skip entirely: it asserted three
+    # hardcoded names and never read pol["measured"], so the policy could list a
+    # metric nothing computes and the check still passed. Each entry now names the
+    # key the tool must produce.
+    produced = telemetry_keys()
+    for group, entries in (pol.get("measured") or {}).items():
+        for entry in entries:
+            if not isinstance(entry, dict) or "key" not in entry:
+                err("policies/telemetry-policy.json measured.%s lists %r without a `key`, so "
+                    "nothing can check that it is computed" % (group, entry))
+                continue
+            if entry["key"] not in produced:
+                err("policies/telemetry-policy.json claims %r (measured.%s) is computed; "
+                    "telemetry.py produces no %r" % (entry["name"], group, entry["key"]))
     for signal in ("human_intervention_rate", "rework_rate", "escalation_rate"):
         if signal not in code:
             err("policies/telemetry-policy.json names %r and telemetry.py does not compute it"
@@ -773,6 +808,53 @@ def check_required_fields_are_written():
                     "neither sets nor stamps it. A required field nothing writes makes every "
                     "predicate that reads it vacuous." % (entry["code"], field))
             return
+
+
+def check_documented_commands_parse():
+    """Every `control_loop.py <sub> ...` shown in the docs is a real invocation.
+
+    A newcomer review found the one documented `observe` example missing its
+    required --item, so the single command the work-item document shows could not
+    be run. The parser is asked directly rather than by running the command:
+    passing --help would make argparse exit 0 no matter what is missing, and
+    running it for real would write.
+    """
+    import shlex
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+    try:
+        import control_loop
+        parser = control_loop.build_parser()
+    except Exception as exc:
+        err("scripts/control_loop.py has no usable parser: %r" % exc)
+        return
+
+    pattern = re.compile(r"control_loop\.py\s+([a-z]+)((?:\\\n|[^\n`])*)")
+    seen = set()
+    for rel in sorted(glob.glob(os.path.join(ROOT, "docs", "*.md"))
+                      + glob.glob(os.path.join(ROOT, "*.md"))):
+        with open(rel, encoding="utf-8") as fh:
+            text = fh.read()
+        for m in pattern.finditer(text):
+            sub, rest = m.group(1), m.group(2).replace("\\\n", " ")
+            try:
+                argv = [sub] + shlex.split(rest)
+            except ValueError:
+                continue
+            # Placeholder arguments in prose are not invocations to check.
+            if any(a.startswith("<") for a in argv):
+                continue
+            key = tuple(argv)
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                parser.parse_args(argv)
+            except SystemExit:
+                err("%s documents `control_loop.py %s`, which its own parser rejects"
+                    % (os.path.relpath(rel, ROOT), " ".join(argv)))
+            except Exception:
+                pass
 
 
 def check_docs_are_reachable():
@@ -1232,6 +1314,72 @@ def check_team_requirements():
                     "acknowledgement" % (rel, stage["id"], degraded["fallback"]))
 
 
+WRITE_TOOLS = ("Write", "Edit", "NotebookEdit")
+
+
+def cannot_write(role, storage, scope, registry):
+    """Why this role could not write an artifact stored at `storage`, or None.
+
+    Three ways it fails, and only the last was ever checked: the role holds no
+    write tool, the role has no write-scope entry at all, or its scope excludes
+    the path. A storage that is not a repository path -- REVIEW lives in the
+    merge request -- is not a file write and is not checked.
+    """
+    if not storage.startswith(("docs/", "tests/", "ops/", "src/")):
+        return None
+    profiles = (load_json("policies/tool-permissions.json") or {}).get("profiles", {})
+    entry = next((a for a in registry.get("agents", []) if a["name"] == role), None)
+    if entry is None:
+        return "it is not a known agent"
+    tools = (profiles.get(entry.get("tool_profile")) or {}).get("tools") or []
+    if not any(t in tools for t in WRITE_TOOLS):
+        return ("its tool profile %r holds no write tool"
+                % entry.get("tool_profile"))
+    role_scope = (scope.get("roles") or {}).get(role)
+    if role_scope is None:
+        return "it has no entry in write-scope.json, so nothing scopes it"
+    where = storage.rstrip("/")
+    if role_scope.get("mode") == "allow":
+        if not any(where.startswith(p.replace("/**", "").rstrip("/"))
+                   for p in role_scope.get("allow", [])):
+            return "its allow-mode scope does not cover that path"
+    elif role_scope.get("mode") == "deny":
+        if any(where.startswith(p.replace("/**", "").rstrip("/"))
+               for p in role_scope.get("deny", [])):
+            return "its deny list covers that path"
+    return None
+
+
+def check_agent_write_scope_matches_the_policy(registry):
+    """The body table an agent reads must be the policy the hook enforces.
+
+    Seven agents had drifted. Where the body was narrower the agent declined work
+    it was authorized for -- sre read its own contract and concluded it could not
+    write the readiness record three stages require it to produce. Where it was
+    wider the agent planned edits the guard rejects. Both are the same bug: two
+    copies of one fact.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+    from agent_render import write_scope_line
+    scope = load_json("policies/write-scope.json") or {}
+    profiles = (load_json("policies/tool-permissions.json") or {}).get("profiles", {})
+    for a in registry.get("agents", []):
+        path = os.path.join(ROOT, "agents", a["name"] + ".md")
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        m = re.search(r"^\| Write scope \| (.*?) \|$", text, re.M)
+        if not m:
+            err("agents/%s.md: no '| Write scope |' row" % a["name"])
+            continue
+        want = write_scope_line(a["name"], scope,
+                                (profiles.get(a["tool_profile"]) or {}).get("tools", []))
+        if m.group(1).strip() != want:
+            err("agents/%s.md: write scope disagrees with policies/write-scope.json\n"
+                "        file:   %s\n        policy: %s" % (a["name"], m.group(1).strip(), want))
+
+
 def check_artifact_contracts(registry):
     """The artifact model is the state model. It must agree with the roles and the write scopes."""
     model = load_json("policies/artifact-model.json") or {}
@@ -1262,13 +1410,19 @@ def check_artifact_contracts(registry):
         if not a.get("required_fields"):
             err("%s: has no required_fields" % where)
         # The owner must actually be able to write where the artifact lives.
+        # This checked one of the three ways it can fail, and only as a warning,
+        # so DEPA shipped with an owner holding no write tools at all and a
+        # workflow whose definition of done required it to produce the file.
         storage = a.get("storage", "")
-        role_scope = scope.get("roles", {}).get(a["owner_role"])
-        if role_scope and role_scope.get("mode") == "allow" and storage.startswith("docs/"):
-            allowed = role_scope.get("allow", [])
-            if not any(storage.rstrip("/").startswith(p.replace("/**", "")) for p in allowed):
-                warn("%s: owner %s cannot write %s under its allow-mode scope"
-                     % (where, a["owner_role"], storage))
+        for role in [a["owner_role"]] + list(a.get("may_modify") or []):
+            why = cannot_write(role, storage, scope, registry)
+            if not why:
+                continue
+            if role == a["owner_role"]:
+                err("%s: owner %s cannot write %s -- %s" % (where, role, storage, why))
+            else:
+                warn("%s: may_modify names %s, which cannot write %s -- %s"
+                     % (where, role, storage, why))
 
 
 
@@ -1414,6 +1568,7 @@ def main():
     check_agent_frontmatter_is_effective()
     check_frontmatter_is_strict_yaml()
     check_stated_counts()
+    check_documented_commands_parse()
     check_docs_are_reachable()
     check_spawn_edges_are_executable()
     check_hooks()
@@ -1436,6 +1591,7 @@ def main():
     check_artifact_model_matches_the_header_schema()
     check_coupling()
     check_team_requirements()
+    check_agent_write_scope_matches_the_policy(registry)
     check_artifact_contracts(registry)
     check_department_cycles()
     check_notifications(registry)

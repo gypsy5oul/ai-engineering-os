@@ -166,10 +166,15 @@ silently degrading. See [`docs/execution.md`](../../docs/execution.md).
 ## How these were verified
 
 Every key above was checked against the settings schema embedded in the
-installed Claude Code binary (`2.1.237`) — its declared type, its accepted
+installed Claude Code binary at `2.1.237` — its declared type, its accepted
 values, and the code that reads it — and cross-checked against
 [the settings reference](https://code.claude.com/docs/en/settings) and
 [managed settings](https://code.claude.com/docs/en/server-managed-settings).
+`policies/platform-capabilities.json` has since moved to `2.1.241`, and the keys
+here have not been re-checked against it. The capability model and this settings
+list are therefore at different versions, which is worth knowing before relying
+on either: a key that was accepted at 2.1.237 is not thereby accepted now.
+
 Do the same before adding a key: these are platform controls that change
 independently of this plugin, and a setting that is merely plausible is a
 control that does nothing.

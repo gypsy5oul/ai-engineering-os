@@ -82,10 +82,11 @@
       "id": "GIT-01",
       "category": "protected-branch",
       "action": "escalate",
-      "pattern": "\\bgit\\s+push\\b[^|;&]*\\s(--force|-f|--force-with-lease)\\b",
+      "pattern": "\\bgit\\s+push\\b[^|;&]*\\s(--force|-f|--force-with-lease)\\b|\\bgit\\s+push\\b[^|;&]*\\s['\\\"]?\\+[A-Za-z0-9_./-]",
       "flags": "i",
       "message": "Force push rewrites shared history.",
-      "remediation": "Push a normal commit. If the branch genuinely needs a rewrite, a human must approve (AP-09)."
+      "remediation": "Push a normal commit. If the branch genuinely needs a rewrite, a human must approve (AP-09).",
+      "note": "A leading + on a refspec is a force push with no --force on the line. It was matched by nothing until a review pushed +main straight past this rule."
     },
     {
       "id": "GIT-02",

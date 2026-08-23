@@ -3,6 +3,181 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.22.0] — What a 42-agent adversarial review found, and what it cost to fix
+
+A dynamic workflow ran 42 agents over this repository across seven dimensions,
+each finding verified by an independent agent whose job was to refute it. Eight
+findings were refuted. Twenty-six survived, and every one of them was real.
+
+They fall into one pattern, which is the pattern this repository keeps producing:
+**a file that reads like the authority and is decoration.** Ten versions of
+`escalate` that the CLI discarded; a control-loop policy nothing consulted; a
+`change` field only the simulator wrote. This release is the seventh instance and
+the widest.
+
+### The allocator enforced none of the rules the planner enforced
+
+`runnable()` refused a task whose dependencies were unmet, whose attempts were
+spent, or whose coupled surface was taken. `claim()` — the function every
+`SubagentStart` actually calls — selected the first task matching the agent's
+role and handed it over. Reproduced against a real graph:
+
+```
+runnable says:                 ['T-001']
+claim(solution-architect)  ->  T-003  deps=['T-002']  deps_met=False
+claim(development-lead)    ->  T-007  surface=api-contract  (already held)
+claim(...)                 ->  T-002  attempts=3/3        (exhausted)
+```
+
+`claim()` now selects from `runnable()`. A test asserts the two agree, because
+the reason they diverged is that nothing said they had to.
+
+Two more in the same allocator. **Concurrent claims raced**: six agents claiming
+at once got overlapping tasks and one agent's whole result was written over.
+Claims are now serialised with `fcntl.flock`; six concurrent claims yield six
+distinct tasks. And **`plan --force` was an unrecorded bypass** of the replan cap,
+the attempt cap and the carry-forward rule — it reset the generation counter and
+reverted accepted work. It is now a repair path that refuses when the graph is
+valid.
+
+**An abandoned lease stranded the graph forever.** An agent that crashes never
+releases, and a leased task is skipped, so one dead session starved everything
+behind it with no way to find out which task. Leases now expire (`lease.ttl_seconds`,
+3600) and `next` names the holder. The spawn ledger had reasoned this out already —
+"a stuck slot is worse than a missed one" — for a slot that costs less.
+
+### Five ways past the guards
+
+**A typo in a project's `production_markers` deleted five of the seven production
+rules, silently.** The markers were substituted into rule patterns as regex, so
+`prod-eu(1` failed to compile and every rule carrying the token was dropped —
+loosening triggered by a project trying to tighten. Markers are now `re.escape`d,
+and any rule that will not compile is reported in the decision, in the audit
+record and at session start, the way a rejected waiver already was.
+
+**`policies/write-scope.json` was inert.** Plugin agents arrive as
+`ai-engineering-os:backend-developer`; `guard_write` matched the name whole, found
+no role, and skipped per-role scoping entirely. Every other hook already stripped
+the namespace. All 22 role scopes existed only for bare names that never arrive:
+
+```
+backend-developer               -> docs/architecture/hld.md   deny
+ai-engineering-os:backend-...   -> docs/architecture/hld.md   allowed
+```
+
+**A `..` segment satisfied any allow-list.** `docs/requirements/../src/app.js`
+matched `docs/requirements/**` and wrote to `src/`. Paths are normalised before
+matching, the raw spelling is no longer a candidate when it contains traversal,
+and an allow-mode role writing outside the project is denied outright.
+
+**`~/.claude/settings.json` was writable through the Write tool** — the shell
+route was guarded, the file-writing route was not. Now hard-denied on both.
+
+**A quoted branch name or a `+` refspec walked past the protected-branch check.**
+`git push origin 'main'` and `git push origin +main` were invisible to it. Both
+now escalate, and `+refspec` is recognised as the force push it is.
+
+### Predicates that could not fail
+
+`cycle_accepted` read the status the lead wrote and nothing else. Every cycle
+declares `determined_by: scripts/check_dod.py against acceptance.conditions`, and
+that determiner was never called from the predicate — so acceptance was an
+assertion, which `policies/department-cycle.json` names as the exact failure it
+exists to prevent. It now re-evaluates the cycle's own conditions and refuses over
+any it can see is false, and it reads `rollup.streams`, which had no reader
+anywhere: a rollup with items in `CHANGES_REQUESTED` passed both `cycle_accepted`
+and `no_open_rework`.
+
+That change failed 17 stages across 9 workflows on first run, and every failure
+was true. Two causes. **The cycles baked feature-workflow artifact codes into
+their acceptance conditions**, so `CYCLE-ARCH` could not be accepted inside
+`WF-MIGRATION` and `CYCLE-PROD` could not be accepted inside `WF-ONBOARDING`. The
+artifact-shaped conditions moved to the stages that produce those artifacts; what
+stays on a cycle is department-generic. And **the reviewer verdicts the cycles
+require were never recorded** — the simulator replaced the reviewer list at each
+stage, so a verdict given at `SAFETY` was gone by `EXECUTE`. Verdicts accumulate
+now, and a rollup marked `ACCEPTED` carries the verdict it rests on.
+
+`no_unresolved_findings(high)` ignored its severity argument entirely and answered
+from the presence of an `AP-04` approval, so `(high)` and `(low)` were the same
+question and neither read a finding. It now reads a findings list and honours the
+floor.
+
+The one gate that actually blocks anything — `TaskCompleted` — evaluated
+**unscoped**, so a finished change's artifacts satisfied a new change's task. The
+scoping added in v0.19.2 had never reached the enforcement point. Scoping it
+exposed five more masked failures in the simulation, all real.
+
+### Three of twenty-five faults tested nothing
+
+**F-05** passed on "there is no findings list", not on "a high finding stands" —
+`must_fail` accepted `REQUIRES-EVIDENCE` as a refusal. It now injects a real open
+finding, requires the status to be `FAIL`, and then proves `AP-04` clears it, so
+the exception edge is shown to lead somewhere.
+
+**F-12** corrupted `.ai-engineering/notification-channels.json`, a path nothing in
+the repository opens. It now breaks the file `route_event.py` reads — which used
+to answer with a traceback, and now returns a refusal in its own shape, because a
+stack trace is not a decision anyone can act on.
+
+**F-13** asserted one hardcoded stage. It now enumerates every externally-checkable
+predicate from the model, so a new one defaulting to `PASS` fails it.
+
+All three are mutation-tested. A fault that certifies a control it never exercises
+is worse than a missing one, because it is counted as coverage.
+
+### The human intervention rate counted things nothing writes
+
+Two of its four terms — approvals and open decisions — were read off work-item
+fields that have no writer, so they were structurally zero and the rate looked
+better the more it was trusted. A real escalation to the human owner reported
+nothing at all. `decide` now records who an escalation reached, telemetry counts
+the ones that leave the organization, and the two dead terms are named in
+`not_measured` with the reason. `check_telemetry_policy_is_live` had claimed a
+bidirectional check and never read the policy's `measured` list; each entry now
+names the key the tool must produce.
+
+### Organization
+
+`DEPA` had no role that could write it: its owner runs a read-only profile by
+design, and its only other `may_modify` role is denied `docs/security/**`. The
+validator checked one of the three ways this can fail, and only as a warning.
+Ownership moves to `security-architect`; the check is now an error covering the
+missing tool, the missing scope entry and the excluding scope, for the owner and
+every `may_modify` role.
+
+Seven agents' `| Write scope |` row had drifted from the policy. Two roles did not
+know they were allowed to write the artifacts they own — `sre` read its own
+contract and concluded it could not write the readiness record three stages
+require of it. Three planned infrastructure edits the guard rejects. The row is
+generated from one function now, and a validator regenerates and compares it.
+
+### Documentation
+
+A newcomer review found the headline mechanism — work item, task graph, control
+loop — documented nowhere operational. The README sold it in a diagram and then
+gave three steps that never create one, so a reader following the documented path
+produced no work item, and the hooks that inject context and gate completion
+correctly did nothing. `README.md`, `docs/getting-started.md` and
+`docs/work-items.md` now carry the sequence, and the single `control_loop.py`
+example in the docs was missing a required argument, so it could not be run.
+Every documented invocation is now checked against the parser.
+
+A separate sweep found 25 documented counts that had drifted from the code:
+eleven approval categories against fifteen, fifteen faults against twenty-five,
+four team stages against five, twenty-four subagent stages against thirty-two,
+seven simulation scenarios against ten, six tool profiles against ten, twenty-nine
+agents against thirty.
+
+### Platform model
+
+Re-verified against Claude Code 2.1.241 (was 2.1.237). All three load-bearing
+capabilities confirmed at contract level and by tracing the consuming code.
+Two entries were wrong: `PermissionRequest` does fire headless — the earlier probe
+covered only the two modes that short-circuit before the hook runs, and an absence
+was recorded as a capability — and agent teams are no longer interactive-only.
+An absence has to be checked the way a presence is.
+
 ## [0.21.4] — Dead policy keys: three wired up, none deleted
 
 An audit listed roughly forty-five policy keys nothing reads. Checking them

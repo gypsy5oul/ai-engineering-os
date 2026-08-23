@@ -106,6 +106,8 @@ def write_artifact(project, code, **over):
         header[field] = over.pop(field, "simulated %s" % field.replace("_", " "))
     header.update(over)
 
+    _accepted_cycle_carries_its_verdict(header)
+
     storage = spec["storage"]
     folder = os.path.join(project, storage) if storage.startswith(("docs/", "tests/")) \
         else os.path.join(project, "docs", "qa")
@@ -177,6 +179,16 @@ def cycle_lead(cid):
     return CYCLES[cid]["positions"]["lead"]
 
 
+def cycle_reviewer(cid):
+    """The peer reviewer whose verdict the cycle's acceptance requires.
+
+    'mutual' means the two departments review each other, so there is no single
+    named reviewer to record here.
+    """
+    who = CYCLES[cid]["positions"].get("peer_reviewer")
+    return None if who in (None, "mutual") else who
+
+
 def emit(project, etype, subject, correlation, **payload):
     cmd = [sys.executable, os.path.join(ROOT, "scripts", "emit_event.py"),
            "--type", etype, "--subject", subject, "--project", project,
@@ -187,8 +199,13 @@ def emit(project, etype, subject, correlation, **payload):
     return r.returncode == 0
 
 
-def check_stage(project, workflow, stage):
-    """Evaluate a stage's definition of done against the simulated project."""
+def check_stage(project, workflow, stage, change=None):
+    """Evaluate a stage's definition of done against the simulated project.
+
+    Scoped to the change under test, the same way the CLI and the completion
+    gate scope. Unscoped, the simulation was proving that a previous scenario's
+    artifacts satisfy this one.
+    """
     wfs = {}
     base = os.path.join(ROOT, "sdlc", "workflows")
     for name in sorted(os.listdir(base)):
@@ -198,6 +215,8 @@ def check_stage(project, workflow, stage):
     wf = wfs[workflow]
     s = next(x for x in wf["stages"] if x["id"] == stage)
     artifacts = check_dod.load_artifacts(project)
+    if change:
+        artifacts = check_dod.scope_to_change(artifacts, change)
     out = []
     for entry in s["definition_of_done"]:
         fn, args = check_dod.parse_predicate(entry)
@@ -657,6 +676,23 @@ def scenario_agent_change(project, log):
 
 # ---------------------------------------------------------------- helpers
 
+def _accepted_cycle_carries_its_verdict(header):
+    """One invariant, applied wherever a header is written.
+
+    A cycle marked ACCEPTED without its peer reviewer's verdict is the head
+    accepting by assertion, which the cycle policy forbids and which the
+    simulator produced at eight sites because each writer applied the rule
+    separately, or not at all.
+    """
+    roll = header.get("rollup")
+    if not isinstance(roll, dict) or roll.get("status") != "ACCEPTED":
+        return
+    who = cycle_reviewer(roll.get("cycle"))
+    if who and not any((r or {}).get("reviewer") == who
+                       for r in (header.get("reviewers") or [])):
+        header["reviewers"] = list(header.get("reviewers") or []) + [verdict(who)]
+
+
 def _rewrite(project, aid, mutate):
     for dirpath, dirnames, files in os.walk(project):
         dirnames[:] = [d for d in dirnames if d != ".git"]
@@ -675,7 +711,18 @@ def _rewrite(project, aid, mutate):
                     header[k.strip()] = json.loads(v)
                 except Exception:
                     header[k.strip()] = v
+            prior = list(header.get("reviewers") or [])
             mutate(header)
+            # A verdict is a thing that happened. Each stage used to replace the
+            # whole reviewer list, so the security verdict recorded at SAFETY was
+            # gone by EXECUTE and the cycle that required it could not be accepted.
+            # Latest verdict per reviewer wins; a re-review still overrides.
+            merged = {(r or {}).get("reviewer"): r for r in prior}
+            merged.update({(r or {}).get("reviewer"): r
+                           for r in (header.get("reviewers") or [])})
+            if merged:
+                header["reviewers"] = [merged[k] for k in merged if k]
+            _accepted_cycle_carries_its_verdict(header)
             body = ["---"]
             for k, v in header.items():
                 body.append("%s: %s" % (k, json.dumps(v) if isinstance(v, (dict, list, str)) else v))
@@ -698,8 +745,21 @@ def patch_links(project, aid, **edges):
 
 
 def patch_rollup(project, aid, value):
+    """Attach a rollup, and the reviewer verdict that acceptance rests on.
+
+    A cycle marked ACCEPTED whose peer reviewer never recorded a verdict is the
+    head accepting by assertion. The simulator used to produce exactly that and
+    the predicate believed it, because cycle_accepted read only the status.
+    """
     def m(h):
         h["rollup"] = value
+        h["version"] = int(h.get("version", 1)) + 1
+    _rewrite(project, aid, m)
+
+
+def patch_approvals(project, aid, approvals):
+    def m(h):
+        h["approvals"] = list(h.get("approvals") or []) + list(approvals)
         h["version"] = int(h.get("version", 1)) + 1
     _rewrite(project, aid, m)
 
@@ -831,6 +891,7 @@ def scenario_migration(project, log):
         _rewrite(project, st["mig"], lambda fm: fm.update({
             "backup_verified": "2026-08-20, 41GB",
             "restore_tested": "restored to staging in 18 minutes; row counts match",
+            "reviewers": [verdict("security-reviewer")],
             "rollup": rollup("CYCLE-SRE", status="IN_PROGRESS", next_gate="REHEARSE")}) or fm)
 
     def rehearse():
@@ -941,7 +1002,9 @@ def run(name, keep=False, verbose=False):
         current["stage"] = stage
         work()
         # Evaluated the moment the stage completes, not at the end of the run.
-        results = check_stage(project, workflow, stage)
+        # Scoped to whichever change the scenario just set. Unscoped, the run was
+        # proving that scenario 1's artifacts satisfy scenario 7.
+        results = check_stage(project, workflow, stage, change=CURRENT_CHANGE["id"])
         counts = {"PASS": 0, "FAIL": 0, "REQUIRES-EVIDENCE": 0}
         for entry, status, detail in results:
             counts[status] += 1

@@ -51,13 +51,22 @@ def dod(project, workflow, stage):
     return {e: (st, d) for e, st, d in S.check_stage(project, workflow, stage)}
 
 
-def must_fail(results, predicate):
-    """The named predicate is the one that objects."""
+def must_fail(results, predicate, status_must_be=None):
+    """The named predicate is the one that objects.
+
+    `status_must_be` exists because REQUIRES-EVIDENCE and FAIL are different
+    answers. F-05 was passing on "I cannot see a findings list", which is not the
+    same as "a high finding stands", and the fault therefore proved nothing about
+    the control it names.
+    """
     if predicate not in results:
         return False, "predicate %r is not in this stage's definition of done" % predicate
     status, detail = results[predicate]
     if status == "PASS":
         return False, "%s passed; the fault was not detected" % predicate
+    if status_must_be and status != status_must_be:
+        return False, ("%s answered %s, not %s: %s"
+                       % (predicate, status, status_must_be, detail[:70]))
     return True, "%s -> %s (%s)" % (predicate, status, detail[:70])
 
 
@@ -156,17 +165,35 @@ def f04(project):
 @fault("F-05", "A high security finding stands with no exception",
        "CYCLE-SEC is not accepted: exception_granted is the only way past it")
 def f05(project):
-    S.write_artifact(project, "SEC", status="approved")
-    conds = cycle("CYCLE-SEC")["acceptance"]["conditions"]
-    arts = check_dod.load_artifacts(project)
-    results = {}
-    for entry in conds:
-        fn, args = check_dod.parse_predicate(entry)
-        results[entry] = check_dod.evaluate(fn, args, arts, project)
-    ok, why = must_fail(results, "no_unresolved_findings(high)")
+    # An actual open finding, not merely the absence of a findings list. The
+    # predicate used to answer REQUIRES-EVIDENCE here and the fault counted that
+    # as detection, so it was testing that the repository knows nothing.
+    S.write_artifact(project, "SEC", status="approved",
+                     findings=[{"id": "SEC-F-001", "severity": "high", "status": "open",
+                                "title": "Unauthenticated transfer endpoint"}])
+
+    def conditions():
+        arts = check_dod.load_artifacts(project)
+        out = {}
+        for entry in cycle("CYCLE-SEC")["acceptance"]["conditions"]:
+            fn, args = check_dod.parse_predicate(entry)
+            out[entry] = check_dod.evaluate(fn, args, arts, project)
+        return out
+
+    ok, why = must_fail(conditions(), "no_unresolved_findings(high)", status_must_be="FAIL")
     if not ok:
         return False, why
-    return True, why
+
+    # And the way past it is the one the cycle documents: a human accepts the
+    # standing risk under AP-04. If that does not clear it, the exception edge
+    # leads nowhere and the finding can never be closed.
+    sec = [a for a in check_dod.load_artifacts(project) if a["type"] == "security"][0]
+    S.patch_approvals(project, sec["id"],
+                      [S.approval("AP-04", "security-owner", recorded_in="project-decision-log")])
+    ok2, why2 = must_hold(conditions(), "no_unresolved_findings(high)")
+    if not ok2:
+        return False, "AP-04 did not clear the finding, so the exception edge leads nowhere: " + why2
+    return True, "%s; cleared only by AP-04" % why
 
 
 @fault("F-06", "Release content was never approved",
@@ -270,28 +297,68 @@ def f12(project):
     S.write_artifact(project, "NFR", status="approved", target="99.9%",
                      reviewers=[S.verdict("qa-lead")],
                      rollup=S.rollup("CYCLE-PROD"))
-    # Break the channel configuration the way an outage would.
-    cfg = os.path.join(project, ".ai-engineering", "notification-channels.json")
-    with open(cfg, "w", encoding="utf-8") as fh:
+    # Break the configuration route_event.py actually reads. This used to corrupt
+    # .ai-engineering/notification-channels.json, a path nothing in the repository
+    # opens, so the fault injected nothing and the tolerance it certified was never
+    # exercised.
+    import json
+    import shutil
+    import subprocess
+    root = os.path.join(project, "_plugin")
+    shutil.copytree(ROOT, root, ignore=shutil.ignore_patterns(
+        ".git", "__pycache__", "*.pyc", ".ai-engineering"))
+    broken = os.path.join(root, "notification", "channels.json")
+    with open(broken, "w", encoding="utf-8") as fh:
         fh.write("{ this is not json")
+
+    event = json.dumps({"type": "REQUIREMENT_APPROVED", "subject": "SIM-REQ-001"})
+    routed = subprocess.run(
+        [sys.executable, os.path.join(root, "scripts", "route_event.py")],
+        input=event, capture_output=True, text=True, timeout=60)
+    if '"send": true' in (routed.stdout or "").lower():
+        return False, ("routing claimed to have sent with an unreadable channel file; a broken "
+                       "notification must be visible, not silently swallowed")
+
     res = dod(project, "WF-FEATURE", "REQ")
     blocked = [k for k, (st, _) in res.items() if st == "FAIL"]
     if blocked:
         return False, "a broken notification channel blocked the stage: %s" % ", ".join(blocked)
-    return True, "REQ unaffected by the channel being down"
+    return True, ("routing refused rather than claiming to send (exit %d), and REQ was "
+                  "unaffected" % routed.returncode)
 
 
-@fault("F-13", "GitLab is unreachable",
-       "evidence that cannot be seen is reported pending, never as satisfied")
+@fault("F-13", "Evidence outside the repository is unreachable",
+       "every externally-checkable predicate reports pending, and never passes")
 def f13(project):
-    res = dod(project, "WF-FEATURE", "CI")
-    wrong = [k for k, (st, _) in res.items() if st == "PASS"]
+    model = check_dod.model()
+    # `repo` means the repository itself, which IS present offline -- config_valid
+    # reads the project's own configuration. Only evidence held by a system this
+    # process cannot reach counts as unreachable.
+    external = {name: spec for name, spec in model["dod_predicates"].items()
+                if spec.get("checkable") not in (None, "project", "repo")}
+    if not external:
+        return False, "the model declares no externally-checkable predicate to test"
+
+    arts = check_dod.load_artifacts(project)
+    wrong, pending = [], []
+    for name, spec in sorted(external.items()):
+        # A plausible argument per declared parameter, so the predicate is
+        # exercised rather than skipped for want of one.
+        args = ["required" if a == "level" else "AP-01" if a.startswith("approval")
+                else "any" for a in (spec.get("args") or [])]
+        status, _ = check_dod.evaluate(name, args, arts, project)
+        if status == "PASS":
+            wrong.append("%s(%s)" % (name, ", ".join(args)))
+        elif status == "REQUIRES-EVIDENCE":
+            pending.append(name)
     if wrong:
-        return False, "claimed to verify GitLab state with no GitLab: %s" % ", ".join(wrong)
-    pending = [k for k, (st, _) in res.items() if st == "REQUIRES-EVIDENCE"]
+        return False, ("claimed to verify evidence that is not in the repository: %s"
+                       % ", ".join(wrong))
     if not pending:
-        return False, "no predicate reported the missing evidence"
-    return True, "%d predicate(s) pending rather than passing" % len(pending)
+        return False, ("no externally-checkable predicate reported the missing evidence; "
+                       "checked %s" % ", ".join(sorted(external)))
+    return True, ("%d of %d external predicate(s) pending rather than passing: %s"
+                  % (len(pending), len(external), ", ".join(pending)))
 
 
 # ---------------------------------------------- E. the controls' own failures

@@ -3,9 +3,10 @@
   "description": "What this plugin believes Claude Code can do, and how each belief was established. One file so that a platform refresh is a diff against a checked model rather than a re-reading of every document.",
   "why": [
     "This repository has been wrong in both directions. It emitted permissionDecision \"escalate\" for ten versions, a value the CLI does not accept, so every escalate-tier rule silently allowed the command it described. It also documented `effort` as unsupported on plugin agents when the CLI validates it.",
-    "Both mistakes were cheap to make because each belief lived in prose, in a different file, established at a different time, with no record of how it was checked. A capability the code depends on should say how it was verified and when."
+    "Both mistakes were cheap to make because each belief lived in prose, in a different file, established at a different time, with no record of how it was checked. A capability the code depends on should say how it was verified and when.",
+    "It also recorded PermissionRequest as unavailable on the strength of a probe that only covered the two modes which short-circuit before the hook runs. An absence has to be checked the way a presence is, or it becomes the most confident kind of wrong entry."
   ],
-  "tested_against": "2.1.237",
+  "tested_against": "2.1.241",
   "evidence_levels": {
     "contract": "Declared in the CLI's own schema. The strongest evidence short of running it.",
     "empirical": "Observed on the wire in this environment.",
@@ -14,63 +15,77 @@
   },
   "capabilities": {
     "hook.SubagentStart.additionalContext": {
-      "available": true, "evidence": "contract+empirical",
-      "note": "Declared as `hookEventName:Tt(\"SubagentStart\"),additionalContext:O().optional()` and confirmed on the wire: a subagent reported back a token that existed nowhere but the hook's output.",
+      "available": true,
+      "evidence": "contract+empirical",
+      "note": "Declared as `hookEventName:Ht(\"SubagentStart\"),additionalContext:O().optional()` and confirmed on the wire. Injected into the subagent's message list only when the spawn is not isolatedContext; an isolated spawn silently receives no briefing, which is the exact failure inject_context.py exists to prevent. SubagentStart hooks are skipped entirely for delegated-observation subagents.",
       "used_by": "hooks/scripts/inject_context.py",
       "load_bearing": true
     },
     "hook.SubagentStop.last_assistant_message": {
-      "available": true, "evidence": "empirical",
+      "available": true,
+      "evidence": "empirical",
       "note": "Carries agent_id, agent_type, last_assistant_message and agent_transcript_path.",
       "used_by": "hooks/scripts/observe_subagent.py",
       "load_bearing": true
     },
     "hook.TaskCompleted.can_block": {
-      "available": true, "evidence": "documented+contract",
-      "note": "Carries task_id, task_subject, task_description. No hookSpecificOutput, so it cannot inject or rewrite; exit 2 blocks the completion. Useful as a gate, not as an orchestrator.",
+      "available": true,
+      "evidence": "documented+contract",
+      "note": "Carries task_id, task_subject, optional task_description, teammate_name and team_name. No hookSpecificOutput variant exists for this event, so it cannot inject or rewrite; it is in the CLI's blocking set, so exit 2 blocks the completion. A gate, not an orchestrator.",
       "used_by": "hooks/scripts/gate_task_completion.py",
       "load_bearing": false
     },
     "hook.TaskCreated.carries_dependencies": {
-      "available": false, "evidence": "absent",
-      "note": "No blocks, blockedBy, owner or metadata in the payload. This is why the task graph is the plugin's own artifact rather than a mirror of Claude Code's list."
+      "available": false,
+      "evidence": "absent",
+      "note": "task_id, task_subject, optional task_description, teammate_name and team_name. No blocks, blockedBy or metadata; teammate_name is the only assignee signal and carries no edges. This is why the task graph is the plugin's own artifact rather than a mirror of Claude Code's list."
     },
     "hook.PermissionRequest.fires_headless": {
-      "available": false, "evidence": "empirical",
-      "note": "Did not fire under `claude -p` in any probed configuration, including auto and dontAsk modes. Nothing here depends on it."
+      "available": true,
+      "evidence": "contract",
+      "note": "Corrected at 2.1.241. It is NOT gated on interactivity: executePermissionRequestHooks is the only tool-lifecycle emitter with no registration guard, and the headless branch runs the hooks before returning its 'permission prompts are not available' deny. The earlier probe found nothing because dontAsk denies before that branch and auto short-circuits ahead of it -- an absence of firing under two modes was read as an absence of the capability. Nothing here depends on it."
     },
     "permission_decision.values": {
-      "available": true, "evidence": "contract",
-      "note": "allow, deny, ask, defer. A value outside this set is discarded and the tool call PROCEEDS.",
+      "available": true,
+      "evidence": "contract",
+      "note": "allow, deny, ask, defer. A value outside this set is discarded and the tool call PROCEEDS -- visibly the first time, then silently, because the error is latched once per (event, command). That is why the escalate bug survived ten versions. defer is print-mode only and solo-only, so ask is the only usable escalation on the wire.",
       "used_by": "hooks/lib/hooklib.py WIRE_DECISION",
       "load_bearing": true
     },
     "agent_frontmatter.effort": {
-      "available": true, "evidence": "contract",
+      "available": true,
+      "evidence": "contract",
       "note": "Validated against low, medium, high, xhigh, max or an integer."
     },
     "agent_frontmatter.ignored_for_plugins": {
-      "available": false, "evidence": "contract",
+      "available": false,
+      "evidence": "contract",
       "note": "permissionMode, hooks and mcpServers are warned about and discarded on a plugin agent. Setting one would be configuration that does nothing."
     },
     "agent_teams": {
-      "available": true, "evidence": "contract", "experimental": true,
-      "note": "Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS. Interactive only: under -p a named spawn degrades to a background subagent. Nothing in the lifecycle may depend on it."
+      "available": true,
+      "evidence": "contract",
+      "experimental": true,
+      "note": "Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS. Print mode carries a full teammate lifecycle (unread-message polling, shutdown_approved handling, team-file removal, shutdown-prompt injection) and --teammate-mode in-process needs no TTY, so the earlier 'interactive only' reading no longer holds at 2.1.241. Still experimental and unverified end to end here; nothing in the lifecycle may depend on it."
     },
     "worktree_isolation": {
-      "available": true, "evidence": "contract",
+      "available": true,
+      "evidence": "contract",
       "note": "isolation: worktree on a spawn or in agent frontmatter. worktree.baseRef defaults to fresh, so an isolated worker does not see unpushed local commits."
     },
     "native_task_list": {
-      "available": true, "evidence": "documented",
-      "note": "TaskCreate/TaskGet/TaskUpdate/TaskList backed by ~/.claude/tasks/<listId>/. Real blocks and blockedBy edges. Gated behind CLAUDE_CODE_ENABLE_TODO_TOOLS on some models. Execution state on one machine, which is why it is not the system of record here."
+      "available": true,
+      "evidence": "documented",
+      "note": "TaskCreate/TaskGet/TaskUpdate/TaskList with real blocks and blockedBy edges (confirmed). On-disk layout not re-confirmed at 2.1.241. Gated behind CLAUDE_CODE_ENABLE_TODO_TOOLS on some models. Execution state on one machine, which is why it is not the system of record here."
     },
     "dynamic_workflows": {
-      "available": true, "evidence": "documented",
-      "note": "A workflows/ directory at the plugin root, JavaScript only, runs under -p. Unused: the lifecycle is declarative on purpose, and this suits repository-wide fan-out rather than stage progression."
+      "available": true,
+      "evidence": "documented",
+      "note": "A workflows/ directory at the plugin root, JavaScript only, runs under -p. Gated by the enableWorkflows / disableWorkflows settings, so an organization can switch it off. Not shipped: the lifecycle is declarative on purpose. Used for review fan-out over this repository, which is what it suits."
     },
     "lsp_servers": {
-      "available": true, "evidence": "contract",
+      "available": true,
+      "evidence": "contract",
       "note": "A .lsp.json at the plugin root. Deliberately not shipped: extensionToLanguage is not variable-expanded and extension claims are global across plugins, so a placeholder would outrank a project's real server."
     }
   },

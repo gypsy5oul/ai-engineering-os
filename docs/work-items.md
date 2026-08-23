@@ -38,6 +38,51 @@ only a hook or a script can read back.
     history.jsonl      append-only: what happened, and every superseded plan
 ```
 
+`CURRENT` sits alongside those directories and names the work item this project
+is on. Every hook reads it to decide whether the session is doing tracked work
+or something else, and a session that is doing something else is a normal
+session, not an error.
+
+## Driving one, end to end
+
+Seven subcommands, all on `scripts/control_loop.py`, all taking `--project` and
+(after `open`) `--item`.
+
+```bash
+# 1. Open it. Intent is quoted verbatim; nothing about the plan is decided yet.
+python3 scripts/control_loop.py open --project . --type feature --risk HIGH \
+    --intent "Partners time out on large transfers"
+
+# 2. Plan it. The graph is generated from the workflow, the project's risk
+#    posture and what each stage needs from the one before it.
+python3 scripts/control_loop.py plan --project . --item ACME-FEAT-001
+
+# 3. Ask what is runnable. Dependencies met, attempts left, surface free.
+python3 scripts/control_loop.py next --project . --item ACME-FEAT-001
+
+# 4. Do the work. Spawning an agent claims a task for it automatically --
+#    SubagentStart hands it the work item and its own task, and SubagentStop
+#    records what came back. Nothing here has to be done by hand.
+
+# 5. Record an outcome. accepted | failed | rejected | blocked | escalated.
+python3 scripts/control_loop.py observe --project . --item ACME-FEAT-001 \
+    --task T-003 --outcome failed --failure-class test_failure \
+    --detail "the token endpoint still rejects valid credentials"
+
+# 6. Let the loop decide: retry, rework, replan or escalate.
+python3 scripts/control_loop.py decide --project . --item ACME-FEAT-001 --task T-003
+
+# 7. Look at the whole thing at any point.
+python3 scripts/control_loop.py status --project . --item ACME-FEAT-001
+```
+
+`replan` is the eighth, and it is not part of the ordinary path: it is what the
+loop reaches for when `decide` says the plan itself is wrong, and it is capped so
+that replanning cannot become the way work avoids finishing.
+
+Nothing in this sequence requires a session to stay alive. The store is the
+system of record; a session that dies is resumed by reading it.
+
 ## Intent and objective are kept apart
 
 `intent` is what the human said, verbatim. `objective` is what the organization
@@ -124,7 +169,7 @@ observed text was wrong in both directions:
 A failure now has a `class` and a `signature`, supplied by whoever observed it:
 
 ```bash
-control_loop.py observe --task T-004 --outcome failed \
+control_loop.py observe --project . --item ACME-FEAT-001 --task T-004 --outcome failed \
     --failure-class test_failure \
     --signature AUTH-401-MISSING-TOKEN \
     --evidence tests/auth/test_login.py \
@@ -161,7 +206,7 @@ The rules, in the order they apply:
 
 | Fact | Resolves to | Because |
 | --- | --- | --- |
-| Teams unavailable | `subagent` | Nothing in the lifecycle may depend on an experimental, interactive-only feature |
+| Teams unavailable | `subagent` | Nothing in the lifecycle may depend on a feature that is still experimental and off by default |
 | Role holds no write tools | `subagent` | A worktree protects files the role could not have touched |
 | CRITICAL risk, declared background | `subagent` | The point of the tier is that somebody is watching; background is where nobody is |
 | A sibling holds the same coupled surface | `worktree` | The parallelism survives and integration becomes an explicit step |

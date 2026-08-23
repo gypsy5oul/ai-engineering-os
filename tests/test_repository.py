@@ -867,7 +867,11 @@ class TestChangeScoping(unittest.TestCase):
                 fh.write("---\nid: ACME-STORY-%03d\ntype: story\nchange: %s\n"
                          "title: A story for scoping\nstatus: done\nowner: backend-developer\n"
                          "version: 1\ncreated_at: '2026-08-01'\nupdated_at: '2026-08-02'\n"
-                         "source: agent\nlinks: {}\nrollup:\n  cycle: CYCLE-DEV\n"
+                         "source: agent\nlinks: {}\n"
+                         # cycle_accepted now re-checks the cycle's own conditions,
+                         # so an accepted CYCLE-DEV has to carry the verdict it rests on.
+                         "reviewers: [{\"reviewer\": \"code-reviewer\", \"verdict\": \"pass\"}]\n"
+                         "rollup:\n  cycle: CYCLE-DEV\n"
                          "  status: %s\n  produced_by: development-lead\n  at: '2026-08-02'\n"
                          "  rework_rounds: 0\n---\n" % (i + 1, change, status))
         return d
@@ -963,6 +967,62 @@ class TestPredicatesAreSatisfiable(unittest.TestCase):
         os.remove(os.path.join(d, "resolved.md"))
         self.artifact(d, "open.md", base % (2, 2, ""))
         self.assertEqual(self.evaluate(d, "no_open_rework(CYCLE-DEV)"), "FAIL")
+
+
+class TestTheRollupStreamsAreRead(unittest.TestCase):
+    """`streams` is the only field carrying per-item state, and no predicate read
+    it. A rollup could declare ACCEPTED over work still in CHANGES_REQUESTED."""
+
+    HEAD = ("---\nid: ACME-STORY-001\ntype: story\nchange: ACME-EPIC-01\ntitle: A story\n"
+            "status: done\nowner: backend-developer\nversion: 1\ncreated_at: '2026-08-01'\n"
+            "updated_at: '2026-08-05'\nsource: agent\nlinks: {}\n"
+            "reviewers: [{\"reviewer\": \"code-reviewer\", \"verdict\": \"pass\"}]\nrollup:\n"
+            "  cycle: CYCLE-DEV\n  status: ACCEPTED\n  produced_by: development-lead\n"
+            "  at: '2026-08-05'\n  rework_rounds: %d\n  streams:\n%s---\n")
+
+    def project(self, rounds, streams):
+        import tempfile
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d, True)
+        with open(os.path.join(d, "s.md"), "w", encoding="utf-8") as fh:
+            fh.write(self.HEAD % (rounds, streams))
+        return d
+
+    def evaluate(self, project, predicate):
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import check_dod
+        fn, args = check_dod.parse_predicate(predicate)
+        return check_dod.evaluate(fn, args, check_dod.load_artifacts(project), project)[0]
+
+    DONE = "    - name: backend\n      state: READY_FOR_INTEGRATION\n"
+    OPEN = ("    - name: backend\n      state: READY_FOR_INTEGRATION\n"
+            "    - name: frontend\n      state: CHANGES_REQUESTED\n")
+
+    def test_all_streams_done_is_accepted(self):
+        d = self.project(1, self.DONE)
+        self.assertEqual(self.evaluate(d, "cycle_accepted(CYCLE-DEV)"), "PASS")
+        self.assertEqual(self.evaluate(d, "no_open_rework(CYCLE-DEV)"), "PASS")
+
+    def test_a_stream_in_changes_requested_is_not_accepted(self):
+        d = self.project(1, self.OPEN)
+        self.assertEqual(self.evaluate(d, "cycle_accepted(CYCLE-DEV)"), "FAIL",
+                         "the head declared ACCEPTED over open work and was believed")
+
+    def test_a_stream_in_changes_requested_is_open_rework(self):
+        self.assertEqual(self.evaluate(self.project(1, self.OPEN),
+                                       "no_open_rework(CYCLE-DEV)"), "FAIL")
+
+    def test_an_unrecognised_stream_state_is_not_evidence_of_completion(self):
+        d = self.project(1, "    - name: backend\n      state: probably-fine\n")
+        self.assertEqual(self.evaluate(d, "cycle_accepted(CYCLE-DEV)"), "FAIL")
+
+    def test_the_round_that_triggers_escalation_does_not_pass(self):
+        """The policy escalates on REACHING the limit. `>` let that round through."""
+        self.assertEqual(self.evaluate(self.project(2, self.DONE),
+                                       "no_open_rework(CYCLE-DEV)"), "PASS")
+        self.assertEqual(self.evaluate(self.project(3, self.DONE),
+                                       "no_open_rework(CYCLE-DEV)"), "FAIL")
 
 
 class TestModelFloorBlocks(unittest.TestCase):

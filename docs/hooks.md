@@ -14,8 +14,11 @@ model cannot argue with.
 | `PreToolUse` | `Write\|Edit\|NotebookEdit` | `guard_write.py` | Forbidden paths, role write scope, secret content |
 | `PreToolUse` | `Agent` | `guard_spawn.py` | Organizational spawn hierarchy |
 | `PostToolUse` | `Write\|Edit\|NotebookEdit` | `audit_log.py` | Records what actually changed |
+| `SubagentStart` | — | `inject_context.py` | Briefs the agent on the one task claimed against its `agent_id`, so the role definition does not have to carry the project's context |
 | `Stop` | — | `check_artifacts.py` | Artifacts written this session parse and validate |
+| `SubagentStop` | — | `observe_subagent.py` | Records what the agent produced against its task, from `last_assistant_message`, rather than trusting the agent to report it |
 | `SubagentStop` | — | `check_artifacts.py` | The same check when a delegated task ends |
+| `TaskCompleted` | — | `gate_task_completion.py` | Exit 2 blocks a task closing while its definition of done is unmet |
 | `SessionStart` | `startup\|resume\|clear\|compact\|fork` | `session_context.py` | Organization presence and project configuration status |
 
 ## The one place the lifecycle is enforced
@@ -128,7 +131,7 @@ Each is now a permanent test.
 | --- | --- | --- |
 | Destructive filesystem | SH-01…SH-05 | Recursive deletes of root/home/wildcard, block devices, `mkfs`, world-writable permissions, filesystem-wide deletes |
 | Supply chain | SH-06, SH-07, SH-08 | Piping a download into a shell; executing the output of a download through command substitution or process substitution; downloading to a file and running it |
-| Protected branch | GIT-00, GIT-01, GIT-02, GIT-04 | Push and commit on protected branches, force push, remote branch deletion |
+| Protected branch | GIT-01, GIT-02, GIT-04 | Force push, remote branch deletion, force-deleting an unmerged local branch |
 | History rewrite | GIT-03, GIT-06 | `filter-branch`, `reflog delete`, `reset --hard` |
 | Untracked file loss | GIT-07 | `git clean`, which deletes files git never showed you |
 | Review bypass | GIT-05 | `--no-verify` |
@@ -143,9 +146,11 @@ Each is now a permanent test.
 | Registry deletion | REG-01 | Deleting container images, which breaks every rollback depending on them |
 | Production config and service | PRD-08, PRD-09 | In-place `kubectl edit/patch` on production; stopping or restarting a production service |
 
-Branch protection is evaluated against the live branch: the guard resolves the
-current branch and parses the push refspec rather than pattern-matching the word
-"main".
+Push and commit on a protected branch are not among those rules. Branch
+protection is evaluated against the live branch instead: `guard_bash.py` resolves
+the current branch and parses the push refspec rather than pattern-matching the
+word "main", and reports the escalation under the synthesized ids `GIT-00` and
+`GIT-00b`, which exist only in the guard and not in the policy file.
 
 ## Regexes are a net, not a wall
 
@@ -163,7 +168,7 @@ Code can enforce them structurally:
 
 The strongest control on production is not a hook: a session without a production
 credential cannot mutate production however the command is spelled.
-`templates/project/settings.json` ships 18 structural deny rules for the project
+`templates/project/settings.json` ships 16 structural deny rules for the project
 to adopt.
 
 Shell remains the one surface where an agent can express an arbitrary action, so

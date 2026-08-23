@@ -204,6 +204,46 @@ def record(project, wid, kind, **fields):
     return entry
 
 
+class _GraphLock(object):
+    """Serialise the read-modify-write in claim() and release().
+
+    Two SubagentStart hooks are two processes, and the concurrency policy permits
+    six agents under one lead. Without this, both read the same graph, both write,
+    and the second write wins: two agents believe they hold one task, and at
+    SubagentStop the loser resolves to nothing and its entire result is discarded
+    as unattributed. That is the failure the lease was built to prevent, returning
+    by a different door.
+
+    Best-effort by design. If the lock cannot be taken the work still proceeds,
+    because a lease that blocks a spawn is worse than a lease that occasionally
+    races.
+    """
+
+    def __init__(self, project, wid):
+        self.path = os.path.join(item_dir(project, wid), ".graph.lock")
+        self.handle = None
+
+    def __enter__(self):
+        try:
+            import fcntl
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            self.handle = open(self.path, "w")
+            fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX)
+        except Exception:
+            self.handle = None
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            if self.handle:
+                import fcntl
+                fcntl.flock(self.handle.fileno(), fcntl.LOCK_UN)
+                self.handle.close()
+        except Exception:
+            pass
+        return False
+
+
 def claim(project, wid, agent_type, agent_id, session=None):
     """Bind exactly one task to exactly one running agent, and record it.
 
@@ -219,16 +259,26 @@ def claim(project, wid, agent_type, agent_id, session=None):
 
     Returns the claimed task, or None when there is nothing for this role to take.
     """
+    with _GraphLock(project, wid):
+        return _claim_locked(project, wid, agent_type, agent_id, session)
+
+
+def _claim_locked(project, wid, agent_type, agent_id, session=None):
     graph = load_graph(project, wid)
     if not graph:
         return None
     held = {t.get("owner_agent") for t in graph.get("tasks", []) if t.get("owner_agent")}
     if agent_id in held:
         return resolve(project, wid, agent_id)
-    for t in graph.get("tasks", []):
-        if t.get("role") != agent_type or t["state"] in TERMINAL:
-            continue
-        if t.get("owner_agent"):
+    # Select from runnable(), not from tasks[]. This used to iterate every task
+    # matching the role, which meant claim -- the binding the platform actually
+    # performs at SubagentStart -- enforced none of the gates runnable() enforces.
+    # A task with unmet dependencies, a task past its attempt cap, and two tasks
+    # on one coupled surface were all handed out, while `next` correctly refused
+    # them. Every bound in the graph was therefore advisory: real in the output a
+    # model reads, absent from the path a spawn takes.
+    for t in runnable(graph):
+        if t.get("role") != agent_type:
             continue
         t["owner_agent"] = agent_id
         if session:
@@ -252,6 +302,11 @@ def resolve(project, wid, agent_id):
 
 
 def release(project, wid, agent_id):
+    with _GraphLock(project, wid):
+        return _release_locked(project, wid, agent_id)
+
+
+def _release_locked(project, wid, agent_id):
     graph = load_graph(project, wid)
     if not graph:
         return None
@@ -397,6 +452,41 @@ def dependencies_met(graph, t):
     return True
 
 
+def _lease_ttl():
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        root = os.path.dirname(os.path.dirname(here))
+        with open(os.path.join(root, "policies", "control-loop-policy.json"),
+                  encoding="utf-8") as fh:
+            return int((json.load(fh).get("lease") or {}).get("ttl_seconds", 3600))
+    except Exception:
+        return 3600
+
+
+def lease_expired(t, ttl=None):
+    """Whether a held task has been held too long to still believe in.
+
+    An agent that crashed never releases, and a leased task is skipped by
+    runnable() -- so one dead session strands everything behind it, permanently,
+    with no CLI to clear it and nothing in `next` naming the culprit.
+    """
+    if not t.get("owner_agent"):
+        return False
+    stamp = parse_stamp(t.get("last_activity") or t.get("started_at"))
+    if stamp is None:
+        return False
+    return (time.time() - stamp) > (ttl if ttl is not None else _lease_ttl())
+
+
+def parse_stamp(value):
+    if not value:
+        return None
+    try:
+        return time.mktime(time.strptime(str(value)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except Exception:
+        return None
+
+
 def runnable(graph):
     """Tasks whose dependencies are satisfied and whose attempts are not spent.
 
@@ -404,13 +494,20 @@ def runnable(graph):
     coupling policy gives each surface one owner, and handing both out invites
     two agents to redefine the same contract in parallel.
     """
-    out, claimed = [], set()
+    # A surface held by a live lease is taken, not merely taken within this call.
+    # Excluding duplicates only inside one listing was enough while runnable() was
+    # a report; once claim() selects from it, two successive claims would each see
+    # a fresh listing and hand out both halves of the same contract.
+    out = []
+    claimed = {t["coupled_surface"] for t in graph.get("tasks", [])
+               if t.get("coupled_surface") and t.get("owner_agent")
+               and not lease_expired(t)}
     for t in graph.get("tasks", []):
         if t["state"] not in RUNNABLE_FROM or not dependencies_met(graph, t):
             continue
         if t.get("attempts", 0) >= t.get("max_attempts", 3):
             continue
-        if t.get("owner_agent"):
+        if t.get("owner_agent") and not lease_expired(t):
             continue
         surface = t.get("coupled_surface")
         if surface:

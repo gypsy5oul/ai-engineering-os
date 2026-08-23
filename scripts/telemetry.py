@@ -107,6 +107,12 @@ def collect(project, only=None):
                     m["decisions_escalated"] += 1
                     if "same failure" in (h.get("why") or ""):
                         m["repeated_failures"] += 1
+            elif kind == "escalated":
+                # Only an escalation that reaches outside the organization is a
+                # human intervention. One that stops at the lead is the ladder
+                # working.
+                if (h.get("to") or "").startswith("human"):
+                    m["human_escalations"] += 1
             elif kind == "replan_refused":
                 m["replans_refused"] += 1
                 # A refused replan is the organization telling a human it is out of
@@ -134,8 +140,11 @@ def rate(numerator, denominator):
 
 def derive(m):
     """The numbers worth reading, and the human intervention rate."""
-    interventions = (m["approvals"] + m["human_escalations"] + m["open_decisions"]
-                     + m["replans"])
+    # Two of the four terms this used to sum -- approvals and open_decisions --
+    # are read off work-item fields that nothing writes, so they were structurally
+    # zero and made the rate look better the more it was trusted. They are named
+    # in `not_measured` now rather than silently added.
+    interventions = m["human_escalations"] + m["replans"]
     return {
         # Denominator is tasks anyone actually worked, not tasks planned. A graph
         # of forty tasks with three attempted is not a 7% rework rate.
@@ -188,9 +197,8 @@ def report(m, d, pol):
     print()
     print("HUMAN INTERVENTION")
     print("  %s per work item" % num(d["human_intervention_rate"], "%5.2f"))
-    print("    approvals            %5d" % m["approvals"])
-    print("    reached a human      %5d" % m["human_escalations"])
-    print("    open decisions       %5d" % m["open_decisions"])
+    print("    reached a human      %5d   an escalation the ladder could not absorb"
+          % m["human_escalations"])
     print("    replans              %5d   the plan a human accepted was wrong" % m["replans"])
     print("  The goal is not zero. A system that never asks has either solved engineering")
     print("  or stopped noticing when it should ask, and the second is far more likely.")

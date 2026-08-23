@@ -23,7 +23,8 @@
         "docs/stories/**",
         "docs/product/**",
         ".ai-engineering/**",
-        "docs/change-requests/**"
+        "docs/change-requests/**",
+        "docs/decisions/**"
       ]
     },
     "requirements-analyst": {
@@ -39,7 +40,8 @@
         "docs/architecture/**",
         "docs/adrs/**",
         "docs/design/**",
-        "docs/observability/**"
+        "docs/observability/**",
+        "docs/decisions/**"
       ]
     },
     "ux-designer": {
@@ -253,7 +255,14 @@
     "**/.aws/credentials",
     "**/.gnupg/**",
     "**/.git/hooks/**",
-    "**/.git/config"
+    "**/.git/config",
+    "**/.claude/settings.json",
+    "**/.claude/settings.local.json",
+    "**/.claude/managed-settings.json",
+    ".claude/settings.json",
+    ".claude/settings.local.json",
+    ".claude/managed-settings.json",
+    "**/.claude/ai-engineering-os/**"
   ],
   "global_hard_deny_note": "Private key material and git internals. Denied outright: there is no engineering task that requires an agent to write these.",
   "global_deny_exceptions": [

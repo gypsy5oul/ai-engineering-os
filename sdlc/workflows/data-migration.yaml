@@ -161,6 +161,11 @@ stages:
     owner: sre
     participants:
       - data-engineer
+      # EXECUTE claims CYCLE-DEVOPS, whose acceptance requires a security verdict,
+      # and no stage of this workflow involved security at all -- so the cycle was
+      # unacceptable as written. A migration moves production data through a
+      # restored copy, which is where a security reviewer belongs anyway.
+      - security-reviewer
     skills:
       - observability
       - incident-management
@@ -185,6 +190,7 @@ stages:
     definition_of_done:
       - required_fields_present(MIG)
       - rollback_plan_or_acknowledged()
+      - agent_verdict(security-reviewer, pass)
     department_cycle: CYCLE-SRE
     cycle_role: enters
     emits:

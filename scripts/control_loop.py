@@ -260,11 +260,26 @@ def cmd_plan(args):
     if item is None:
         print("ERROR no such work item: %s" % args.item)
         return 2
-    if W.load_graph(args.project, args.item) and not args.force:
+    existing = W.load_graph(args.project, args.item)
+    if existing and not args.force:
         print("ERROR %s already has a graph. Use `replan --reason` to rebuild it: a plan "
               "replaced without a recorded reason is indistinguishable from thrashing."
               % args.item)
         return 1
+    if existing and args.force:
+        # --force is a repair tool, not a second replan. It used to rebuild any
+        # graph: it reset the generation to 1, discarded accepted work the replan
+        # rule says to carry forward, and never touched item['replans'] -- so it
+        # was an unrecorded, unlimited way around a cap that refuses at two.
+        if not W.validate(existing, "task-graph.schema.json"):
+            print("REFUSED: %s has a valid graph, so there is nothing to repair.\n"
+                  "--force exists for a graph that will not parse or validate. To replace one "
+                  "that works, use `replan --reason`: it counts against the replan limit, "
+                  "records why, and carries accepted work forward." % args.item)
+            return 1
+        W.record(args.project, args.item, "graph_repaired",
+                 why="the previous graph did not validate")
+        print("Repairing an invalid graph for %s." % args.item)
     graph, skipped = build_graph(args.project, item)
     W.save_graph(args.project, graph)
     item["status"] = "in-progress"
@@ -304,6 +319,10 @@ def cmd_next(args):
                     print("  %-6s %-28s waiting on %s" % (t["id"], t["title"][:28], ", ".join(held)))
                 elif t.get("attempts", 0) >= t.get("max_attempts", 3):
                     print("  %-6s %-28s attempts exhausted -> escalate" % (t["id"], t["title"][:28]))
+                elif t.get("owner_agent"):
+                    print("  %-6s %-28s held by %s since %s"
+                          % (t["id"], t["title"][:28], t["owner_agent"],
+                             t.get("last_activity") or "unknown"))
         if stuck:
             print("\nUnreachable, because something they need was abandoned: %s" % ", ".join(stuck))
             print("A graph where work waits on an abandoned task looks busy and is finished.")
@@ -455,7 +474,15 @@ def cmd_decide(args):
         print("  %s" % why)
         if action == "escalate":
             print("  ladder: %s" % " -> ".join((pol.get("escalation") or {}).get("ladder", [])))
+    ladder = (pol.get("escalation") or {}).get("ladder") or []
+    # Who the escalation actually reaches. Telemetry counted a human intervention
+    # from replan_refused alone, so a real escalation to the human owner reported
+    # none: the loudest event in the system was invisible in the one number that
+    # is supposed to summarise it.
+    target = (t.get("escalation_target") or (ladder[-1] if ladder else "human_owner"))
     W.record(args.project, args.item, "decided", task=args.task, action=action, why=why)
+    if action == "escalate":
+        W.record(args.project, args.item, "escalated", task=args.task, to=target, why=why)
     return 1 if action == "escalate" else 0
 
 
@@ -531,7 +558,10 @@ def cmd_status(args):
     return 0
 
 
-def main():
+def build_parser():
+    """The parser, separately, so validate_plugin can check that every invocation
+    the documentation shows is one argparse would actually accept. Running the
+    commands to find out is not an option: most of them write."""
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -593,7 +623,11 @@ def main():
     s.add_argument("--item")
     s.set_defaults(fn=cmd_status)
 
-    args = ap.parse_args()
+    return ap
+
+
+def main():
+    args = build_parser().parse_args()
     args.project = os.path.abspath(args.project)
     return args.fn(args)
 

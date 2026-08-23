@@ -19,7 +19,7 @@ color: blue
 | Reports to | product-manager |
 | Risk class | MEDIUM |
 | Tool profile | author (`Read, Grep, Glob, Edit, Write`) |
-| Write scope | May write only to: `docs/requirements/**` |
+| Write scope | May write only to: `docs/requirements/**`, `docs/change-requests/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to the human operator. |
 
 ## Purpose

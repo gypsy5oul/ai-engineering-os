@@ -124,7 +124,7 @@ that.
 
 ## Agent teams
 
-Experimental and disabled by default. The plugin works without them: four stages
+Experimental and disabled by default. The plugin works without them: five stages
 declare a team, each with a `degraded_mode` stating what is lost. Set
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` deliberately, at the organization level,
 after reading [`docs/execution.md`](execution.md) — one stage is

@@ -21,7 +21,8 @@ and each stage picks one.
    declared integration step. In a shared checkout, no.
 5. Would the workers run a build, a test suite or a formatter? → **isolation `worktree`**,
    even if their source files are disjoint: those write shared output.
-6. Is the session non-interactive? → **not a team**; teammates do not spawn under `-p`.
+6. Is the session non-interactive? → a team is still possible at 2.1.241, but it
+   is unverified here; prefer **subagent** unless the parallelism is the point.
 
 Rule 4 is not a preference. Two workers editing one file in one checkout
 overwrite each other and the loser's work vanishes silently. What has changed is
@@ -140,10 +141,10 @@ degraded_mode:
     - Investigation becomes serial, extending time to mitigation.
 ```
 
-Current levels: `WF-INCIDENT INVESTIGATE` is **REQUIRED**; `WF-FEATURE ARCH` and
-`WF-RELEASE STAGING` are **PREFERRED**; `WF-FEATURE DEV` is **OPTIONAL** — a
-single session implements the same stories with identical guarantees, just
-slower.
+Current levels: `WF-INCIDENT INVESTIGATE` is **REQUIRED**; `WF-FEATURE ARCH`,
+`WF-RELEASE STAGING` and `WF-MIGRATION REHEARSE` are **PREFERRED**;
+`WF-FEATURE DEV` is **OPTIONAL** — a single session implements the same stories
+with identical guarantees, just slower.
 
 Validation fails a `TEAM_REQUIRED` stage that falls back without human
 acknowledgement.
@@ -156,7 +157,7 @@ Resolve the whole picture with:
 python3 scripts/resolve_model.py --all
 ```
 
-Teams are used in exactly four places, and each says in its `actions` why the
+Teams are used in exactly five places, and each says in its `actions` why the
 parallelism is worth the multiplier:
 
 | Stage | Why a team |
@@ -164,6 +165,7 @@ parallelism is worth the multiplier:
 | `WF-FEATURE ARCH` | Security, operability and design must challenge each other rather than review in sequence |
 | `WF-FEATURE DEV` | Only where stories own disjoint paths; otherwise they run sequentially in one session |
 | `WF-INCIDENT INVESTIGATE` | Competing hypotheses; sequential investigation anchors on the first plausible theory |
+| `WF-MIGRATION REHEARSE` | Correctness, duration and operability have to be judged while the same run is happening; sequentially each discipline sees a different run |
 | `WF-RELEASE STAGING` | QA, security and operability validate different things against the same candidate |
 
 Everything else is `inline` or `subagent`. Validation fails a `team` stage with
@@ -173,13 +175,15 @@ fewer than two participants — a team of one is a subagent with extra cost.
 
 - Agent teams are **experimental and disabled by default**; they need
   `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`.
-- Teammates spawn only in **interactive** sessions.
+- Teammates are no longer interactive-only: print mode carries a full teammate
+  lifecycle and `--teammate-mode in-process` needs no TTY. Verified against
+  2.1.241 from the CLI's own contract, not run end to end here.
 - **No nested teams**: depth is one level.
 - A teammate's model is **fixed at spawn**. Permission mode is not: every teammate starts in the lead's mode, and individual teammate modes can be changed after spawning, but not set per teammate at spawn time.
 - A subagent definition's `tools` and `model` apply to a teammate; its `skills`
   and `mcpServers` **do not**.
 - Enabling teams converts *every* named subagent spawn in the main conversation
-  into a teammate, including in the 24 stages that declare `execution: subagent`.
+  into a teammate, including in the 32 stages that declare `execution: subagent`.
   Because an idle notification carries no output, such a stage stalls rather than
   failing. See [Agent teams](agent-teams.md) — this is why the environment
   variable is a session-level decision.
