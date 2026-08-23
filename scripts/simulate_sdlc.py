@@ -117,9 +117,37 @@ def write_artifact(project, code, **over):
         else:
             body.append("%s: %s" % (k, json.dumps(v) if isinstance(v, str) and (":" in v) else v))
     body += ["---", "", "Simulated artifact."]
-    with open(os.path.join(folder, aid + ".md"), "w", encoding="utf-8") as fh:
+    path = os.path.join(folder, aid + ".md")
+    with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(body) + "\n")
+
+    # Validate what was just written. The simulation is this repository's proof
+    # that the process can be completed, and for a long time it wrote 37 of its 49
+    # artifacts in a shape the header schema rejects while reporting every
+    # definition of done satisfied. A proof that does not check its own output is
+    # measuring the checker, not the thing.
+    errors = _validate_header(header)
+    if errors:
+        raise AssertionError(
+            "%s does not satisfy schemas/artifact-header.schema.json: %s\n"
+            "The simulation writes the artifacts a real project would, so an artifact it "
+            "cannot write validly is one the organization cannot produce."
+            % (aid, "; ".join(errors[:3])))
     return aid
+
+
+_HEADER_SCHEMA = None
+
+
+def _validate_header(header):
+    global _HEADER_SCHEMA
+    if _HEADER_SCHEMA is None:
+        with open(os.path.join(ROOT, "schemas", "artifact-header.schema.json"),
+                  encoding="utf-8") as fh:
+            _HEADER_SCHEMA = json.load(fh)
+    sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+    from jsonschema_mini import validate as jsvalidate
+    return [str(e) for e in jsvalidate(header, _HEADER_SCHEMA)]
 
 
 def verdict(reviewer, v="pass"):

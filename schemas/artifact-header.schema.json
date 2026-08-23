@@ -57,8 +57,8 @@
     },
     "change": {
       "type": "string",
-      "description": "The unit of work this artifact belongs to: one feature, defect, incident or release. Without it, definition-of-done predicates match every artifact in the project, so a finished run vacuously satisfies a new one and two concurrent runs starve each other. Use the id of the artifact that opened the work (an EPIC, DEF, INC or REL).",
-      "pattern": "^[A-Z][A-Z0-9]{1,9}-(EPIC|DEF|INC|REL|REQ)-[0-9]{3,}$"
+      "description": "The unit of work this artifact belongs to: one feature, defect, incident or release. Without it, definition-of-done predicates match every artifact in the project, so a finished run vacuously satisfies a new one and two concurrent runs starve each other. Use the id of the artifact that opened the work (an EPIC, DEF, INC or REL). The pattern matches the work item id exactly, because a change is a work item; they were written separately and drifted, so every simulated artifact failed this field.",
+      "pattern": "^[A-Z][A-Z0-9]{1,9}-(FEAT|DEF|INC|REL|CHG|MIG|OPS)-[0-9]{3,}$"
     },
     "title": {
       "type": "string",
@@ -68,17 +68,24 @@
       "type": "string",
       "enum": [
         "accepted",
+        "active",
         "answered",
         "approved",
+        "assessing",
         "authorized",
+        "breached",
         "closed",
         "collected",
         "done",
         "draft",
+        "executed",
         "in-review",
         "mitigated",
+        "not-ready",
         "open",
+        "promoted",
         "proposed",
+        "ready",
         "recovered",
         "rejected",
         "rolled-back",
@@ -163,6 +170,55 @@
           "items": {
             "type": "string"
           }
+        },
+        "test_plans": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Test plans this artifact covers or derives from."
+        },
+        "non_functional": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Non-functional requirements this artifact satisfies or measures."
+        },
+        "observability": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The observability design that makes this artifact's targets measurable."
+        },
+        "production_readiness": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The readiness record that assessed this release."
+        },
+        "runbooks": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Runbooks covering the surface this artifact touches."
+        },
+        "change_requests": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Change requests that altered this artifact."
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Open decisions blocking or shaping this artifact."
         }
       }
     },

@@ -105,3 +105,72 @@ class TestSimulationCoverage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTheSimulationValidatesWhatItWrites(unittest.TestCase):
+    """A proof that does not check its own output is measuring the checker.
+
+    The simulation wrote 37 of its 49 artifacts in a shape the header schema
+    rejects, while reporting every definition of done satisfied. Three separate
+    drifts caused it -- the change-id pattern, seven statuses and six link kinds --
+    and none was visible because nothing validated the artifacts.
+    """
+
+    def scenarios_output(self):
+        import tempfile, shutil, json
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import simulate_sdlc as S
+        import check_dod as C
+        from jsonschema_mini import validate as jsvalidate
+        root = tempfile.mkdtemp(prefix="aieos-simval-")
+        self.addCleanup(shutil.rmtree, root, True)
+        for name, fn in S.SCENARIOS.items():
+            d = os.path.join(root, name)
+            S.make_project(d)
+            for _, _, work in fn(d, lambda *a, **k: None):
+                work()
+        with open(os.path.join(ROOT, "schemas", "artifact-header.schema.json"),
+                  encoding="utf-8") as fh:
+            schema = json.load(fh)
+        out = []
+        for base, _, files in os.walk(root):
+            for f in files:
+                if not f.endswith(".md"):
+                    continue
+                try:
+                    fm, _ = C.read_fm(os.path.join(base, f))
+                except Exception:
+                    continue
+                if isinstance(fm, dict) and fm.get("id") and fm.get("type"):
+                    out.append((fm["id"], [str(e) for e in jsvalidate(fm, schema)]))
+        return out
+
+    def test_every_artifact_the_simulation_writes_is_valid(self):
+        results = self.scenarios_output()
+        self.assertGreater(len(results), 20, "the simulation wrote almost nothing")
+        bad = ["%s: %s" % (aid, "; ".join(errs[:2])) for aid, errs in results if errs]
+        self.assertEqual(bad, [], "%d invalid artifact(s):\n  %s"
+                         % (len(bad), "\n  ".join(bad[:6])))
+
+    def test_writing_an_invalid_artifact_stops_the_simulation(self):
+        """The guard, not just the current state. Without this the schema could be
+        loosened and nothing would notice."""
+        import tempfile, shutil, subprocess
+        tmp = tempfile.mkdtemp(prefix="aieos-simmut-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        dst = os.path.join(tmp, "plugin")
+        shutil.copytree(ROOT, dst, ignore=shutil.ignore_patterns(".git", "__pycache__"))
+        path = os.path.join(dst, "scripts", "simulate_sdlc.py")
+        with open(path, encoding="utf-8") as fh:
+            body = fh.read()
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(body.replace('    body += ["---", "", "Simulated artifact."]',
+                                  '    header["status"] = "nearly-done"\n'
+                                  '    body += ["---", "", "Simulated artifact."]', 1))
+        proc = subprocess.run(
+            [sys.executable, os.path.join(dst, "scripts", "simulate_sdlc.py"),
+             "--scenario", "feature"], cwd=dst, capture_output=True, text=True, timeout=300)
+        self.assertTrue(proc.returncode != 0 or "does not satisfy" in proc.stdout + proc.stderr,
+                        "an artifact with an invalid status was written without complaint")
+

@@ -88,7 +88,7 @@ def workflow(wid):
 def f01(project):
     S.write_artifact(project, "REQ", status="approved")
     S.write_artifact(project, "ARCH", status="draft",
-                     reviewers=[S.verdict("architecture-reviewer", "changes-requested")],
+                     reviewers=[S.verdict("architecture-reviewer", "block")],
                      rollup=S.rollup("CYCLE-ARCH", status="IN_PROGRESS"))
     ok, why = must_fail(dod(project, "WF-FEATURE", "ARCH"),
                         "agent_verdict(architecture-reviewer, pass)")
@@ -105,7 +105,7 @@ def f01(project):
        "QA does not pass, and the workflow returns to development")
 def f02(project):
     S.write_artifact(project, "TESTREPORT", status="draft",
-                     reviewers=[S.verdict("test-reviewer", "fail")],
+                     reviewers=[S.verdict("test-reviewer", "block")],
                      rollup=S.rollup("CYCLE-QA", status="IN_PROGRESS"))
     res = dod(project, "WF-FEATURE", "QA")
     ok, why = must_fail(res, "agent_verdict(test-reviewer, pass)")
@@ -568,7 +568,7 @@ def f25(project):
     S.write_artifact(project, "STORY", status="done",
                      rollup=S.rollup("CYCLE-DEV", status="ACCEPTED"))
     S.set_change("SIM-FEAT-901")
-    S.write_artifact(project, "STORY", status="in-progress",
+    S.write_artifact(project, "STORY", status="in-review",
                      rollup=S.rollup("CYCLE-DEV", status="IN_PROGRESS"))
 
     arts = check_dod.load_artifacts(project)
@@ -603,7 +603,9 @@ def run(selected=None, verbose=False):
             # Without this every artifact fails required_fields_present and the
             # fault appears to fail for a reason that has nothing to do with what
             # it tests -- which is the exact mistake this harness exists to catch.
-            S.set_change("SIM-%s" % fid.replace("-", ""))
+            # A real work item id: a change is a work item, and the header schema
+            # holds both to the same pattern. "SIM-F01" was neither.
+            S.set_change("SIM-FEAT-%03d" % int(fid.split("-")[1]))
             S.COUNTERS.clear() if hasattr(S, "COUNTERS") else None
             try:
                 ok, detail = fn(project)

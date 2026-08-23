@@ -3,6 +3,46 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.21.3] — The simulation never checked what it wrote
+
+`simulate_sdlc.py` is this repository's proof that the process can be completed.
+It wrote **37 of its 49 artifacts** in a shape `artifact-header.schema.json`
+rejects, while reporting every definition of done satisfied.
+
+A proof that does not check its own output is measuring the checker.
+
+### Three drifts, none visible
+
+| | |
+| --- | --- |
+| `$.change` (19 artifacts) | The change-id pattern was written using artifact codes (`EPIC`, `REQ`) before work items existed. A change **is** a work item, so the two patterns must be identical, and were not. My own bug from v0.19.2. |
+| `$.status` (13) | The artifact model declared seven statuses the schema rejected — `promoted`, `active`, `ready`, `not-ready`, `executed`, `assessing`, `breached`. The model is the authority on what states its own types have; the schema was behind. |
+| `$.links` (5) | The model *required* a link kind the schema forbade, and the simulation wrote five more. `additionalProperties` stays `false`: an open map would let a typo become a silent edge that traces nothing. |
+
+### The fix that matters
+
+`write_artifact` now validates every header against the schema and raises if it
+fails. Verified by mutation: an invalid status, an undeclared link kind and a
+malformed change id are each caught.
+
+`check_artifact_model_matches_the_header_schema()` catches the underlying drift —
+a status or link the model declares and the schema rejects now fails the build,
+rather than surfacing as invalid artifacts nobody validates.
+
+### What turning it on immediately found
+
+Seventeen of the twenty-five fault cases broke, all on invented values:
+
+- the fault runner stamped `SIM-F01` as a change id, which is not a work item id
+- two cases used verdicts `changes-requested` and `fail`; the vocabulary is
+  `pass`, `pass-with-conditions`, `block`, `not-applicable`
+- one wrote a `STORY` as `in-progress`, a status that type does not have
+
+Every one was the harness inventing a value rather than a gap in the contracts.
+They had passed for as long as they existed, because nothing checked.
+
+Tests: **380 → 382.**
+
 ## [0.21.2] — The documented way to create an agent failed the build
 
 `scripts/scaffold_agent.py` is the flow both `docs/development.md` and

@@ -783,6 +783,37 @@ def check_docs_are_reachable():
         err("README.md links docs/%s, which does not exist" % ghost)
 
 
+def check_artifact_model_matches_the_header_schema():
+    """The artifact model and the header schema must agree on statuses and links.
+
+    They drifted: the model declared seven statuses the schema rejected and
+    required a link kind it forbade, so 37 of the 49 artifacts the simulation
+    writes were invalid while it reported every definition of done satisfied. The
+    model is the authority on what states its own types have; this check is what
+    keeps the schema from falling behind it.
+    """
+    model = load_json("policies/artifact-model.json")
+    schema = load_json("schemas/artifact-header.schema.json")
+    if not (model and schema):
+        return
+    allowed = set((schema.get("properties", {}).get("status", {}) or {}).get("enum", []))
+    link_kinds = set(((schema.get("properties", {}).get("links", {}) or {})
+                      .get("properties", {})))
+    for entry in model.get("artifact_types", []):
+        for status in entry.get("statuses", []):
+            if allowed and status not in allowed:
+                err("policies/artifact-model.json: %s declares status %r, which "
+                    "schemas/artifact-header.schema.json rejects. Every artifact of that type "
+                    "would be invalid." % (entry["code"], status))
+        for link in entry.get("links_required", []):
+            if link == "source":
+                continue          # a top-level header field, not a link
+            if link_kinds and link not in link_kinds:
+                err("policies/artifact-model.json: %s requires the link %r, which the header "
+                    "schema does not declare and additionalProperties forbids."
+                    % (entry["code"], link))
+
+
 def check_hooks():
     cfg = load_json("hooks/hooks.json")
     if cfg is None:
@@ -1345,6 +1376,7 @@ def main():
     check_definitions_of_done()
     check_execution_and_model(registry)
     check_artifact_model()
+    check_artifact_model_matches_the_header_schema()
     check_coupling()
     check_team_requirements()
     check_artifact_contracts(registry)
