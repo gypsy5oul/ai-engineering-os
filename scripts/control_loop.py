@@ -34,6 +34,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
 from minyaml import parse_file          # noqa: E402
 import workitem as W                    # noqa: E402
+import failure as F                     # noqa: E402
 
 TYPE_WORKFLOW = {
     "feature": "WF-FEATURE", "defect": "WF-DEFECT", "incident": "WF-INCIDENT",
@@ -345,11 +346,24 @@ def cmd_observe(args):
         t["result"] = args.detail
     if args.outcome == "blocked" and args.detail:
         t["blocked_reason"] = args.detail
+    entry = {"task": args.task, "outcome": args.outcome,
+             "attempts": t.get("attempts", 0), "detail": args.detail or ""}
+    if args.outcome in ("failed", "rejected"):
+        cls, sig = F.identity(args.failure_class, args.signature, args.detail)
+        entry["failure_class"], entry["failure_signature"] = cls, sig
+        if args.evidence:
+            entry["evidence"] = args.evidence
+            t.setdefault("evidence", []).extend(args.evidence)
+        t["failure_class"], t["failure_signature"] = cls, sig
     W.save_graph(args.project, graph)
-    W.record(args.project, args.item, "observed", task=args.task,
-             outcome=args.outcome, attempts=t.get("attempts", 0), detail=args.detail or "")
+    W.record(args.project, args.item, "observed", **entry)
     print("%s %s -> %s (attempt %d of %d)"
           % (args.item, args.task, state, t.get("attempts", 0), t.get("max_attempts", 3)))
+    if entry.get("failure_signature"):
+        print("  failure: %s" % F.describe((entry["failure_class"], entry["failure_signature"])))
+        if entry["failure_signature"] == F.NO_SIGNATURE:
+            print("  Nothing identifying in the detail, so this will not be read as a repeat of "
+                  "anything. Pass --signature to make it comparable.")
     return 0
 
 
@@ -367,8 +381,13 @@ def loop_bound(pol, loop="implement"):
 
 
 def _repeated_failure(hist):
-    details = [h.get("detail", "") for h in hist if h.get("outcome") in ("failed", "rejected")]
-    return len(details) >= 2 and details[-1] and details[-1] == details[-2], details
+    """Whether the last two failures were the same one, by identity not by wording."""
+    ids = [(h.get("failure_class"), h.get("failure_signature"))
+           for h in hist if h.get("outcome") in ("failed", "rejected")]
+    ids = [i for i in ids if i[1]]
+    if len(ids) < 2:
+        return False, ids
+    return F.same(ids[-1], ids[-2]), ids
 
 
 # How a rule name in policies/control-loop-policy.json becomes a question about
@@ -402,7 +421,7 @@ def evaluate_rules(pol, t, hist):
             continue
         why = rule.get("why") or name
         if name == "same_failure_repeated":
-            why = "%s Seen twice: %r." % (why, _repeated_failure(hist)[1][-1][:70])
+            why = "%s Seen twice as %s." % (why, F.describe(_repeated_failure(hist)[1][-1]))
         elif name == "attempts_exhausted":
             why = "%s (%d of %d)" % (why, t.get("attempts", 0),
                                      t.get("max_attempts", loop_bound(pol)))
@@ -547,6 +566,15 @@ def main():
     ob.add_argument("--outcome", required=True,
                     choices=["accepted", "failed", "rejected", "blocked", "escalated"])
     ob.add_argument("--detail")
+    ob.add_argument("--failure-class", choices=list(F.CLASSES),
+                    help="the kind of failure. With --signature this is how the loop tells a "
+                         "repeat from progress.")
+    ob.add_argument("--signature",
+                    help="a stable identity for this failure, not a description. Derived from "
+                         "--detail when omitted, conservatively: prose is discarded and only "
+                         "identifying tokens are kept.")
+    ob.add_argument("--evidence", action="append",
+                    help="where to look: a test path, a log line, an artifact id. Repeatable.")
     ob.set_defaults(fn=cmd_observe)
 
     d = common(sub.add_parser("decide"))

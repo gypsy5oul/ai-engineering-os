@@ -150,6 +150,14 @@
           "owner_agent": {
             "type": "string",
             "description": "The agent_id currently holding this task, from SubagentStart. One agent holds one task and a held task is never offered again, so a result can be attributed to exactly one task rather than to every task sharing its role."
+          },
+          "failure_class": {
+            "type": "string",
+            "description": "The kind of the most recent failure, from policies/control-loop-policy.json."
+          },
+          "failure_signature": {
+            "type": "string",
+            "description": "A stable identity for the most recent failure. Compared with the previous one to tell a repeat from progress; comparing the observed wording read 'API returns 401' and 'endpoint still returns 401' as two different failures."
           }
         }
       }

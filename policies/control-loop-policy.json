@@ -7,19 +7,35 @@
   ],
   "loops": {
     "implement": {
-      "sequence": ["plan", "implement", "verify", "review", "accept"],
+      "sequence": [
+        "plan",
+        "implement",
+        "verify",
+        "review",
+        "accept"
+      ],
       "max_iterations": 3,
       "on_exhaustion": "escalate",
       "why": "Three rounds of the same rework means the acceptance criteria, the design, or an unwritten disagreement is the problem. A fourth round hides that instead of surfacing it."
     },
     "diagnose": {
-      "sequence": ["review", "diagnose", "replan", "implement", "verify"],
+      "sequence": [
+        "review",
+        "diagnose",
+        "replan",
+        "implement",
+        "verify"
+      ],
       "max_iterations": 2,
       "on_exhaustion": "escalate",
       "why": "Replanning twice on the same work item means the problem was not understood at intake. A third replan is a new work item, not a better plan."
     },
     "verify": {
-      "sequence": ["verify", "fix", "verify"],
+      "sequence": [
+        "verify",
+        "fix",
+        "verify"
+      ],
       "max_iterations": 2,
       "on_exhaustion": "escalate",
       "why": "Verification that keeps failing on the same evidence is not flaky; it is correct."
@@ -28,15 +44,51 @@
   "decide": {
     "description": "Given an observed task outcome, what the loop does next. Evaluated top to bottom; the first match wins.",
     "rules": [
-      {"when": "task_accepted", "action": "continue", "why": "Unblock whatever depended on it."},
-      {"when": "attempts_exhausted", "action": "escalate", "why": "The bound exists to be honoured. Checked before retry so an exhausted task cannot loop once more."},
-      {"when": "same_failure_repeated", "action": "escalate", "why": "A different failure each time is progress. The same failure twice is not, and retrying it a third time only spends tokens to learn what is already known."},
-      {"when": "review_rejected", "action": "rework", "why": "A rejection is information the implementer has not seen yet."},
-      {"when": "dependency_invalidated", "action": "replan", "why": "The graph is no longer a description of the work."},
-      {"when": "architecture_contradicted", "action": "replan", "why": "Evidence beat the design. Continuing would build on something known to be wrong."},
-      {"when": "missing_information", "action": "escalate", "why": "An agent that guesses here produces work nobody can trust. A DEC is cheaper than the rework."},
-      {"when": "approval_missing", "action": "wait", "why": "Not a failure. The organization is waiting on a human, and the liveness policy decides when that wait becomes a problem."},
-      {"when": "transient_failure", "action": "retry", "why": "Only after every rule above has declined it. Retry is the last resort, not the first instinct."}
+      {
+        "when": "task_accepted",
+        "action": "continue",
+        "why": "Unblock whatever depended on it."
+      },
+      {
+        "when": "attempts_exhausted",
+        "action": "escalate",
+        "why": "The bound exists to be honoured. Checked before retry so an exhausted task cannot loop once more."
+      },
+      {
+        "when": "same_failure_repeated",
+        "action": "escalate",
+        "why": "The same failure twice, by class and signature rather than by wording. A different failure each time is progress; this is not, and a third attempt only spends tokens to learn what is already known."
+      },
+      {
+        "when": "review_rejected",
+        "action": "rework",
+        "why": "A rejection is information the implementer has not seen yet."
+      },
+      {
+        "when": "dependency_invalidated",
+        "action": "replan",
+        "why": "The graph is no longer a description of the work."
+      },
+      {
+        "when": "architecture_contradicted",
+        "action": "replan",
+        "why": "Evidence beat the design. Continuing would build on something known to be wrong."
+      },
+      {
+        "when": "missing_information",
+        "action": "escalate",
+        "why": "An agent that guesses here produces work nobody can trust. A DEC is cheaper than the rework."
+      },
+      {
+        "when": "approval_missing",
+        "action": "wait",
+        "why": "Not a failure. The organization is waiting on a human, and the liveness policy decides when that wait becomes a problem."
+      },
+      {
+        "when": "transient_failure",
+        "action": "retry",
+        "why": "Only after every rule above has declined it. Retry is the last resort, not the first instinct."
+      }
     ]
   },
   "replan": {
@@ -58,7 +110,11 @@
     "on_exhaustion": "escalate to the human owner: two replans means the intake was wrong"
   },
   "escalation": {
-    "ladder": ["lead", "head", "human_owner"],
+    "ladder": [
+      "lead",
+      "head",
+      "human_owner"
+    ],
     "record": "Every escalation appends to the work item's history with the trigger, the evidence and the target. An escalation nobody recorded is a decision nobody can review."
   },
   "enforced_by": {
@@ -70,5 +126,19 @@
     "advisory": [
       "Which decide rule applies to an observed failure is a judgement the model makes. The bounds on retrying and replanning are not."
     ]
+  },
+  "failure_identity": {
+    "description": "How the loop decides two failures are the same one. Comparing the raw text was wrong in both directions: 'API returns 401' and 'endpoint still returns 401' are one failure and read as two, while 'failed' twice reads as one and can be two unrelated causes.",
+    "fields": {
+      "class": "The kind of failure: test_failure, review_rejected, contract_conflict, missing_information, dependency_unavailable, timeout, permission_denied, environment, unknown.",
+      "signature": "A stable identity for THIS failure, not a description of it. Supplied by whoever observed it where possible, derived otherwise.",
+      "evidence": "Where to look: a test path, a log line, an artifact id.",
+      "message": "Prose for a human. Never compared."
+    },
+    "derivation": {
+      "why": "An observer that has to invent a signature will not supply one, so the loop derives one when it is missing. Derivation is deliberately conservative: it keeps only tokens that identify a failure -- exception names, status codes, test paths, error identifiers -- and discards prose entirely.",
+      "on_no_tokens": "no-signature, which never matches anything, including itself. Deciding two failures are the same on no evidence is worse than deciding they differ: a wrong 'same' escalates work that was making progress."
+    },
+    "comparison": "Same class AND same signature means the same failure. Class alone is too coarse -- two unrelated test failures are both test_failure -- and signature alone would collide across kinds."
   }
 }

@@ -136,5 +136,57 @@
     "Disjoint file ownership is stated in the spawn prompt, not assumed. Where it cannot be disjoint, isolation 'worktree' is stated in the spawn instead, and the integration step with it.",
     "The lead coordinates and synthesises; it does not implement while teammates work.",
     "Isolation is not free: a checkout per worker, and a merge the lead must run and test. Count the merge before choosing parallelism, not after the branches exist."
-  ]
+  ],
+  "resolution": {
+    "description": "How a task's execution mode is chosen at the moment it runs, rather than inherited from what its stage declared. A stage says what kind of work it is; only the runtime knows whether teams are available, whether siblings would collide, and how much is in flight.",
+    "why": "A declared mode is a recommendation made before the situation existed. `execution: team` on a stage is correct advice and wrong instruction in a headless session, where teammates do not spawn at all. Resolving at runtime turns the declaration into a starting point that gets overruled by facts.",
+    "inputs": [
+      "risk",
+      "the task's declared mode",
+      "whether agent teams are actually available",
+      "whether the session is interactive",
+      "whether the role can write at all",
+      "whether a sibling holds the same coupled surface",
+      "how many tasks are already running"
+    ],
+    "rules": [
+      {
+        "when": "teams_unavailable",
+        "resolve_to": "subagent",
+        "why": "Teams are experimental, off by default and interactive-only. Nothing in the lifecycle may depend on them, so an unavailable team degrades rather than failing."
+      },
+      {
+        "when": "read_only_role",
+        "resolve_to": "subagent",
+        "why": "A reviewer that cannot write has nothing to isolate. Giving it a worktree costs setup and disk to protect files it could not have touched."
+      },
+      {
+        "when": "critical_risk",
+        "resolve_to": "subagent",
+        "why": "CRITICAL work is not sent to the background. The point of the risk tier is that somebody is watching, and a background task is precisely the one nobody is."
+      },
+      {
+        "when": "sibling_holds_surface",
+        "resolve_to": "worktree",
+        "why": "Two tasks that would edit the same coupled surface are isolated rather than sequenced when both are otherwise ready, so the parallelism survives and the integration becomes an explicit step."
+      },
+      {
+        "when": "writes_files_and_siblings_running",
+        "resolve_to": "worktree",
+        "why": "Parallel writers in one checkout produce a build output nobody owns. The cost is real -- setup, disk, a merge -- which is why it applies only when something else is genuinely running."
+      },
+      {
+        "when": "declared_mode_is_available",
+        "resolve_to": "declared",
+        "why": "No fact overruled the stage's recommendation, so it stands."
+      }
+    ],
+    "never": {
+      "team": "in a non-interactive session, or for a task no other task runs alongside",
+      "background": "for CRITICAL risk, or where the next step needs the result",
+      "worktree": "for a role with no write tools"
+    },
+    "enforced_by": "scripts/resolve_execution.py, and control_loop.py next --resolve",
+    "not_enforceable": "Nothing makes an agent honour the resolved mode. A PreToolUse hook can refuse a spawn but cannot rewrite one, so this resolves and records; it does not compel."
+  }
 }

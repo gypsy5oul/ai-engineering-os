@@ -139,15 +139,31 @@ class TestGraphOrdering(Loop):
 
 class TestBoundsHold(Loop):
     def test_the_same_failure_twice_escalates(self):
+        """Identity, not wording. The two reports are phrased differently on
+        purpose: comparing the text read them as two different failures."""
+        wid = self.open_item()
+        cl(self.project, "plan", "--item", wid)
+        cl(self.project, "observe", "--item", wid, "--task", "T-002", "--outcome", "failed",
+           "--failure-class", "test_failure", "--signature", "NFR-NO-INDICATOR",
+           "--detail", "the target has no measurable indicator")
+        cl(self.project, "observe", "--item", wid, "--task", "T-002", "--outcome", "failed",
+           "--failure-class", "test_failure", "--signature", "NFR-NO-INDICATOR",
+           "--detail", "still cannot measure this target")
+        proc = cl(self.project, "decide", "--item", wid, "--task", "T-002")
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn("ESCALATE", proc.stdout)
+        self.assertIn("NFR-NO-INDICATOR", proc.stdout)
+
+    def test_two_reports_with_nothing_identifying_are_not_a_repeat(self):
+        """A wrong "these are the same" escalates work that was making progress.
+        A wrong "these differ" costs one attempt inside a bound that exists."""
         wid = self.open_item()
         cl(self.project, "plan", "--item", wid)
         for _ in range(2):
             cl(self.project, "observe", "--item", wid, "--task", "T-002",
-               "--outcome", "failed", "--detail", "the target has no measurable indicator")
+               "--outcome", "failed", "--detail", "it failed")
         proc = cl(self.project, "decide", "--item", wid, "--task", "T-002")
-        self.assertEqual(proc.returncode, 1)
-        self.assertIn("ESCALATE", proc.stdout)
-        self.assertIn("same failure twice", proc.stdout)
+        self.assertNotIn("ESCALATE", proc.stdout)
 
     def test_attempts_are_bounded(self):
         wid = self.open_item()

@@ -582,6 +582,43 @@ def check_marketplace_ref_exists():
                 % (entry.get("name"), ref, expected))
 
 
+def check_execution_resolution_is_live():
+    """Every resolution rule the execution policy declares must exist in code.
+
+    Same shape as the control-loop check: a policy that reads like the authority
+    and is decoration. Matching is on the rule's `when`, which the resolver names
+    in the reason it prints, so a rule nobody implemented shows up here rather
+    than as a mode that silently never changes.
+    """
+    pol = load_json("policies/execution-policy.json")
+    if not pol or "resolution" not in pol:
+        return
+    path = os.path.join(ROOT, "scripts", "resolve_execution.py")
+    if not os.path.exists(path):
+        err("policies/execution-policy.json declares a resolution model and "
+            "scripts/resolve_execution.py does not exist, so nothing resolves anything")
+        return
+    with open(path, encoding="utf-8") as fh:
+        code = fh.read()
+    MARKERS = {
+        "teams_unavailable": "teams_available(",
+        "read_only_role": "role_can_write(",
+        "critical_risk": "CRITICAL",
+        "sibling_holds_surface": "surface_clash",
+        "writes_files_and_siblings_running": "running and role_can_write",
+        "declared_mode_is_available": "no fact overruled",
+    }
+    for rule in (pol["resolution"].get("rules") or []):
+        name = rule.get("when")
+        marker = MARKERS.get(name)
+        if marker is None:
+            err("policies/execution-policy.json: resolution rule %r is not known to "
+                "check_execution_resolution_is_live, so nothing verifies it exists" % name)
+        elif marker not in code:
+            err("policies/execution-policy.json: resolution rule %r has no implementation in "
+                "resolve_execution.py" % name)
+
+
 def check_control_loop_policy_is_live():
     """Every rule the control loop policy declares must have code behind it.
 
@@ -1230,6 +1267,7 @@ def main():
     check_hooks()
     check_ci_config()
     check_control_loop_policy_is_live()
+    check_execution_resolution_is_live()
     check_platform_capabilities()
     check_required_fields_are_written()
     check_marketplace_ref_exists()

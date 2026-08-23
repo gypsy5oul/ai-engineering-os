@@ -107,6 +107,71 @@ That last one matters most. A different failure each time is progress; the same
 failure twice is not, and retrying it only spends tokens to learn what is already
 known.
 
+## Two failures are the same when their identity matches
+
+The loop escalates on a repeat, so the comparison decides between escalating work
+that was still making progress and spinning on work that was not. Comparing the
+observed text was wrong in both directions:
+
+```
+"API returns 401"                }  one failure,
+"endpoint still returns 401"     }  read as two
+
+"failed"                         }  two unrelated causes,
+"failed"                         }  read as one
+```
+
+A failure now has a `class` and a `signature`, supplied by whoever observed it:
+
+```bash
+control_loop.py observe --task T-004 --outcome failed \
+    --failure-class test_failure \
+    --signature AUTH-401-MISSING-TOKEN \
+    --evidence tests/auth/test_login.py \
+    --detail "the token endpoint still rejects valid credentials"
+```
+
+When no signature is given, one is derived — conservatively. Only identifying
+tokens survive: exception names, status codes, test paths, error identifiers.
+Prose is discarded. When nothing identifying remains, the result is a signature
+that **matches nothing, including another copy of itself**.
+
+That asymmetry is deliberate. A wrong *"these are the same"* escalates work that
+was making progress; a wrong *"these differ"* costs one more attempt inside a
+bound that already exists. Only one of those is recoverable by waiting.
+
+## Execution mode is chosen when the task runs
+
+A stage declares its execution mode when the workflow is written, which is before
+the situation exists. `execution: team` is good advice and a bad instruction in a
+headless session, where teammates do not spawn at all.
+
+```bash
+python3 scripts/resolve_execution.py --project . --item ACME-FEAT-001 --all
+```
+
+```
+TASK    DECLARED       RESOLVED       WHY
+T-004   team        -> subagent       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is not set
+T-009   subagent    -> worktree       a sibling holds the database-schema surface
+T-010   worktree    -> subagent       code-reviewer holds no write tools
+```
+
+The rules, in the order they apply:
+
+| Fact | Resolves to | Because |
+| --- | --- | --- |
+| Teams unavailable | `subagent` | Nothing in the lifecycle may depend on an experimental, interactive-only feature |
+| Role holds no write tools | `subagent` | A worktree protects files the role could not have touched |
+| CRITICAL risk, declared background | `subagent` | The point of the tier is that somebody is watching; background is where nobody is |
+| A sibling holds the same coupled surface | `worktree` | The parallelism survives and integration becomes an explicit step |
+| Writes files, siblings running | `worktree` | Parallel writers in one checkout produce a build output nobody owns |
+| Nothing overruled it | the declared mode | |
+
+**It resolves and records; it does not compel.** A `PreToolUse` hook can refuse a
+spawn but cannot rewrite one, so nothing forces an agent to honour the answer.
+That limit is in the policy's `not_enforceable`, not left to be discovered.
+
 ## What the hooks do
 
 Verified empirically against the installed CLI before either was built:

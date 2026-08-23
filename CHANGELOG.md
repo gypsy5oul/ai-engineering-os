@@ -3,6 +3,72 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.20.0] — Failure identity and execution resolution
+
+### Added — two failures are the same when their identity matches
+
+The loop escalates on a repeat, so the comparison decides between escalating work
+that was still making progress and spinning on work that was not. Comparing the
+observed text was wrong in both directions:
+
+```
+"API returns 401"                }  one failure,
+"endpoint still returns 401"     }  read as two
+
+"failed"                         }  two unrelated causes,
+"failed"                         }  read as one
+```
+
+A failure now carries a `class` and a `signature`. Where none is supplied, one is
+derived — and the derivation is deliberately conservative: only identifying tokens
+survive (exception names, status codes, test paths, error identifiers), prose is
+discarded, and when nothing identifying remains the result **matches nothing,
+including another copy of itself**.
+
+That asymmetry is the design. A wrong *"these are the same"* escalates work that
+was making progress; a wrong *"these differ"* costs one more attempt inside a
+bound that already exists. Only one of those is recoverable by waiting.
+
+### Added — execution mode resolved at runtime, not inherited
+
+A stage declares its mode when the workflow is written, which is before the
+situation exists.
+
+```
+TASK    DECLARED       RESOLVED       WHY
+T-004   team        -> subagent       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is not set
+T-009   subagent    -> worktree       a sibling holds the database-schema surface
+T-010   worktree    -> subagent       code-reviewer holds no write tools
+```
+
+Six rules, in order: teams unavailable degrades to subagent; a role with no write
+tools is never isolated, because a worktree protects files it could not have
+touched; CRITICAL work is never sent to the background, since the point of the
+tier is that somebody is watching; two tasks on one coupled surface are isolated
+rather than sequenced, so the parallelism survives; a writer alongside running
+siblings is isolated; otherwise the declaration stands.
+
+**It resolves and records; it does not compel.** A `PreToolUse` hook can refuse a
+spawn but cannot rewrite one. That is in the policy's `not_enforceable` rather
+than left to be discovered.
+
+### Both policies are checked, not just written
+
+`check_execution_resolution_is_live()` joins the control-loop equivalent: a
+resolution rule with no implementation fails the build. This is the third
+subsystem where that check has been added, and it exists because the same defect —
+a policy file that reads like the authority and is decoration — has now been found
+in this repository four times.
+
+### Two old tests were asserting the old behaviour
+
+`test_the_same_failure_twice_escalates` used a detail with nothing identifying in
+it, so under the new rule it correctly stops being a repeat. It now passes an
+explicit signature with two *differently worded* reports, which is the case the
+change exists for, and a second test covers the opposite direction.
+
+Tests: **346 → 364.**
+
 ## [0.19.2] — The scoping field nothing wrote
 
 `change` was declared in the artifact header schema and read by `check_dod.py` for
