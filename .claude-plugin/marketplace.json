@@ -4,7 +4,7 @@
   "description": "Private marketplace for the organization's AI Engineering OS.",
   "owner": {
     "name": "AI Engineering Platform Team",
-    "email": "ai-platform@example.com",
+    "email": "ai-platform@sixdee.com",
     "url": "https://github.com/gypsy5oul/ai-engineering-os"
   },
   "plugins": [
@@ -24,8 +24,8 @@
         "name": "AI Engineering Platform Team"
       },
       "source": {
-        "source": "github",
-        "repo": "gypsy5oul/ai-engineering-os"
+        "source": "url",
+        "url": "https://github.com/gypsy5oul/ai-engineering-os.git"
       }
     }
   ]
