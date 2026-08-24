@@ -1432,6 +1432,46 @@ def check_agent_write_scope_matches_the_policy(registry):
                 "        file:   %s\n        policy: %s" % (a["name"], m.group(1).strip(), want))
 
 
+def check_code_signals_are_live():
+    """Every signal the code-signals policy states is implemented and reachable.
+
+    The policy describes what the repository can be asked about its own ordering.
+    A signal listed there and absent from the script is a claim about the graph
+    that nothing produces.
+    """
+    pol = load_json("policies/code-signals.json")
+    if not pol:
+        return
+    path = os.path.join(ROOT, "scripts", "infer_dependencies.py")
+    if not os.path.exists(path):
+        err("policies/code-signals.json exists and scripts/infer_dependencies.py does not, so "
+            "nothing infers anything from the code")
+        return
+    with open(path, encoding="utf-8") as fh:
+        code = fh.read()
+    for sig in pol.get("signals", []):
+        name = sig.get("signal")
+        if name and ('"%s"' % name) not in code:
+            err("policies/code-signals.json declares signal %r (%s) and infer_dependencies.py "
+                "never produces it" % (name, sig.get("id")))
+    # CS-03 must not be addable: the policy says history is evidence about
+    # coupling and says nothing about direction.
+    if '"co_change"' in code.split("def main(")[-1].split("--record")[0] and \
+            "signal\": \"co_change" in code:
+        err("infer_dependencies.py can record a co_change edge; policies/code-signals.json "
+            "forbids it, because history says two files move together and not which one first")
+    allowed = ((load_json("schemas/task-graph.schema.json") or {})
+               .get("properties", {}).get("tasks", {}).get("items", {})
+               .get("properties", {}).get("derived_depends_on", {})
+               .get("items", {}).get("properties", {}).get("signal", {}).get("enum"))
+    if allowed and "co_change" in allowed:
+        err("schemas/task-graph.schema.json permits a derived_depends_on with signal co_change, "
+            "which policies/code-signals.json lists under `never`")
+    for name in ("def infer(", "def co_change(", "def would_cycle("):
+        if name not in code:
+            err("scripts/infer_dependencies.py is missing %s" % name.strip("def ("))
+
+
 def check_task_synthesis_is_live():
     """Every rule the synthesis policy states is enforced by the validator.
 
@@ -1709,6 +1749,7 @@ def main():
     check_coupling()
     check_team_requirements()
     check_agent_write_scope_matches_the_policy(registry)
+    check_code_signals_are_live()
     check_task_synthesis_is_live()
     check_release_acts_have_distinct_ids()
     check_artifact_contracts(registry)

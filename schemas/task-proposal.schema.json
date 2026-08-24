@@ -4,7 +4,10 @@
   "title": "A proposed decomposition of one stage task into several",
   "description": "What an agent hands back when asked to decompose a stage. The organization validates it against policies/task-synthesis.json and grafts what survives; nothing here is trusted because it parsed.",
   "type": "object",
-  "required": ["parent", "children"],
+  "required": [
+    "parent",
+    "children"
+  ],
   "additionalProperties": false,
   "properties": {
     "parent": {
@@ -23,7 +26,11 @@
       "maxItems": 8,
       "items": {
         "type": "object",
-        "required": ["key", "title", "role"],
+        "required": [
+          "key",
+          "title",
+          "role"
+        ],
         "additionalProperties": false,
         "properties": {
           "key": {
@@ -31,21 +38,35 @@
             "pattern": "^[a-z0-9][a-z0-9-]{1,30}$",
             "description": "A local name used only to express dependencies between siblings. The organization assigns the real task ids."
           },
-          "title": {"type": "string", "minLength": 8, "maxLength": 120},
-          "role": {"type": "string", "minLength": 2},
+          "title": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 120
+          },
+          "role": {
+            "type": "string",
+            "minLength": 2
+          },
           "produces": {
             "type": "array",
-            "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{1,15}$"},
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9]{1,15}$"
+            },
             "description": "Artifact codes. Together the children must produce exactly what the parent owed."
           },
           "depends_on": {
             "type": "array",
-            "items": {"type": "string"},
+            "items": {
+              "type": "string"
+            },
             "description": "Sibling keys only. The parent already carries this change's outside dependencies."
           },
           "definition_of_done": {
             "type": "array",
-            "items": {"type": "string"},
+            "items": {
+              "type": "string"
+            },
             "description": "Predicate calls from the artifact model. An invented predicate is skipped by the evaluator, which makes it a definition of done that always passes, so these are checked."
           },
           "coupled_surface": {
@@ -54,10 +75,24 @@
           },
           "risk": {
             "type": "string",
-            "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"],
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
             "description": "Defaults to the parent's. May be raised, never lowered: decomposing HIGH work into LOW pieces routes around the model floor and the approval gates one level down."
           },
-          "reviewer": {"type": "string"}
+          "reviewer": {
+            "type": "string"
+          },
+          "owns_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The files or globs this task will edit. Two tasks that name the same path will be ordered rather than run together, so this is how a split says which of its pieces are genuinely independent."
+          }
         }
       }
     }

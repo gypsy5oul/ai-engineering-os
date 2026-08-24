@@ -3,6 +3,79 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.25.0] — Asking the repository what order its work has to happen in
+
+`policies/coupling-policy.json` has said, since the beginning, that file
+disjointness is *necessary and not sufficient*. It then implemented only the
+sufficient half: named surfaces that two roles must not both edit. The necessary
+half was missing entirely. Two tasks editing one file, or one editing a module
+the other imports, are ordered whether or not anybody named a surface — and the
+repository already contains the answer, so asking a proposer to remember it was
+asking for an ordering that sounds right.
+
+A task now declares `owns_paths`, and the ordering is derived:
+
+```
+Ordering the repository implies:
+  T-021   waits for T-020    import_edge   src/payments/service.py imports
+                                           'src.payments.model', which is
+                                           src/payments/model.py
+  T-023   waits for T-021    path_overlap  both edit src/payments/service.py
+```
+
+### Three signals, worth different amounts
+
+**CS-01 path overlap** is certain and not an inference: two tasks name the same
+file, and parallel edits produce a conflict or a lost one.
+
+**CS-02 import edge** is likely: the importer is written against the imported
+thing, and changing both at once means writing against something that is moving.
+
+**CS-03 co-change** is evidence. This repository's own history moving two files
+together catches coupling through a queue name, a column or a feature flag that
+no scan can see — and says nothing whatever about which lands first, so it is
+reported and **never added**. A commit touching more than forty files is ignored:
+that is a release, not a relationship.
+
+Every added edge carries the line that produced it. An inference nobody can argue
+with just slows the graph down for reasons nobody can find.
+
+### The refusals matter more than the additions
+
+**Two modules that import each other have no order between them.** The first
+implementation added whichever edge came up first and refused the other — a
+direction chosen by iteration order, which is a decision made by nobody and
+visible to no one. Both are now dropped and the pair named: either they are one
+task, or the cycle in the code is the thing to fix. A longer ring is caught at
+the graph level, where an edge closing a loop is refused with the same reasoning.
+
+**A regex is not a parser, and the run says so.** Dynamic imports, dependency
+injection, re-exports, barrel files and anything coupled through data are
+invisible to CS-01 and CS-02. An extension with no pattern is named in the output
+rather than reported as a clean scan, and a project adds its own patterns in
+`.ai-engineering/code-signals.json` instead of editing the script.
+
+### Two bugs the build produced, both found by testing rather than reasoning
+
+Making ESM imports resolve — `from './base.js'` carries the extension, so the
+tail being compared was `js` rather than `base` — I stripped any trailing
+`.something` from the import target. That turned every Python dotted import into
+a reference to its own parent package: `src.payments.model` became
+`src.payments`. Only *known* extensions are stripped now.
+
+And the first mutation pass had two survivors. A resolver loose enough to match
+any path segment invented no edges in my fixtures, because none of them owned a
+directory named after a standard-library module; and the graph-level cycle check
+was unreachable, because the mutual-import guard caught every cycle my fixtures
+contained. Both gaps were in the tests, not the code. `TestABareNameDoesNotClaim
+ADirectory` owns `src/json/encoder.py` alongside a file that does `import json`,
+and `TestALongerCycleIsRefused` builds a three-module ring.
+
+`F-27` injects the failure the coupling policy names and never caught: two tasks
+planned in parallel on files that import each other. It asserts the plan really
+does offer both at once, then that inference corrects it, then that the edge
+carries evidence naming the file.
+
 ## [0.24.0] — One stage is often several tasks
 
 A stage is a unit of accountability, not a unit of work. `DEV` on a payments

@@ -1,0 +1,73 @@
+{
+  "version": "1",
+  "description": "What the repository being changed can be asked about the order its work must happen in, and what it cannot.",
+  "why": [
+    "policies/coupling-policy.json says file disjointness is necessary and not sufficient, and then only implements the sufficient half: named surfaces that two roles must not both edit. The necessary half was missing. Two tasks editing the same file, or one editing a module the other imports, are ordered whether or not anyone named a surface for it.",
+    "The alternative to deriving this is asking a proposer to know it, and a proposer reasoning about a repository it has not read will produce an ordering that sounds right. The repository already contains the answer."
+  ],
+  "signals": [
+    {
+      "id": "CS-01",
+      "signal": "path_overlap",
+      "means": "Two tasks declare paths that intersect.",
+      "confidence": "certain",
+      "why": "Not an inference. Two agents editing one file in parallel produce a conflict or a lost edit, whichever the merge notices.",
+      "edge": "sequence them in declared order; the second waits"
+    },
+    {
+      "id": "CS-02",
+      "signal": "import_edge",
+      "means": "A file one task owns imports a file another task owns.",
+      "confidence": "likely",
+      "why": "The importer is written against the imported thing. Changing both at once means writing against something that is moving.",
+      "edge": "the importing task waits for the imported one"
+    },
+    {
+      "id": "CS-03",
+      "signal": "co_change",
+      "means": "Two tasks own files that this repository's own history changes together, at or above the threshold.",
+      "confidence": "evidence, not proof",
+      "why": "A static scan cannot see a coupling expressed through configuration, dependency injection, a message name or a database column. The history can: files that keep changing together are coupled by something, even when nothing imports anything.",
+      "edge": "reported, never added automatically"
+    }
+  ],
+  "co_change": {
+    "window_commits": 300,
+    "min_shared_commits": 3,
+    "min_ratio": 0.5,
+    "why": "Three commits and half the time, so a pair that moved together twice by coincidence is not evidence. A pair over the threshold is reported for a human or a proposer to judge, because history says these move together and not why."
+  },
+  "import_patterns": {
+    "why": "A regex is not a parser. These find the common, static, literal form of an import in each language and nothing else. A project adds its own here rather than editing the script.",
+    "by_extension": {
+      ".py":    ["^\\s*from\\s+([\\w.]+)\\s+import\\b", "^\\s*import\\s+([\\w.]+)"],
+      ".js":    ["from\\s+['\"]([^'\"]+)['\"]", "require\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)"],
+      ".jsx":   ["from\\s+['\"]([^'\"]+)['\"]", "require\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)"],
+      ".ts":    ["from\\s+['\"]([^'\"]+)['\"]", "require\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)"],
+      ".tsx":   ["from\\s+['\"]([^'\"]+)['\"]", "require\\(\\s*['\"]([^'\"]+)['\"]\\s*\\)"],
+      ".go":    ["^\\s*\"([^\"]+)\"", "^\\s*[\\w]+\\s+\"([^\"]+)\""],
+      ".java":  ["^\\s*import\\s+(?:static\\s+)?([\\w.]+)\\s*;"],
+      ".kt":    ["^\\s*import\\s+([\\w.]+)"],
+      ".rb":    ["require(?:_relative)?\\s+['\"]([^'\"]+)['\"]"],
+      ".rs":    ["^\\s*use\\s+([\\w:]+)"],
+      ".php":   ["^\\s*use\\s+([\\w\\\\]+)\\s*;", "require(?:_once)?\\s*\\(?\\s*['\"]([^'\"]+)['\"]"],
+      ".cs":    ["^\\s*using\\s+([\\w.]+)\\s*;"],
+      ".sql":   [],
+      ".yaml":  [],
+      ".yml":   [],
+      ".json":  []
+    }
+  },
+  "cannot_see": [
+    "Dynamic imports, reflection, dependency injection and service locators. The edge exists at runtime and appears nowhere a regex can read.",
+    "Coupling through data: a shared table, a column, a queue name, a feature flag. CS-03 is the only signal that catches any of this, and it catches it as a correlation.",
+    "Re-exports and barrel files. A imports B which re-exports C; the edge to C is invisible.",
+    "Generated code, vendored code and anything not in the working tree.",
+    "Any language with no entry in import_patterns. An unlisted extension yields no import signal, and the run says which extensions it skipped rather than reporting a clean scan."
+  ],
+  "never": [
+    "Remove an edge. Inference adds ordering; it does not decide that ordering is unnecessary.",
+    "Add an edge that would make the graph cyclic. A cycle means the split was wrong, and that is a refusal, not something to resolve by dropping one of the two edges.",
+    "Add a CS-03 edge. History is evidence that two things move together, not a statement about which must land first."
+  ]
+}

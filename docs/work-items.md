@@ -106,13 +106,14 @@ Worth stating plainly, because the word oversells easily:
 | Bounded replanning that carries accepted work forward | implemented |
 | Task synthesis beyond the workflow's stages | **implemented**, one level, derived or proposed |
 | Fan-out sized to the work (N stories, N tasks) | **partly** — a stage becomes 2 to 8 tasks; the number comes from the artifact model or from an agent's proposal, not from the story count |
-| Dependencies inferred from the code being changed | **not implemented** |
+| Dependencies inferred from the code being changed | **implemented** for declared paths: overlap, static imports, and history as evidence |
 
-So: the graph is generated per change, genuinely parallel, and a stage can now
-become the several tasks it actually is. What it still does not do is read the
-code being changed. Dependencies come from artifact flow and from a proposer's
-judgement; nothing here inspects a call graph to discover that one task must
-land before another.
+So: the graph is generated per change, genuinely parallel, a stage can become
+the several tasks it actually is, and the repository is asked what order those
+tasks have to happen in. The remaining limit is what a regex can see — a static,
+literal import in a language the patterns cover. Coupling through configuration,
+injection or a shared column is reported from the history as a correlation and
+never as an order.
 
 ## The graph is generated, not fixed
 
@@ -218,6 +219,69 @@ plan was wrong, and a decomposition of a wrong plan is not worth carrying.
 What is not checked is whether a decomposition is any *good*. The rules reject
 one that is incoherent with the graph; they cannot reject one that is merely
 poor. That is what the stage's reviewer is for.
+
+## What the repository knows about its own order
+
+`policies/coupling-policy.json` says file disjointness is necessary and not
+sufficient, and then implements the sufficient half: named surfaces two roles
+must not both edit. This is the necessary half. Two tasks editing one file, or
+one editing a module the other imports, are ordered whether or not anybody named
+a surface — and the repository already contains the answer, so asking a proposer
+to remember it is asking for an ordering that sounds right.
+
+A task that declares `owns_paths` can be checked against one that does the same:
+
+```bash
+python3 scripts/infer_dependencies.py --project . --item ACME-FEAT-001
+```
+
+```
+Ordering the repository implies:
+  T-021   waits for T-020    import_edge   src/payments/service.py imports
+                                           'src.payments.model', which is
+                                           src/payments/model.py
+  T-023   waits for T-021    path_overlap  both edit src/payments/service.py
+
+History suggests, without saying which order (CS-03, never added):
+  T-024   and T-025    config/queues.yaml and src/worker.py changed together
+                       in 5 of 5 commits
+
+note: no import pattern for .graphql, so files of that kind were not scanned.
+```
+
+Three signals, and what separates them is how much each is worth:
+
+| | | |
+| --- | --- | --- |
+| **CS-01** path overlap | certain | Two tasks name the same file. Not an inference: parallel edits produce a conflict or a lost one. |
+| **CS-02** import edge | likely | The importer is written against the imported thing. Changing both at once means writing against something that is moving. |
+| **CS-03** co-change | evidence | This repository's history moves the two files together. It catches coupling through a queue name, a column or a feature flag that no scan can see — and says nothing about which lands first, so it is reported and never added. |
+
+`--record` adds the certain and likely edges, each carrying the evidence that
+produced it, because an inference nobody can argue with just slows the graph down
+for reasons nobody can find:
+
+```yaml
+derived_depends_on:
+  - task: T-020
+    signal: import_edge
+    evidence: "src/payments/service.py imports 'src.payments.model', which is src/payments/model.py"
+```
+
+Two refusals matter more than the additions. **Two modules that import each
+other have no order between them**, and adding whichever edge came up first
+would pick a direction on iteration order — a decision made by nobody and
+visible to no one. Both are dropped and the pair is named: either they are one
+task, or the cycle in the code is the thing to fix. And a longer ring is caught
+at the graph level, where an edge that would close a loop is refused with the
+same reasoning.
+
+**A regex is not a parser**, and the run says so rather than reporting a clean
+scan. Dynamic imports, dependency injection, re-exports, barrel files and
+anything coupled through data are invisible to CS-01 and CS-02 — CS-03 is the
+only signal that sees any of it, and it sees it as a correlation. An extension
+with no pattern is named in the output, and a project adds its own patterns in
+`.ai-engineering/code-signals.json` rather than editing the script.
 
 ## Every loop is bounded
 

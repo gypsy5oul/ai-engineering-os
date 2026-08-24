@@ -256,6 +256,45 @@
                 "type": "string"
               }
             }
+          },
+          "owns_paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Repository paths or globs this task will edit. Declared, not discovered -- nothing here can know what a task will touch before it touches it. What it buys is that scripts/infer_dependencies.py can then order tasks that edit the same file, or edit a file that imports another task's file."
+          },
+          "derived_depends_on": {
+            "type": "array",
+            "description": "Dependencies added by inference rather than by the plan, each with the evidence that produced it, so a wrong edge can be found and argued with instead of silently slowing the graph down.",
+            "items": {
+              "type": "object",
+              "required": [
+                "task",
+                "signal",
+                "evidence"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "task": {
+                  "type": "string",
+                  "pattern": "^T-[0-9]{3,}$"
+                },
+                "signal": {
+                  "type": "string",
+                  "enum": [
+                    "path_overlap",
+                    "import_edge"
+                  ]
+                },
+                "evidence": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }

@@ -17,7 +17,7 @@ An engineering organization, not a tool.
 | **30 agents** | Roles with contracts: authority, forbidden actions, inputs, outputs, escalation. Frozen — see [organization freeze](organization-freeze.md). |
 | **33 skills** | Shared capabilities. Technology-neutral. |
 | **4 guards** | Hooks that deny, escalate or audit every command, write and spawn. Tiered so a broken policy file cannot open them. |
-| **27 policies** | Model routing, risk, approvals, artifacts, execution mode, coupling, system of record. |
+| **28 policies** | Model routing, risk, approvals, artifacts, execution mode, coupling, system of record. |
 | **9 workflows** | Level 1: stage to stage. |
 | **7 department cycles** | Level 2: the delegation loop inside a stage. |
 | **28 artifact types** | The state model. Each with an owner, a lifecycle and a review path. |

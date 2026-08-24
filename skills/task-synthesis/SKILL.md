@@ -52,6 +52,19 @@ you have written a pipeline and changed nothing.
 build against one interface, designing that interface is its own task and
 everything else depends on it. That is the shape that makes the rest parallel.
 
+**Say which files each piece will edit.** `owns_paths` is what lets the
+repository check your ordering. Two tasks naming the same file get sequenced;
+a task whose file imports another task's file waits for it. Declaring paths is
+how a split proves its pieces are independent rather than asserting it:
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/infer_dependencies.py \
+    --project . --item ACME-FEAT-001
+```
+
+Run it before you hand the proposal over. If it finds an ordering you did not
+intend, one of you is wrong, and it is usually not the import graph.
+
 **Say which piece owns a shared surface.** If the stage owns one, exactly one
 child owns it. Giving it to everybody serialises the split away; giving it to
 nobody deletes the guarantee at the moment the work becomes parallel, which is
@@ -67,6 +80,7 @@ exactly when it starts to mattering.
     {"key": "api", "title": "Design the activation API contract",
      "role": "solution-architect", "produces": ["ARCH"],
      "coupled_surface": "api-contract",
+     "owns_paths": ["docs/architecture/activation.md", "src/api/activation.yaml"],
      "definition_of_done": ["artifact_status(ARCH, approved)"]},
     {"key": "decisions", "title": "Record the activation design decisions",
      "role": "solution-architect", "produces": ["ADR"], "depends_on": ["api"],

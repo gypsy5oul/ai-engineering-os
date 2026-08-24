@@ -760,6 +760,85 @@ def f26(project):
     return True, "TS-01 refused the drop and accepted the covering split"
 
 
+@fault("F-27", "Two tasks are planned in parallel on files that import each other",
+       "the order is inferred from the code and the parallelism is corrected, with evidence")
+def f27(project):
+    """The failure the coupling policy names and did not catch.
+
+    `coupling-policy.json` says file disjointness is necessary and not sufficient,
+    and implemented only the sufficient half: named surfaces. Two tasks whose
+    files import each other are ordered whether or not anyone named a surface,
+    and a plan that runs them together produces work written against something
+    that is still moving.
+    """
+    import subprocess
+    loop = os.path.join(ROOT, "scripts", "control_loop.py")
+    for rel, text in (("src/payments/model.py", "class Payment:\n    pass\n"),
+                      ("src/payments/service.py",
+                       "from src.payments.model import Payment\n")):
+        path = os.path.join(project, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+
+    opened = subprocess.run([sys.executable, loop, "open", "--project", project,
+                             "--type", "feature", "--risk", "HIGH",
+                             "--intent", "Parallel work on files that import each other"],
+                            capture_output=True, text=True, timeout=120)
+    if opened.returncode != 0:
+        return False, "could not open a work item: %s" % (opened.stderr or opened.stdout)[:120]
+    item = opened.stdout.split()[0]
+    planned = subprocess.run([sys.executable, loop, "plan", "--project", project, "--item", item],
+                             capture_output=True, text=True, timeout=120)
+    if planned.returncode != 0:
+        return False, "could not plan: %s" % (planned.stderr or planned.stdout)[:120]
+
+    graph = W.load_graph(project, item)
+    dev = next((t for t in graph["tasks"] if t.get("stage") == "DEV"), None)
+    if dev is None:
+        return False, "the feature workflow no longer has a DEV stage"
+    made = W.graft(graph, dev["id"], [
+        {"key": "model", "title": "Define the payment model", "role": "backend-developer",
+         "owns_paths": ["src/payments/model.py"]},
+        {"key": "service", "title": "Implement the charge service", "role": "backend-developer",
+         "owns_paths": ["src/payments/service.py"]}], mode="proposed")
+    W.save_graph(project, graph)
+    model, service = made[0]["id"], made[1]["id"]
+
+    # As planned, both are offered at once: nothing in the plan knows one file
+    # imports the other.
+    graph = W.load_graph(project, item)
+    for t in graph["tasks"]:
+        if not t.get("parent") and t["id"] != dev["id"]:
+            t["state"] = "accepted"
+    W.save_graph(project, graph)
+    before = [t["id"] for t in W.runnable(W.load_graph(project, item))]
+    if not (model in before and service in before):
+        return False, ("the plan did not offer both in parallel, so this fault is not "
+                       "reproducing the condition it tests: %s" % before)
+
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "infer_dependencies.py"),
+                        "--project", project, "--item", item, "--record"],
+                       capture_output=True, text=True, timeout=180)
+    if r.returncode != 0:
+        return False, "inference failed: %s" % (r.stderr or r.stdout)[:160]
+
+    after = [t["id"] for t in W.runnable(W.load_graph(project, item))]
+    if service in after:
+        return False, ("the importing task is still offered before the module it imports; "
+                       "the ordering was not applied")
+    if model not in after:
+        return False, "the imported module is no longer offered either: %s" % after
+
+    held = W.task(W.load_graph(project, item), service)
+    derived = held.get("derived_depends_on") or []
+    if not derived:
+        return False, "the edge was added with no evidence, so a wrong one could not be found"
+    if "service.py" not in derived[0]["evidence"]:
+        return False, "the evidence does not name the file that produced it: %r" % derived[0]
+    return True, "ordered %s after %s, evidenced by the import" % (service, model)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fault", action="append", help="run only these fault ids")

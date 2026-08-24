@@ -362,6 +362,8 @@ def graft(graph, parent_id, children, mode="proposed", rationale=None, proposed_
         }
         if child.get("produces"):
             t["produces"] = list(child["produces"])
+        if child.get("owns_paths"):
+            t["owns_paths"] = list(child["owns_paths"])
         if child.get("definition_of_done"):
             t["definition_of_done"] = list(child["definition_of_done"])
         if child.get("coupled_surface"):
