@@ -233,38 +233,52 @@
     },
     "architecture-reviewer": {
       "mode": "allow",
-      "allow": [],
-      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+      "allow": [
+        "docs/reviews/**"
+      ],
+      "why": "A reviewer may write its own verdict and nothing else. The rule that matters is that a reviewer must not author what it reviews -- not that it must not write at all. v0.22.1 gave reviewers an empty allow-list, which reads like the stronger version of the same principle and is a different rule: a real architecture review then had a verdict, a predicate that reads verdicts, and nowhere to put one. docs/reviews/** is the reviewer's own record; every artifact under review lives somewhere else."
     },
     "security-reviewer": {
       "mode": "allow",
-      "allow": [],
-      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+      "allow": [
+        "docs/reviews/**"
+      ],
+      "why": "A reviewer may write its own verdict and nothing else. The rule that matters is that a reviewer must not author what it reviews -- not that it must not write at all. v0.22.1 gave reviewers an empty allow-list, which reads like the stronger version of the same principle and is a different rule: a real architecture review then had a verdict, a predicate that reads verdicts, and nowhere to put one. docs/reviews/** is the reviewer's own record; every artifact under review lives somewhere else."
     },
     "code-reviewer": {
       "mode": "allow",
-      "allow": [],
-      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+      "allow": [
+        "docs/reviews/**"
+      ],
+      "why": "A reviewer may write its own verdict and nothing else. The rule that matters is that a reviewer must not author what it reviews -- not that it must not write at all. v0.22.1 gave reviewers an empty allow-list, which reads like the stronger version of the same principle and is a different rule: a real architecture review then had a verdict, a predicate that reads verdicts, and nowhere to put one. docs/reviews/** is the reviewer's own record; every artifact under review lives somewhere else."
     },
     "performance-reviewer": {
       "mode": "allow",
-      "allow": [],
-      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+      "allow": [
+        "docs/reviews/**"
+      ],
+      "why": "A reviewer may write its own verdict and nothing else. The rule that matters is that a reviewer must not author what it reviews -- not that it must not write at all. v0.22.1 gave reviewers an empty allow-list, which reads like the stronger version of the same principle and is a different rule: a real architecture review then had a verdict, a predicate that reads verdicts, and nowhere to put one. docs/reviews/** is the reviewer's own record; every artifact under review lives somewhere else."
     },
     "reliability-reviewer": {
       "mode": "allow",
-      "allow": [],
-      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+      "allow": [
+        "docs/reviews/**"
+      ],
+      "why": "A reviewer may write its own verdict and nothing else. The rule that matters is that a reviewer must not author what it reviews -- not that it must not write at all. v0.22.1 gave reviewers an empty allow-list, which reads like the stronger version of the same principle and is a different rule: a real architecture review then had a verdict, a predicate that reads verdicts, and nowhere to put one. docs/reviews/** is the reviewer's own record; every artifact under review lives somewhere else."
     },
     "dependency-reviewer": {
       "mode": "allow",
-      "allow": [],
-      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+      "allow": [
+        "docs/reviews/**"
+      ],
+      "why": "A reviewer may write its own verdict and nothing else. The rule that matters is that a reviewer must not author what it reviews -- not that it must not write at all. v0.22.1 gave reviewers an empty allow-list, which reads like the stronger version of the same principle and is a different rule: a real architecture review then had a verdict, a predicate that reads verdicts, and nowhere to put one. docs/reviews/** is the reviewer's own record; every artifact under review lives somewhere else."
     },
     "test-reviewer": {
       "mode": "allow",
-      "allow": [],
-      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+      "allow": [
+        "docs/reviews/**"
+      ],
+      "why": "A reviewer may write its own verdict and nothing else. The rule that matters is that a reviewer must not author what it reviews -- not that it must not write at all. v0.22.1 gave reviewers an empty allow-list, which reads like the stronger version of the same principle and is a different rule: a real architecture review then had a verdict, a predicate that reads verdicts, and nowhere to put one. docs/reviews/** is the reviewer's own record; every artifact under review lives somewhere else."
     }
   },
   "governed_paths": {

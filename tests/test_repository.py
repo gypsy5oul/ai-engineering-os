@@ -53,11 +53,27 @@ class TestOrganizationalInvariants(unittest.TestCase):
     def tools(self, name):
         return self.profiles[self.agents[name]["tool_profile"]]["tools"]
 
-    def test_reviewers_cannot_write(self):
-        for name in self.agents:
-            if "review" in name:
-                self.assertNotIn("Write", self.tools(name))
-                self.assertNotIn("Edit", self.tools(name))
+    def test_reviewers_write_only_their_own_record(self):
+        """Independence is the write scope, not the absence of a write tool. A
+        reviewer that cannot write cannot record the verdict the predicates read,
+        which left a real architecture review with findings and nowhere to put
+        them."""
+        registry = json.load(open(os.path.join(ROOT, "policies", "agent-registry.json")))
+        scope = json.load(open(os.path.join(ROOT, "policies", "write-scope.json")))["roles"]
+        for a in registry["agents"]:
+            if "review" not in a["name"]:
+                continue
+            with self.subTest(agent=a["name"]):
+                allowed = scope.get(a["name"], {})
+                self.assertEqual(allowed.get("mode"), "allow",
+                                 "%s has no allow-mode scope" % a["name"])
+                self.assertTrue(allowed.get("allow"),
+                                "%s can write nothing, so it cannot record a verdict" % a["name"])
+                outside = [p for p in allowed["allow"] if not p.startswith("docs/reviews/")]
+                self.assertEqual(outside, [],
+                                 "%s may write %s, so it can author what it reviews"
+                                 % (a["name"], outside))
+
 
     def test_critical_agents_cannot_write(self):
         for name, agent in self.agents.items():

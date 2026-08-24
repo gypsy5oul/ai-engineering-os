@@ -128,6 +128,31 @@
       ],
       "intent": "Coordinates work and authors the planning artifacts the coordination produces (stage plans, stories, incident records).",
       "notes": "Write access is narrowed to planning paths by policies/write-scope.json. A lead that could write source would become the whole team; the scope, not the tool list, is what prevents that. Claude Code removes AskUserQuestion from every subagent even when the tools field lists it, so a role that runs as a subagent cannot prompt the human directly. Escalation is a return value: the role ends its turn with an OPEN DECISION block that the main session puts to the human. See docs/approvals.md."
+    },
+    "reviewing-author": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Write",
+        "Edit"
+      ],
+      "intent": "Reads the repository, runs read-only inspection commands, and writes its own review record. Cannot write anything else.",
+      "notes": "A reviewer that cannot write cannot record the verdict the predicates read. Write is safe here because the write scope is what actually constrains it: docs/reviews/** and nothing else, so the reviewer can author its own record and cannot touch the artifact under review. Withholding the tool looked like the stronger rule and was a different one -- it left a real architecture review with a verdict and nowhere to put it."
+    },
+    "analysing-author": {
+      "tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "WebFetch",
+        "WebSearch",
+        "Write",
+        "Edit"
+      ],
+      "intent": "The analysis profile plus the ability to write its own review record.",
+      "notes": "A reviewer that cannot write cannot record the verdict the predicates read. Write is safe here because the write scope is what actually constrains it: docs/reviews/** and nothing else, so the reviewer can author its own record and cannot touch the artifact under review. Withholding the tool looked like the stronger rule and was a different one -- it left a real architecture review with a verdict and nowhere to put it."
     }
   }
 }

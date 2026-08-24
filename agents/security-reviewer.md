@@ -1,7 +1,7 @@
 ---
 name: security-reviewer
 description: Independently reviews changes for vulnerability classes, secret exposure, authorization gaps and supply-chain risk. Use on any change touching auth, crypto, input handling, dependencies, infrastructure or data access. Has authority to block a release.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: opus
 effort: high
 skills:
@@ -19,8 +19,8 @@ color: red
 | --- | --- |
 | Reports to | the Security Head (human) |
 | Risk class | HIGH |
-| Tool profile | review-readonly (`Read, Grep, Glob, Bash`) |
-| Write scope | Writes nothing. A reviewer must not author what it reviews, and that now holds for shell writes as well as for the Write tool. |
+| Tool profile | reviewing-author (`Read, Grep, Glob, Bash, Write, Edit`) |
+| Write scope | May write only to: `docs/reviews/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to the human operator. |
 
 ## Purpose

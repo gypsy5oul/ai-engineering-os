@@ -801,7 +801,7 @@
         "kind": "human",
         "role": "a human other than the author"
       },
-      "storage": "the merge request",
+      "storage": "docs/reviews/",
       "statuses": [
         "open",
         "in-review",
@@ -843,7 +843,8 @@
       "optional_fields": [
         "findings"
       ],
-      "findings_shape": "A list of {id, severity, status}. severity is one of info, low, medium, high, critical; status defaults to open. no_unresolved_findings(severity) reads it."
+      "findings_shape": "A list of {id, severity, status}. severity is one of info, low, medium, high, critical; status defaults to open. no_unresolved_findings(severity) reads it.",
+      "storage_note": "The merge request is where a code review belongs when there is one. A design or requirement review has no merge request, and the verdict predicates read artifacts -- so the reviewer's own record lives here and the merge request carries the code discussion."
     },
     {
       "code": "TESTREPORT",

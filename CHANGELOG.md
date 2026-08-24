@@ -3,6 +3,47 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.29.0] — A reviewer with findings and nowhere to put them
+
+An architecture-reviewer, given a real design to review, found two genuine
+defects — including that `Enter` would re-fire whichever on-screen key had focus
+instead of computing equals — and then could not record its verdict anywhere.
+
+v0.22.1 gave every reviewer an empty write scope, reasoning that *a reviewer
+writes nothing*. That reads like the stronger version of the rule and is a
+different rule. The one that matters is that **a reviewer must not author what it
+reviews**, and the empty scope quietly removed the organization's ability to
+record the verdict that `agent_verdict(...)` reads — the predicate every
+department cycle's acceptance depends on.
+
+Reviewers now hold `docs/reviews/**` and nothing else, on two new tool profiles
+that carry a write tool for exactly that purpose. Independence is the scope,
+which is checkable, rather than the absence of a tool, which is only a proxy for
+it.
+
+Eight things asserted the old rule and all eight had to be corrected: the
+registry validator, the organization evaluation and its drift mutation, three
+agent evaluation cases, the shell-scope guard test, the organizational invariant
+test, and the scaffold flow — where a newly scaffolded reviewer with no scope
+entry is now rejected, with a test that proves it.
+
+`role_can_write` also had to stop meaning "holds a write tool". A reviewer holds
+one now, and isolating it in a worktree protects nobody: nothing else writes to
+`docs/reviews/`, and the reviewer writes nowhere else.
+
+### Three more from the same run
+
+`required_fields_present` truncated its list to four missing fields. An agent
+fixed those four, was told two more were missing, and fixed those — a full
+session per four fields. It reports all of them now.
+
+`REVIEW`'s storage was "the merge request". That is right for a code review and
+leaves a design review with nowhere to go, so it is `docs/reviews/` and the
+merge request keeps the code discussion.
+
+The `agent-evaluator` was briefly swept up in a bulk edit and moved onto a
+reviewer profile. It judges agents; it does not review artifacts. Reverted.
+
 ## [0.28.0] — Driving a real change through it, and what that cost
 
 Installed from GitHub at project scope into a fresh project and driven as the

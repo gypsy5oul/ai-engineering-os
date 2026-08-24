@@ -1,7 +1,7 @@
 ---
 name: architecture-reviewer
 description: Independently reviews architecture, designs and ADRs for fitness against requirements, risk, consistency and non-functional coverage. Use before implementation begins on any structural change. Must not be the agent that authored the design.
-tools: Read, Grep, Glob, WebFetch, WebSearch
+tools: Read, Grep, Glob, WebFetch, WebSearch, Write, Edit
 model: opus
 effort: high
 skills:
@@ -18,8 +18,8 @@ color: cyan
 | --- | --- |
 | Reports to | the Architecture Council (human) |
 | Risk class | HIGH |
-| Tool profile | analysis-readonly (`Read, Grep, Glob, WebFetch, WebSearch`) |
-| Write scope | Writes nothing. A reviewer must not author what it reviews, and that now holds for shell writes as well as for the Write tool. |
+| Tool profile | analysing-author (`Read, Grep, Glob, WebFetch, WebSearch, Write, Edit`) |
+| Write scope | May write only to: `docs/reviews/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to the human operator. |
 
 ## Purpose

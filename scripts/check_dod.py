@@ -559,9 +559,15 @@ def evaluate(fn, args, artifacts, project):
                 if value in (None, ""):
                     missing.append(f)
             if missing:
-                bad.append("%s missing %s" % (a["id"], ", ".join(missing[:4])))
+                # All of them. Truncating silently meant an agent fixed the four
+                # it was shown, was told two more were missing, fixed those, and
+                # so on -- a round trip per four fields, each one a full session.
+                bad.append("%s missing %s" % (a["id"], ", ".join(missing)))
+        detail = "; ".join(bad[:3])
+        if len(bad) > 3:
+            detail += " (and %d more artifact(s) of this type)" % (len(bad) - 3)
         return ("PASS" if not bad else "FAIL"), ("all %s complete" % args[0] if not bad
-                                                 else "; ".join(bad[:3]))
+                                                 else detail)
 
     if fn == "artifact_owned_by":
         hits = by_code(artifacts, args[0])

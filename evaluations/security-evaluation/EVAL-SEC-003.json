@@ -18,7 +18,7 @@
       "type": "json_path_equals",
       "file": "policies/agent-registry.json",
       "path": "agents[name=security-reviewer].tool_profile",
-      "value": "review-readonly",
+      "value": "reviewing-author",
       "description": ""
     },
     {

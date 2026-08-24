@@ -143,11 +143,11 @@ class TestDriftIsDetected(unittest.TestCase):
          "policies/risk-classification.json",
          lambda t: t.replace('"model_floor": "opus"', '"model_floor": "sonnet"', 1)),
 
-        ("EVAL-ORG-008", "the code reviewer is moved onto an implementer profile",
-         "policies/agent-registry.json",
-         lambda t: replace_after(t, '"name": "code-reviewer"',
-                                 '"tool_profile": "review-readonly"',
-                                 '"tool_profile": "implementer"')),
+        ("EVAL-ORG-008", "the code reviewer is given write access to source",
+         "policies/write-scope.json",
+         lambda t: replace_after(t, '"code-reviewer"',
+                                 '"docs/reviews/**"',
+                                 '"docs/reviews/**", "src/**"')),
 
         ("EVAL-ORG-009", "an agent verdict may approve on the organization's behalf",
          "policies/approval-authority.json",

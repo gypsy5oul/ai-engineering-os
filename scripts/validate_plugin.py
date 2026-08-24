@@ -221,9 +221,22 @@ def check_registry_consistency(registry, profiles, write_scope, routing):
         profile = profiles["profiles"].get(a["tool_profile"], {})
         if a["risk"] == "CRITICAL" and "Write" in profile.get("tools", []):
             err("agent-registry: CRITICAL agent %s must not have write tools" % a["name"])
-        if "review" in a["name"] and "Write" in profile.get("tools", []):
-            err("agent-registry: reviewer %s must not have write tools; independence is structural"
-                % a["name"])
+        # A reviewer's independence is its write scope, not the absence of a
+        # write tool. It has to be able to record the verdict the predicates
+        # read: a real architecture review produced findings and had nowhere to
+        # put them, because "a reviewer writes nothing" was enforced as a missing
+        # tool. What must hold is narrower and checkable -- it writes its own
+        # record and nothing else.
+        if "review" in a["name"]:
+            allowed = ((write_scope.get("roles") or {}).get(a["name"]) or {})
+            paths = allowed.get("allow")
+            if allowed.get("mode") != "allow" or paths is None:
+                err("agent-registry: reviewer %s has no allow-mode write scope, so nothing "
+                    "constrains what it may write" % a["name"])
+            elif [x for x in paths if not x.startswith("docs/reviews/")]:
+                err("agent-registry: reviewer %s may write %s. A reviewer writes its own record "
+                    "and nothing else, or it can author what it reviews."
+                    % (a["name"], ", ".join(x for x in paths if not x.startswith("docs/reviews/"))))
 
     for role in write_scope.get("roles", {}):
         if role not in names:

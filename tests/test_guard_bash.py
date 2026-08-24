@@ -460,7 +460,7 @@ class TestWriteScopeReachesTheShell(unittest.TestCase):
         ("backend-developer", "cp /tmp/a docs/adrs/0001.md"),
         ("docs-writer",       "sed -i s/x/y/ src/main.go"),
         ("code-reviewer",     "sed -i s/x/y/ src/payments/service.py"),
-        ("security-reviewer", "echo approved >> docs/reviews/r.md"),
+        ("security-reviewer", "echo approved >> docs/architecture/hld.md"),
     ]
 
     IN_SCOPE = [
@@ -481,6 +481,16 @@ class TestWriteScopeReachesTheShell(unittest.TestCase):
                 decision, reason, _, _ = bash(command, agent="ai-engineering-os:" + agent)
                 self.assertEqual(decision, ESCALATE, "%s: %s" % (agent, command))
                 self.assertIn("WS-SHELL", reason)
+
+    def test_a_reviewer_can_write_its_own_record(self):
+        """A reviewer records the verdict the predicates read. Its independence is
+        the scope -- docs/reviews/** and nothing else -- not the absence of a
+        write tool, which left a real review with findings and nowhere to put
+        them."""
+        for agent in ("code-reviewer", "security-reviewer", "architecture-reviewer"):
+            with self.subTest(agent=agent):
+                self.assertIsNone(bash("echo verdict >> docs/reviews/r.md",
+                                       agent="ai-engineering-os:" + agent)[0])
 
     def test_a_reviewer_cannot_author_what_it_reviews_through_the_shell(self):
         """Six of the seven reviewers hold Bash. Independence used to rest on the

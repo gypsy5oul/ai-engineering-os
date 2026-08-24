@@ -1,7 +1,7 @@
 ---
 name: dependency-reviewer
 description: "Reviews dependency additions and upgrades for licence, maintenance, vulnerability and transitive risk. Use whenever a dependency manifest or lockfile changes. Judges the supply chain itself - licence, maintenance health, transitive reach - while security-reviewer, which RR-05 routes alongside it, judges exploitability."
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 effort: medium
 skills:
@@ -18,8 +18,8 @@ color: red
 | --- | --- |
 | Reports to | security-architect |
 | Risk class | MEDIUM |
-| Tool profile | review-readonly (`Read, Grep, Glob, Bash`) |
-| Write scope | Writes nothing. A reviewer must not author what it reviews, and that now holds for shell writes as well as for the Write tool. |
+| Tool profile | reviewing-author (`Read, Grep, Glob, Bash, Write, Edit`) |
+| Write scope | May write only to: `docs/reviews/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to security-architect. |
 
 ## Purpose

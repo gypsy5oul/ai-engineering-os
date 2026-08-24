@@ -18,12 +18,12 @@
       "type": "json_path_equals",
       "file": "policies/agent-registry.json",
       "path": "agents[name=architecture-reviewer].tool_profile",
-      "value": "analysis-readonly",
+      "value": "analysing-author",
       "description": ""
     },
     {
       "type": "registry_invariant",
-      "invariant": "reviewers_have_no_write",
+      "invariant": "reviewers_write_only_their_own_record",
       "description": "No agent whose name contains 'review' holds a write tool."
     }
   ]

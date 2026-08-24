@@ -1,7 +1,7 @@
 ---
 name: reliability-reviewer
 description: "Reviews a proposed change for failure modes, blast radius, rollback safety, idempotency and observability coverage. Use on a diff that touches retries, timeouts, failover, queues, health checks or deployment behaviour. Reviews changes only and cannot edit; sre owns the running system itself."
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 effort: medium
 skills:
@@ -19,8 +19,8 @@ color: orange
 | --- | --- |
 | Reports to | sre |
 | Risk class | MEDIUM |
-| Tool profile | review-readonly (`Read, Grep, Glob, Bash`) |
-| Write scope | Writes nothing. A reviewer must not author what it reviews, and that now holds for shell writes as well as for the Write tool. |
+| Tool profile | reviewing-author (`Read, Grep, Glob, Bash, Write, Edit`) |
+| Write scope | May write only to: `docs/reviews/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to sre. |
 
 ## Purpose

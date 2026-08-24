@@ -47,10 +47,31 @@ def json_path(doc, path):
 
 # ---------------------------------------------------------------- invariants
 
-def inv_reviewers_have_no_write(ctx):
-    bad = [a["name"] for a in ctx["registry"]["agents"]
-           if "review" in a["name"] and _has_write(ctx, a)]
-    return (not bad, "reviewers with write tools: %s" % bad)
+def inv_reviewers_write_only_their_own_record(ctx):
+    """Independence is the write scope, not the absence of a write tool.
+
+    The earlier invariant required reviewers to hold no write tool at all. That
+    is a stronger-sounding rule and a different one: a real architecture review
+    produced findings, and the reviewer had nowhere to record the verdict that
+    the agent_verdict predicates read. What must hold is that a reviewer cannot
+    author what it reviews.
+    """
+    scope = (ctx.get("write_scope") or {}).get("roles") or {}
+    bad = []
+    for a in ctx["registry"]["agents"]:
+        if "review" not in a["name"]:
+            continue
+        allowed = scope.get(a["name"]) or {}
+        if allowed.get("mode") != "allow":
+            bad.append("%s has no allow-mode scope" % a["name"])
+            continue
+        paths = allowed.get("allow") or []
+        if not paths:
+            bad.append("%s can write nothing, so it cannot record a verdict" % a["name"])
+        outside = [x for x in paths if not x.startswith("docs/reviews/")]
+        if outside:
+            bad.append("%s may write %s" % (a["name"], ", ".join(outside)))
+    return (not bad, "; ".join(bad))
 
 
 def inv_critical_agents_have_no_write(ctx):
@@ -729,7 +750,8 @@ def main():
     args = ap.parse_args()
 
     ctx = {"registry": load("policies/agent-registry.json"),
-           "profiles": load("policies/tool-permissions.json")}
+           "profiles": load("policies/tool-permissions.json"),
+           "write_scope": load("policies/write-scope.json")}
 
     results = load(args.llm_results) if args.llm_results else {}
     cases = collect(args.suite)

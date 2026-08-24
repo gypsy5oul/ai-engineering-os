@@ -1,7 +1,7 @@
 ---
 name: performance-reviewer
 description: Reviews changes for latency, throughput, resource and scalability regressions, and specifies the performance testing a change requires. Use when hot paths, query patterns, concurrency, caching or batch sizes change.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 effort: medium
 skills:
@@ -19,8 +19,8 @@ color: orange
 | --- | --- |
 | Reports to | qa-lead |
 | Risk class | MEDIUM |
-| Tool profile | review-readonly (`Read, Grep, Glob, Bash`) |
-| Write scope | Writes nothing. A reviewer must not author what it reviews, and that now holds for shell writes as well as for the Write tool. |
+| Tool profile | reviewing-author (`Read, Grep, Glob, Bash, Write, Edit`) |
+| Write scope | May write only to: `docs/reviews/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to qa-lead. |
 
 ## Purpose

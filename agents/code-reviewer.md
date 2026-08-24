@@ -1,7 +1,7 @@
 ---
 name: code-reviewer
 description: Reviews correctness, maintainability and adherence to project standards on a diff. Use on every code change. Routed automatically by policies/review-routing.json rule RR-02.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 effort: medium
 skills:
@@ -18,8 +18,8 @@ color: green
 | --- | --- |
 | Reports to | development-lead |
 | Risk class | MEDIUM |
-| Tool profile | review-readonly (`Read, Grep, Glob, Bash`) |
-| Write scope | Writes nothing. A reviewer must not author what it reviews, and that now holds for shell writes as well as for the Write tool. |
+| Tool profile | reviewing-author (`Read, Grep, Glob, Bash, Write, Edit`) |
+| Write scope | May write only to: `docs/reviews/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to development-lead. |
 
 ## Purpose

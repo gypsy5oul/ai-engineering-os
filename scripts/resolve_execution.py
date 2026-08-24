@@ -35,15 +35,29 @@ def policy(name):
 
 
 def role_can_write(role):
+    """Whether this role writes anything a worktree would protect.
+
+    Not just "holds a write tool". A reviewer holds one so it can record its own
+    verdict, and its scope is docs/reviews/** and nothing else -- isolating that
+    protects nobody from anything, because no other role writes there and the
+    reviewer writes nowhere else.
+    """
     reg = policy("agent-registry.json")
     profiles = policy("tool-permissions.json").get("profiles", {})
+    scope = (policy("write-scope.json").get("roles") or {}).get(role)
     entries = reg.get("agents") or []
     if isinstance(entries, dict):
         entries = [dict(v, name=k) for k, v in entries.items()]
     for e in entries:
         if (e.get("name") or e.get("id")) == role:
             tools = (profiles.get(e.get("tool_profile"), {}) or {}).get("tools", [])
-            return any(t in tools for t in WRITE_TOOLS)
+            if not any(t in tools for t in WRITE_TOOLS):
+                return False
+            if scope and scope.get("mode") == "allow":
+                elsewhere = [p for p in (scope.get("allow") or [])
+                             if not p.startswith("docs/reviews/")]
+                return bool(elsewhere)
+            return True
     return True          # unknown role: assume it writes, which is the cautious answer
 
 

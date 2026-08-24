@@ -21,7 +21,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class Scaffolded(unittest.TestCase):
-    def sandbox(self, name="contract-reviewer"):
+    def sandbox(self, name="contract-reviewer", scope=True):
         tmp = tempfile.mkdtemp(prefix="aieos-scaffold-")
         self.addCleanup(shutil.rmtree, tmp, True)
         dst = os.path.join(tmp, "plugin")
@@ -36,6 +36,19 @@ class Scaffolded(unittest.TestCase):
         reg["agents"].append(entry)
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(reg, fh, indent=2)
+
+        # A reviewer's independence is its write scope, so a new one needs an
+        # entry. Adding it here mirrors what a person following the documented
+        # flow must do -- and the validator says so if they forget, which is the
+        # test below.
+        if scope and "review" in name:
+            spath = os.path.join(dst, "policies", "write-scope.json")
+            with open(spath, encoding="utf-8") as fh:
+                ws = json.load(fh)
+            ws["roles"][name] = {"mode": "allow", "allow": ["docs/reviews/**"],
+                                 "why": "A reviewer writes its own record and nothing else."}
+            with open(spath, "w", encoding="utf-8") as fh:
+                json.dump(ws, fh, indent=2)
         return dst
 
     def scaffold(self, dst, name="contract-reviewer"):
@@ -112,3 +125,24 @@ class TestOneSourceOfTruth(unittest.TestCase):
         self.assertNotIn("Skills", agent_render.SECTIONS,
                          "the renderer still emits a section the contract dropped in v0.8.0")
         self.assertNotIn("Model policy", agent_render.SECTIONS)
+
+
+class TestANewReviewerNeedsAScope(Scaffolded):
+    """Independence is the write scope. A reviewer added to the registry with no
+    scope entry is unconstrained, and the validator has to say so rather than
+    letting the scaffold produce something that looks finished."""
+
+    def test_a_reviewer_without_a_write_scope_is_rejected(self):
+        dst = self.sandbox(scope=False)
+        self.scaffold(dst)
+        result = self.validate(dst)
+        self.assertIn("contract-reviewer", result.stdout)
+        self.assertIn("no allow-mode write scope", result.stdout)
+
+    def test_the_message_says_what_is_wrong(self):
+        dst = self.sandbox(scope=False)
+        self.scaffold(dst)
+        line = [l for l in self.validate(dst).stdout.splitlines()
+                if "contract-reviewer" in l and "scope" in l]
+        self.assertTrue(line)
+        self.assertIn("nothing constrains what it may write", line[0])

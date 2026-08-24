@@ -1,7 +1,7 @@
 ---
 name: test-reviewer
 description: "Reviews test code as written: coverage of acceptance criteria and risk, assertion quality, flakiness. Use on a diff that adds or modifies tests. Judges the tests in front of it and cannot edit; qa-lead sets the strategy and owns the release decision."
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 effort: medium
 skills:
@@ -19,8 +19,8 @@ color: orange
 | --- | --- |
 | Reports to | qa-lead |
 | Risk class | MEDIUM |
-| Tool profile | review-readonly (`Read, Grep, Glob, Bash`) |
-| Write scope | Writes nothing. A reviewer must not author what it reviews, and that now holds for shell writes as well as for the Write tool. |
+| Tool profile | reviewing-author (`Read, Grep, Glob, Bash, Write, Edit`) |
+| Write scope | May write only to: `docs/reviews/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to qa-lead. |
 
 ## Purpose
