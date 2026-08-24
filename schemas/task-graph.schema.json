@@ -221,6 +221,41 @@
           "native_task": {
             "type": "string",
             "description": "The Claude Code task this graph task is bound to, when one exists. Written at claim time so the completion gate can match on an id rather than on a substring of a subject line."
+          },
+          "parent": {
+            "type": "string",
+            "pattern": "^T-[0-9]{3,}$",
+            "description": "The stage task this one was decomposed out of. The parent keeps the stage's definition of done and depends on all its children, so the stage gate the rest of the graph was promised still exists."
+          },
+          "synthesis": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "On a parent: how it came to be decomposed.",
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "derived",
+                  "proposed"
+                ]
+              },
+              "children": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^T-[0-9]{3,}$"
+                }
+              },
+              "rationale": {
+                "type": "string"
+              },
+              "proposed_by": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              }
+            }
           }
         }
       }

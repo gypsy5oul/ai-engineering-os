@@ -6,6 +6,7 @@ model: sonnet
 effort: medium
 skills:
   - story-decomposition
+  - task-synthesis
   - traceability
   - change-review
 color: green

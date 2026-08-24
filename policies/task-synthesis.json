@@ -1,0 +1,77 @@
+{
+  "version": "1",
+  "description": "When one stage becomes several tasks, and what a decomposition must satisfy to be accepted into the graph.",
+  "why": [
+    "A stage is a unit of accountability, not a unit of work. `DEV` for a payments change is one task in the graph and five people's work in reality, and a graph that cannot say so cannot schedule it, cannot parallelise it, and cannot show anyone where the change actually is.",
+    "The decomposition itself is judgement: which pieces, in what order, sharing which contracts. This repository does not simulate judgement. An agent proposes, and the organization validates and records -- the same split as everywhere else here."
+  ],
+  "modes": {
+    "derived": {
+      "what": "Split a stage by the artifacts it produces and the roles that own them, taken from policies/artifact-model.json.",
+      "invents": "nothing",
+      "when": "The stage produces artifacts owned by more than one role. Otherwise there is no split to derive and this refuses.",
+      "why": "A stage owing an ARCH and an SLO owes them to two different owners, and that is already written down. Deriving it is reading, not guessing."
+    },
+    "proposed": {
+      "what": "An agent proposes concrete tasks against schemas/task-proposal.schema.json; the organization validates every rule below and grafts what survives.",
+      "invents": "the decomposition, which is the part that requires judgement",
+      "when": "Anything the derived mode cannot answer.",
+      "why": "The alternative is a heuristic in Python pretending to be engineering judgement, which is the failure this repository is arranged against."
+    }
+  },
+  "rules": [
+    {
+      "id": "TS-01",
+      "rule": "children_cover_the_parent",
+      "means": "The union of the children's `produces` must equal the parent's, exactly.",
+      "why": "A decomposition that drops an artifact turns a stage the organization owes into one nobody owes, and the definition of done still passes because it is evaluated on the parent."
+    },
+    {
+      "id": "TS-02",
+      "rule": "roles_exist_and_can_write",
+      "means": "Every child's role is in the agent registry and can write the storage of every artifact it produces.",
+      "why": "The same check the artifact model is held to. A task assigned to a role that cannot produce its output is a task nobody can do."
+    },
+    {
+      "id": "TS-03",
+      "rule": "risk_is_not_laundered",
+      "means": "A child may raise its risk above the parent's; it may not lower it.",
+      "why": "Otherwise decomposing HIGH work into LOW pieces is a way to route around the model floor, the approval gates and the concurrency limits, one level down where nobody is looking."
+    },
+    {
+      "id": "TS-04",
+      "rule": "dependencies_stay_inside",
+      "means": "A child may depend only on its siblings, and the sibling graph must be acyclic.",
+      "why": "The parent already carries the change's dependencies. A child reaching outside its stage rewires the graph from inside a stage, where the person reading the graph will not look."
+    },
+    {
+      "id": "TS-05",
+      "rule": "predicates_must_parse",
+      "means": "Every predicate in a child's definition of done is a real predicate from the artifact model, called with the right number of arguments.",
+      "why": "An unparseable predicate is silently skipped by the evaluator, so an invented one is a definition of done that always passes."
+    },
+    {
+      "id": "TS-06",
+      "rule": "bounded",
+      "means": "Between 2 and max_children tasks, and one level of decomposition only.",
+      "why": "A stage that needs more than this is not a stage that needs decomposing; it is a work item that was scoped wrong. Depth is bounded for the same reason every other loop here is."
+    },
+    {
+      "id": "TS-07",
+      "rule": "the_parent_becomes_the_checkpoint",
+      "means": "The parent keeps its definition of done and comes to depend on all of its children. Downstream tasks keep depending on the parent.",
+      "why": "The stage gate is the thing the rest of the graph was promised. Replacing the parent with its children would delete it, and every downstream dependency with it."
+    },
+    {
+      "id": "TS-08",
+      "rule": "a_shared_surface_keeps_an_owner",
+      "means": "If the stage owns a coupled surface, exactly one child must own it.",
+      "why": "The coupling policy gives each shared contract one owner. Decomposing a stage that owns one and assigning it to nobody deletes that guarantee at the moment the work becomes parallel, which is precisely when it starts to matter; assigning it to every child is the opposite mistake and serialises the split away."
+    }
+  ],
+  "max_children": 8,
+  "max_depth": 1,
+  "not_enforceable": [
+    "Whether the decomposition is any good. The rules below reject a decomposition that is incoherent with the graph; they cannot reject one that is merely poor. That is what the reviewer on the stage is for."
+  ]
+}

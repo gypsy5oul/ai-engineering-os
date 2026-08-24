@@ -512,8 +512,15 @@ def cmd_replan(args):
         W.record(args.project, args.item, "replan_refused", replans=done, reason=args.reason)
         return 1
 
-    carry = {t["stage"]: True for t in graph["tasks"]
-             if t["state"] == "accepted" and t.get("stage")} if not args.redo_all else {}
+    # Every task of the stage, not any one of them. A decomposed stage has
+    # several, and carrying it forward because one child finished would mark the
+    # whole stage done and drop the rest of the work silently.
+    by_stage = {}
+    for t in graph["tasks"]:
+        if t.get("stage"):
+            by_stage.setdefault(t["stage"], []).append(t["state"])
+    carry = ({sid: True for sid, states in by_stage.items()
+              if all(st == "accepted" for st in states)} if not args.redo_all else {})
     new, skipped = build_graph(args.project, item, generation=graph["generation"] + 1,
                                reason=args.reason, carry=carry)
     W.record(args.project, args.item, "replanned",
@@ -557,11 +564,27 @@ def cmd_status(args):
                 print("  replans:   %d" % item["replans"])
             if graph:
                 print("  generation %d" % graph["generation"])
+                # Children are listed under the stage they came out of, because
+                # a flat list of twenty-two tasks does not say which four of them
+                # are one stage.
+                kids = {}
                 for t in graph["tasks"]:
+                    if t.get("parent"):
+                        kids.setdefault(t["parent"], []).append(t)
+
+                def show(t, indent=""):
                     mark = {"accepted": "ok ", "rework": "RWK", "blocked": "BLK",
                             "escalated": "ESC", "abandoned": "---"}.get(t["state"], "   ")
-                    print("    %s %-6s %-30s %-20s %s"
-                          % (mark, t["id"], t["title"][:30], t["role"], t["state"]))
+                    print("    %s %s%-6s %-*s %-20s %s"
+                          % (mark, indent, t["id"], 30 - len(indent),
+                             t["title"][:30 - len(indent)], t["role"], t["state"]))
+
+                for t in graph["tasks"]:
+                    if t.get("parent"):
+                        continue
+                    show(t)
+                    for child in kids.get(t["id"], []):
+                        show(child, indent="  ")
     return 0
 
 

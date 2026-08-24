@@ -3,6 +3,92 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.24.0] — One stage is often several tasks
+
+A stage is a unit of accountability, not a unit of work. `DEV` on a payments
+change was one node in the graph and five people's work in reality, and a graph
+that cannot say so cannot schedule it, cannot run the independent parts at the
+same time, and cannot show anyone where the change has got to.
+
+Deciding which pieces, in what order, sharing which contracts, is judgement.
+There is no heuristic in this release pretending to be an engineer. An agent
+proposes; the organization validates and records; a proposal that does not hold
+together is refused whole.
+
+### Derived: reading, not guessing
+
+When the artifacts a stage produces are owned by more than one role, the split is
+already in the artifact model:
+
+```
+T-008 decomposed into 2 task(s):
+  T-020   qa-lead        QA test design: TP        TP
+  T-021   qa-engineer    QA test design: TEST      TEST
+```
+
+It refuses in the two cases where the model does not contain an answer: one role
+owning everything the stage produces, and a stage owning a coupled surface, where
+which piece edits the shared contract is a judgement no artifact model holds.
+
+### Proposed: validated against eight rules
+
+`schemas/task-proposal.schema.json` for the shape,
+`policies/task-synthesis.json` for the rules, and the `task-synthesis` skill for
+the agent producing it. Each rule exists because it names something that fails in
+silence:
+
+| | |
+| --- | --- |
+| **TS-01** children produce exactly what the stage owed | Drop one and the stage still passes: the definition of done is evaluated on the parent, so the artifact simply stops existing |
+| **TS-02** a role must be able to write what it is given | A reviewer holds no write tools; a developer cannot write `docs/architecture/` |
+| **TS-03** risk may be raised, never lowered | Splitting HIGH work into LOW pieces routes around the model floor, the approval gates and the concurrency limits one level down |
+| **TS-04** children depend only on siblings, acyclically | The parent carries the change's outside dependencies; reaching past it rewires the graph from inside a stage |
+| **TS-05** predicates must be real, with the right arity | An unknown predicate is skipped by the evaluator, so an invented one is a definition of done that always passes |
+| **TS-06** two to eight children, one level | A stage needing more is a work item that was scoped wrong |
+| **TS-07** the parent becomes the checkpoint | Replacing it with its children would delete the stage gate and every downstream edge pointing at it |
+| **TS-08** a shared surface keeps exactly one owner | Assigning it to nobody deletes the coupling guarantee at the moment the work becomes parallel; assigning it to everybody serialises the split away |
+
+TS-08 was not in the first draft. The first derived split gave every child the
+parent's surface, and the two tasks then excluded each other — a decomposition
+that serialised itself on creation, which is the shape of having changed the
+graph and none of its behaviour.
+
+### The stage survives its own decomposition
+
+```
+T-008  QA test design                queued      <- the gate, waiting
+  T-020  Write the test plan         queued
+  T-021  Write the automated tests   queued      depends on T-020
+```
+
+The parent keeps its definition of done and comes to depend on all of its
+children. Everything downstream still waits for the parent, so nothing that was
+promised the stage gate loses it.
+
+Two integration points needed fixing for this to be true. Replan's carry-forward
+was keyed on any accepted task in a stage, so one finished child would have
+marked the whole stage done and dropped the rest of the work silently — it now
+requires every task of the stage. And `status` nests children under their parent,
+because a flat list of twenty-two tasks does not say which four of them are one
+stage.
+
+### Bounds, and what is not checked
+
+One level, deliberately. A replan does not carry a decomposition forward, also
+deliberately: a replan means the plan was wrong, and a decomposition of a wrong
+plan is not worth keeping.
+
+What is not checked is whether a decomposition is any *good*. These rules reject
+one that is incoherent with the graph; they cannot reject one that is merely
+poor. That is what the stage's reviewer is for, and saying so is more useful than
+implying otherwise.
+
+`F-26` injects the dangerous shape — a stage split into two tasks that both write
+the plan and neither writes the suite — and requires both the refusal and the
+acceptance of the covering split, so the rule is a rule rather than a refusal to
+decompose. All twenty-seven synthesis tests were then mutation-tested by
+disabling each rule in turn.
+
 ## [0.23.0] — Making the arrows authoritative
 
 An implementation-path review of the current branch reached a conclusion the

@@ -307,6 +307,89 @@ def _claim_locked(project, wid, agent_type, agent_id, session=None):
     return None
 
 
+def next_task_ids(graph, count):
+    """Fresh ids after the highest one in use.
+
+    Not `len(tasks) + 1`: a graph that has been decomposed has gaps, and reusing
+    an id would silently reattach a new task to an old task's history.
+    """
+    highest = 0
+    for t in graph.get("tasks", []):
+        try:
+            highest = max(highest, int(str(t["id"]).split("-")[1]))
+        except (IndexError, ValueError):
+            continue
+    return ["T-%03d" % (highest + n) for n in range(1, count + 1)]
+
+
+def graft(graph, parent_id, children, mode="proposed", rationale=None, proposed_by=None):
+    """Add children under a stage task and make the parent depend on them.
+
+    The parent is kept, not replaced. It carries the stage's definition of done,
+    and every downstream task depends on it -- replacing it with its children
+    would delete the stage gate and every edge that pointed at it. What changes
+    is that the parent can no longer start until its children are done, which is
+    what "this stage is now several tasks" actually means.
+
+    `children` are dicts already validated by the caller. Their `depends_on` uses
+    sibling keys, which are translated to real ids here.
+    """
+    parent = task(graph, parent_id)
+    if parent is None:
+        raise ValueError("no task %s to decompose" % parent_id)
+    ids = next_task_ids(graph, len(children))
+    by_key = {c["key"]: tid for c, tid in zip(children, ids)}
+
+    made = []
+    for child, tid in zip(children, ids):
+        t = {
+            "id": tid,
+            "title": child["title"],
+            "role": child["role"],
+            "stage": parent.get("stage"),
+            "state": "queued",
+            "parent": parent_id,
+            "risk": child.get("risk") or parent.get("risk", "MEDIUM"),
+            "attempts": 0,
+            "max_attempts": parent.get("max_attempts", 3),
+            # The parent's own upstream dependencies, plus any sibling it names.
+            # A child inherits the stage's entry conditions; it does not get to
+            # start before the stage could have.
+            "depends_on": sorted(set(parent.get("depends_on") or [])
+                                 | {by_key[k] for k in (child.get("depends_on") or [])
+                                    if k in by_key}),
+            "execution": {"declared": declared_execution(parent)},
+        }
+        if child.get("produces"):
+            t["produces"] = list(child["produces"])
+        if child.get("definition_of_done"):
+            t["definition_of_done"] = list(child["definition_of_done"])
+        if child.get("coupled_surface"):
+            t["coupled_surface"] = child["coupled_surface"]
+        elif parent.get("coupled_surface") in (child.get("produces") or []):
+            # The surface belongs to whichever child actually produces it. Giving
+            # it to every child made a decomposition serialise itself: two tasks
+            # touching different artifacts would each wait for the other, and the
+            # parallelism the split existed to expose disappeared on creation.
+            t["coupled_surface"] = parent["coupled_surface"]
+        if child.get("reviewer") or parent.get("reviewer"):
+            t["reviewer"] = child.get("reviewer") or parent["reviewer"]
+        made.append(t)
+
+    graph["tasks"].extend(made)
+    parent["depends_on"] = sorted(set(parent.get("depends_on") or []) | set(ids))
+    parent["synthesis"] = {"mode": mode, "children": ids, "at": now()}
+    if rationale:
+        parent["synthesis"]["rationale"] = rationale
+    if proposed_by:
+        parent["synthesis"]["proposed_by"] = proposed_by
+    return made
+
+
+def children_of(graph, parent_id):
+    return [t for t in graph.get("tasks", []) if t.get("parent") == parent_id]
+
+
 def complete_lease(project, wid, agent_id, result=None, native_task=None,
                    actual_execution=None):
     """Record a result against the task this agent holds, and release it. Atomic.

@@ -1,6 +1,6 @@
 # Skill catalogue
 
-32 skills. A skill is a capability many roles share; it is not an organizational
+33 skills. A skill is a capability many roles share; it is not an organizational
 role and does not have authority of its own. The rule for choosing between them
 is in `docs/agent-model.md`.
 
@@ -39,6 +39,7 @@ guides work that can damage production, data or the security boundary.
 | [`sdlc-navigator`](../skills/sdlc-navigator/SKILL.md) | Place a piece of work in the software lifecycle and decide what happens next. | `engineering-director` | LOW |
 | [`security-assessment`](../skills/security-assessment/SKILL.md) | Review a change for vulnerability classes, secret exposure, authorization gaps and supply-chain risk, with severity and an exploitation path per finding. | `security-architect`, `security-reviewer`, `dependency-reviewer` | HIGH |
 | [`story-decomposition`](../skills/story-decomposition/SKILL.md) | Break approved architecture and requirements into epics, stories and tasks that can be implemented independently and verified objectively. | `development-lead`, `ux-designer` | LOW |
+| [`task-synthesis`](../skills/task-synthesis/SKILL.md) | Decompose one stage of a work item into the several concrete tasks it actually is, as a proposal the organization validates and grafts into the task graph. | `development-lead`, `solution-architect`, `qa-lead` | LOW |
 | [`team-patterns`](../skills/team-patterns/SKILL.md) | Choose between a single agent, subagents and an agent team, and spawn the right team with the right context. | `engineering-director` | LOW |
 | [`technology-selection`](../skills/technology-selection/SKILL.md) | Run a structured technology decision when the approved stack does not cover a need. | `solution-architect` | MEDIUM |
 | [`test-automation`](../skills/test-automation/SKILL.md) | Implement reliable automated tests from an approved test design, and diagnose flaky or low-value tests. | `qa-lead`, `qa-engineer`, `test-reviewer` | MEDIUM |

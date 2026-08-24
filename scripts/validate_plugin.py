@@ -1432,6 +1432,48 @@ def check_agent_write_scope_matches_the_policy(registry):
                 "        file:   %s\n        policy: %s" % (a["name"], m.group(1).strip(), want))
 
 
+def check_task_synthesis_is_live():
+    """Every rule the synthesis policy states is enforced by the validator.
+
+    A decomposition policy nobody checks is the most dangerous version of this
+    repository's recurring defect: it reads like the rules the graph is held to,
+    and a proposal violating all of them would be grafted in silently.
+    """
+    pol = load_json("policies/task-synthesis.json")
+    if not pol:
+        return
+    path = os.path.join(ROOT, "scripts", "synthesize_tasks.py")
+    if not os.path.exists(path):
+        err("policies/task-synthesis.json exists and scripts/synthesize_tasks.py does not, so "
+            "nothing decomposes anything and nothing enforces these rules")
+        return
+    with open(path, encoding="utf-8") as fh:
+        code = fh.read()
+    for rule in pol.get("rules", []):
+        rid = rule.get("id")
+        # Each rule id must appear in a refusal message, which is the only place
+        # it can have an effect.
+        if ('"%s:' % rid) not in code and ("'%s:" % rid) not in code:
+            err("policies/task-synthesis.json: rule %s (%s) is stated and never enforced -- no "
+                "refusal in synthesize_tasks.py cites it" % (rid, rule.get("rule")))
+    for name in ("def check(", "def derive(", "def cycles("):
+        if name not in code:
+            err("scripts/synthesize_tasks.py is missing %s, which the policy's modes depend on"
+                % name.strip("def ("))
+    schema = os.path.join(ROOT, "schemas", "task-proposal.schema.json")
+    if not os.path.exists(schema):
+        err("policies/task-synthesis.json describes a proposed mode and "
+            "schemas/task-proposal.schema.json does not exist, so a proposal is unchecked "
+            "before its rules are even reached")
+    else:
+        model = load_json("schemas/task-proposal.schema.json") or {}
+        cap = ((model.get("properties") or {}).get("children") or {}).get("maxItems")
+        if cap != pol.get("max_children"):
+            err("schemas/task-proposal.schema.json allows %s children and "
+                "policies/task-synthesis.json permits %s. Two bounds that disagree means one of "
+                "them is not the bound." % (cap, pol.get("max_children")))
+
+
 def check_release_acts_have_distinct_ids():
     """Two release acts may not share an approval id.
 
@@ -1667,6 +1709,7 @@ def main():
     check_coupling()
     check_team_requirements()
     check_agent_write_scope_matches_the_policy(registry)
+    check_task_synthesis_is_live()
     check_release_acts_have_distinct_ids()
     check_artifact_contracts(registry)
     check_department_cycles()

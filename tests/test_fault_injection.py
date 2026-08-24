@@ -42,6 +42,7 @@ class TestFaultsAreHandled(unittest.TestCase):
         for needed in ("Architecture is rejected", "QA fails", "rework limit",
                        "escalation is still open", "withdrawn", "Agent teams are unavailable",
                        "notification channel", "Evidence outside the repository", "hook policy",
+                       "decomposition quietly drops",
                        "required model", "nobody moves it", "concurrency limit",
                        "untested rollback", "dimension unanswered",
                        "readiness still not ready", "no runbook",
@@ -63,6 +64,8 @@ class TestFaultsDetectRemovedControls(unittest.TestCase):
         # certifying controls they never exercised. They are mutation-tested first
         # because a fault that tests nothing is worse than a missing one: it is
         # counted as coverage.
+        ("F-26", "the coverage rule stops refusing a dropped artifact",
+         "scripts/synthesize_tasks.py", "if owed - given:", "if False:"),
         ("F-05", "the findings severity argument is ignored again", "scripts/check_dod.py",
          "if order.get(sev, -1) < floor:", "if True:"),
         ("F-12", "a broken channel file reports a send anyway", "scripts/route_event.py",

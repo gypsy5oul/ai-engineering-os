@@ -104,13 +104,15 @@ Worth stating plainly, because the word oversells easily:
 | Parallel execution where work is independent | implemented |
 | Coupled surfaces sequenced automatically | implemented |
 | Bounded replanning that carries accepted work forward | implemented |
-| Task synthesis beyond the workflow's stages | **not implemented** |
-| Fan-out sized to the work (N stories, N tasks) | **not implemented** |
+| Task synthesis beyond the workflow's stages | **implemented**, one level, derived or proposed |
+| Fan-out sized to the work (N stories, N tasks) | **partly** — a stage becomes 2 to 8 tasks; the number comes from the artifact model or from an agent's proposal, not from the story count |
 | Dependencies inferred from the code being changed | **not implemented** |
 
-So: the graph is generated per change and genuinely parallel, and it is still
-derived from a declared set of stages. It does not yet invent tasks the workflow
-did not name.
+So: the graph is generated per change, genuinely parallel, and a stage can now
+become the several tasks it actually is. What it still does not do is read the
+code being changed. Dependencies come from artifact flow and from a proposer's
+judgement; nothing here inspects a call graph to discover that one task must
+land before another.
 
 ## The graph is generated, not fixed
 
@@ -137,6 +139,85 @@ one it costs the observability design for a service going to production. So the
 default inverts with risk: above MEDIUM, optional stages are **kept** unless the
 project has listed them as skippable, and dropping one becomes a decision someone
 made rather than a default nobody saw.
+
+## One stage is often several tasks
+
+A stage is a unit of accountability. `DEV` on a payments change is one node in the
+graph and five people's work in reality, and a graph that cannot say so cannot
+schedule it, cannot run the independent parts at the same time, and cannot show
+anyone where the change has got to.
+
+Deciding which pieces, in what order, sharing which contracts, is judgement. This
+repository does not simulate judgement, so the split is proposed and the
+organization validates it — the same division as everywhere else here.
+
+**Derived.** When the artifacts a stage produces are owned by more than one role,
+the split is already written down in the artifact model and reading it is not
+guessing:
+
+```bash
+python3 scripts/synthesize_tasks.py --project . --item ACME-FEAT-001 \
+    --task T-008 --derive
+```
+
+```
+T-008 decomposed into 2 task(s):
+  T-020   qa-lead        QA test design: TP        TP
+  T-021   qa-engineer    QA test design: TEST      TEST
+```
+
+When one role owns everything the stage produces, there is no split to derive and
+this refuses rather than inventing one. It also refuses when the stage owns a
+coupled surface: which piece of the work edits a shared contract is a judgement
+the artifact model does not contain.
+
+**Proposed.** Everything else. An agent produces a decomposition against
+`schemas/task-proposal.schema.json` — the `task-synthesis` skill is the
+instruction for that — and the organization validates all eight rules in
+`policies/task-synthesis.json` before anything is written:
+
+```bash
+python3 scripts/synthesize_tasks.py --project . --item ACME-FEAT-001 \
+    --from proposal.json --proposed-by solution-architect
+```
+
+A proposal that does not hold together is refused whole, with the rule that
+refused it:
+
+```
+REFUSED: the decomposition of T-008 does not satisfy policies/task-synthesis.json.
+  - TS-01: nothing produces TEST, which T-008 owes. A decomposition that drops an
+    artifact turns a stage the organization owes into one nobody owes, and the
+    parent's definition of done still passes.
+```
+
+The rules exist because each names something that fails silently: an artifact
+nobody owes still passes the parent's gate; a task assigned to a role that cannot
+write its output is a task nobody can do; a child that lowers its risk routes
+around the model floor and the approval gates one level down; an invented
+predicate is skipped by the evaluator, which makes it a definition of done that
+always passes.
+
+**The stage survives its own decomposition.** The parent keeps its definition of
+done and comes to depend on all of its children, so the gate the rest of the
+graph was promised still exists and every downstream edge still points at it.
+What changes is that the stage cannot be worked until its pieces are:
+
+```
+T-008  QA test design                queued      <- the stage gate, waiting
+  T-020  Write the test plan         queued
+  T-021  Write the automated tests   queued      depends on T-020
+```
+
+Two limits worth knowing. One level of decomposition only: a stage needing more
+is a work item that was scoped wrong, and saying so is more useful than
+subdividing it. And a replan rebuilds the graph from the workflow, so a
+decomposition does not survive one — deliberately, because a replan means the
+plan was wrong, and a decomposition of a wrong plan is not worth carrying.
+
+What is not checked is whether a decomposition is any *good*. The rules reject
+one that is incoherent with the graph; they cannot reject one that is merely
+poor. That is what the stage's reviewer is for.
 
 ## Every loop is bounded
 

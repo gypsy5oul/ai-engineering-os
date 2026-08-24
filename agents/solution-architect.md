@@ -10,6 +10,7 @@ skills:
   - api-design
   - database-design
   - technology-selection
+  - task-synthesis
 color: cyan
 ---
 

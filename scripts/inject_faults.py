@@ -21,6 +21,7 @@ Those cases assert the opposite - that nothing blocked.
 Run: python3 scripts/inject_faults.py [--fault F-04] [--verbose]
 """
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -32,6 +33,7 @@ sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
 
 import simulate_sdlc as S           # noqa: E402
 import check_dod                    # noqa: E402
+import workitem as W                # noqa: E402
 from minyaml import parse_file      # noqa: E402
 
 FAULTS = []
@@ -695,6 +697,67 @@ def run(selected=None, verbose=False):
         return 1
     print("Every injected fault produced the refusal or the tolerance it should.")
     return 0
+
+
+@fault("F-26", "A decomposition quietly drops an artifact the stage owed",
+       "the graft is refused: an artifact nobody owes still passes the parent's gate")
+def f26(project):
+    """The dangerous shape of a bad decomposition.
+
+    A stage owing a test plan and a test suite, split into two tasks that both
+    write the plan. The suite is now owed by nobody -- and the parent's definition
+    of done is evaluated on the parent, so the stage still passes. Nothing about
+    this looks wrong in the graph unless the graft itself refuses it.
+    """
+    import subprocess
+    loop = os.path.join(ROOT, "scripts", "control_loop.py")
+    opened = subprocess.run([sys.executable, loop, "open", "--project", project,
+                             "--type", "feature", "--risk", "HIGH",
+                             "--intent", "Decomposition that drops an artifact"],
+                            capture_output=True, text=True, timeout=120)
+    if opened.returncode != 0:
+        return False, "could not open a work item: %s" % (opened.stderr or opened.stdout)[:120]
+    # The id is assigned from the project key, not chosen here.
+    item = opened.stdout.split()[0]
+    planned = subprocess.run([sys.executable, loop, "plan", "--project", project, "--item", item],
+                             capture_output=True, text=True, timeout=120)
+    if planned.returncode != 0:
+        return False, "could not plan: %s" % (planned.stderr or planned.stdout)[:120]
+
+    graph = W.load_graph(project, item)
+    parent = next((t for t in graph["tasks"]
+                   if set(t.get("produces") or []) == {"TP", "TEST"}), None)
+    if parent is None:
+        return False, "the feature workflow no longer has a stage producing TP and TEST"
+
+    dropped = {"parent": parent["id"], "children": [
+        {"key": "plan", "title": "Write the test plan", "role": "qa-lead", "produces": ["TP"]},
+        {"key": "more", "title": "Write more of the plan", "role": "qa-lead",
+         "produces": ["TP"]}]}
+    r = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "scripts", "synthesize_tasks.py"),
+         "--project", project, "--item", item, "--from", "-"],
+        input=json.dumps(dropped), capture_output=True, text=True, timeout=120)
+    if r.returncode == 0:
+        return False, "the decomposition was accepted and TEST is now owed by nobody"
+    if "TS-01" not in r.stdout:
+        return False, "refused, but not for the right reason: %s" % r.stdout[:120]
+    if W.children_of(W.load_graph(project, item), parent["id"]):
+        return False, "refused and grafted anyway"
+
+    # And the same stage, split correctly, is accepted -- so the rule is a rule
+    # and not a refusal to decompose.
+    ok = {"parent": parent["id"], "children": [
+        {"key": "plan", "title": "Write the test plan", "role": "qa-lead", "produces": ["TP"]},
+        {"key": "tests", "title": "Write the automated tests", "role": "qa-engineer",
+         "produces": ["TEST"], "depends_on": ["plan"]}]}
+    r2 = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "scripts", "synthesize_tasks.py"),
+         "--project", project, "--item", item, "--from", "-"],
+        input=json.dumps(ok), capture_output=True, text=True, timeout=120)
+    if r2.returncode != 0:
+        return False, "a correct decomposition was also refused: %s" % r2.stdout[:120]
+    return True, "TS-01 refused the drop and accepted the covering split"
 
 
 def main():

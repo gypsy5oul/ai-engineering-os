@@ -8,6 +8,7 @@ skills:
   - test-design
   - test-automation
   - traceability
+  - task-synthesis
 color: orange
 ---
 
