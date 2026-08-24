@@ -245,3 +245,143 @@ class TestResolutionIsOnTheLivePath(unittest.TestCase):
         self.assertEqual(b["agent_id"], "a1")
         self.assertEqual(b["session_id"], "S1")
         self.assertIn("declared", b["execution"])
+
+
+class TestResolutionAppliesToDecomposedTasks(unittest.TestCase):
+    """`execution` became an object in v0.23 for any task that came from a
+    decomposition. The resolver kept reading the raw field, so `declared` was a
+    dict, no rule matched, the dict was returned as the mode, and writing it back
+    failed schema validation inside a try/except. Execution resolution silently
+    did not apply to decomposed tasks for three versions."""
+
+    def setUp(self):
+        self.project = tempfile.mkdtemp(prefix="aieos-exec-child-")
+        self.addCleanup(shutil.rmtree, self.project, True)
+        os.makedirs(os.path.join(self.project, ".ai-engineering"))
+        src = os.path.join(ROOT, "templates", "project", "project.yaml")
+        with open(src, encoding="utf-8") as fh:
+            cfg = fh.read().replace("    blocking: true", "    blocking: false")
+        with open(os.path.join(self.project, ".ai-engineering", "project.yaml"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(cfg)
+        for argv in (["open", "--type", "feature", "--risk", "HIGH",
+                      "--intent", "Execution resolution on a decomposed task"],
+                     ["plan", "--item", "SFTP-FEAT-001"]):
+            subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "control_loop.py")]
+                           + argv + ["--project", self.project], capture_output=True, timeout=120)
+        subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "synthesize_tasks.py"),
+                        "--project", self.project, "--item", "SFTP-FEAT-001", "--task", "T-008",
+                        "--derive", "--no-infer"], capture_output=True, timeout=180)
+
+    def child(self):
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        kids = W.children_of(graph, "T-008")
+        self.assertTrue(kids, "the fixture did not decompose")
+        return graph, kids[0]
+
+    def test_the_mode_is_a_string_not_the_execution_object(self):
+        import resolve_execution
+        graph, child = self.child()
+        self.assertIsInstance(child["execution"], dict, "the fixture is not exercising the case")
+        mode, why = resolve_execution.resolve(self.project, graph, child)
+        self.assertIsInstance(mode, str)
+        self.assertIn(mode, ("inline", "subagent", "background", "team", "worktree",
+                             "dynamic-workflow"))
+
+    def test_the_resolution_persists_on_a_child(self):
+        import resolve_execution
+        graph, child = self.child()
+        resolve_execution.record_resolution(self.project, "SFTP-FEAT-001", child, graph)
+        W.save_graph(self.project, graph)
+        after = W.task(W.load_graph(self.project, "SFTP-FEAT-001"), child["id"])
+        self.assertTrue(after["execution"].get("resolved"))
+        self.assertTrue(after["execution"].get("resolution_reason"))
+
+
+class TestTeamsAreRefusedWhereTheyWouldOverwrite(unittest.TestCase):
+    """Teammates are not worktree-isolated. The documentation is explicit that two
+    of them editing one file overwrite each other and that the only remedy is
+    partitioning by file, so where the tasks have said which files they own, that
+    can be checked rather than trusted."""
+
+    def setUp(self):
+        import resolve_execution
+        self.R = resolve_execution
+        self.graph = {"tasks": [
+            {"id": "T-001", "state": "working", "role": "backend-developer",
+             "owns_paths": ["src/api/handler.py"], "execution": "subagent"},
+            {"id": "T-002", "state": "queued", "role": "solution-architect",
+             "execution": "team", "risk": "HIGH"},
+        ]}
+        self.task = self.graph["tasks"][1]
+
+    def overlap(self, mine, theirs):
+        self.task["owns_paths"] = list(mine)
+        self.graph["tasks"][0]["owns_paths"] = list(theirs)
+        return self.R.overlapping_paths(self.task, [self.graph["tasks"][0]])
+
+    def test_a_shared_file_is_reported(self):
+        self.assertIn("src/api/handler.py",
+                      self.overlap(["src/api/handler.py"], ["src/api/handler.py"]) or "")
+
+    def test_disjoint_files_are_not(self):
+        self.assertIsNone(self.overlap(["src/a.py"], ["src/b.py"]))
+
+    def test_an_undeclared_task_claims_nothing(self):
+        """The absence of a declaration is not evidence of separation."""
+        self.task.pop("owns_paths", None)
+        self.assertIsNone(self.R.overlapping_paths(self.task, [self.graph["tasks"][0]]))
+
+    def test_a_finished_sibling_does_not_count(self):
+        self.graph["tasks"][0]["state"] = "accepted"
+        self.assertIsNone(self.overlap(["src/api/handler.py"], ["src/api/handler.py"]))
+
+
+class TestTheTeamBranchActuallyUsesTheOverlapCheck(unittest.TestCase):
+    """Testing the helper is not testing the rule. This drives resolve() itself
+    with teams genuinely available, which is the only path where the check runs."""
+
+    def setUp(self):
+        import re
+        import resolve_execution
+        self.R = resolve_execution
+        self.project = tempfile.mkdtemp(prefix="aieos-team-")
+        self.addCleanup(shutil.rmtree, self.project, True)
+        os.makedirs(os.path.join(self.project, ".ai-engineering"))
+        src = os.path.join(ROOT, "templates", "project", "project.yaml")
+        with open(src, encoding="utf-8") as fh:
+            cfg = fh.read().replace("    blocking: true", "    blocking: false")
+        cfg = re.sub(r"agent_teams_available:\s*\w+", "agent_teams_available: true", cfg)
+        with open(os.path.join(self.project, ".ai-engineering", "project.yaml"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(cfg)
+        self.previous = os.environ.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS")
+        os.environ["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = "1"
+        self.addCleanup(self.restore)
+        ok, why = self.R.teams_available(self.project)
+        self.assertTrue(ok, "the fixture cannot exercise the team branch: %s" % why)
+
+    def restore(self):
+        if self.previous is None:
+            os.environ.pop("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS", None)
+        else:
+            os.environ["CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"] = self.previous
+
+    def graph_with(self, mine, theirs, sibling_state="working"):
+        return {"tasks": [
+            {"id": "T-001", "state": sibling_state, "role": "backend-developer",
+             "owns_paths": list(theirs), "execution": "subagent"},
+            {"id": "T-002", "state": "queued", "role": "qa-lead", "stage": "NOPIN",
+             "execution": "team", "risk": "HIGH", "owns_paths": list(mine)},
+        ]}
+
+    def test_an_overlapping_team_becomes_a_worktree(self):
+        graph = self.graph_with(["src/api/handler.py"], ["src/api/handler.py"])
+        mode, why = self.R.resolve(self.project, graph, graph["tasks"][1])
+        self.assertEqual(mode, "worktree")
+        self.assertIn("overwrite", why)
+
+    def test_a_disjoint_team_stays_a_team(self):
+        graph = self.graph_with(["src/a.py"], ["src/b.py"], sibling_state="queued")
+        mode, _ = self.R.resolve(self.project, graph, graph["tasks"][1])
+        self.assertEqual(mode, "team")

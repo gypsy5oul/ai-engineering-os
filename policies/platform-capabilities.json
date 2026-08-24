@@ -64,9 +64,11 @@
     },
     "agent_teams": {
       "available": true,
-      "evidence": "contract",
+      "evidence": "documented",
       "experimental": true,
-      "note": "Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS. Print mode carries a full teammate lifecycle (unread-message polling, shutdown_approved handling, team-file removal, shutdown-prompt injection) and --teammate-mode in-process needs no TTY, so the earlier 'interactive only' reading no longer holds at 2.1.241. Still experimental and unverified end to end here; nothing in the lifecycle may depend on it."
+      "note": "Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS, and spawning a teammate requires an interactive session: the documentation states that under -p, including SDK sessions, \"Claude doesn't spawn teammates, and a subagent that Claude names runs as an ordinary subagent even with agent teams enabled\". Teammates are not worktree-isolated, so work given to a team must be partitioned by file. Nothing in the lifecycle may depend on teams.",
+      "corrected": "v0.22 recorded teams as no longer interactive-only, on the strength of print-mode teammate lifecycle strings in the binary and a --teammate-mode in-process flag. That was an over-read: a print-mode session can BE a teammate or manage one, which is not evidence that a print-mode lead can SPAWN one. The earlier reading was right and this file was wrong for four versions. Same error as the PermissionRequest entry, mirrored: there an absence was inferred from a probe that could not have seen it, here a presence was inferred from strings that did not say it.",
+      "cannot_be_detected": "No environment variable distinguishes an interactive session from -p: CLAUDE_CODE_ENTRYPOINT is \"cli\" in both, verified. So resolve_execution.py cannot check interactivity, and the degradation is covered the other way instead -- a team that becomes an ordinary subagent is recorded in execution.actual, and the divergence from execution.resolved is written to the work item history."
     },
     "worktree_isolation": {
       "available": true,
@@ -116,7 +118,63 @@
       "note": "The payload is agent_id and agent_type only: no teammate marker, no isolation flag. So execution.actual can be claimed as `subagent` only where agent teams are off; where the flag is on, a spawn could be either and the task records actual_undetermined instead of guessing.",
       "used_by": "hooks/scripts/inject_context.py observe_actual",
       "load_bearing": true
+    },
+    "agent_frontmatter.documented_and_unused": {
+      "available": true,
+      "evidence": "documented",
+      "note": "The subagent frontmatter supports more than this plugin uses: disallowedTools, maxTurns, memory, background, initialPrompt, and an Agent(type) form in `tools` that restricts which subagents an agent may spawn. All are listed as working normally for plugin agents. `disallowedTools`, `maxTurns`, `memory`, `background` and `initialPrompt` are present in the 2.1.241 binary; the frontmatter path for Agent(type) was not confirmed there, only the internal allowedAgentTypes field.",
+      "why_unused": "The spawn hierarchy is enforced by hooks/scripts/guard_spawn.py, which works and is tested. Replacing a verified enforcement with an unverified one is a regression even when the unverified one is more mechanical. Adopting Agent(type) as a second layer needs the frontmatter path confirmed first.",
+      "load_bearing": false
     }
   },
-  "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent."
+  "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent.",
+  "when_the_docs_and_the_binary_disagree": {
+    "rule": "The installed binary wins, and the disagreement is recorded here rather than resolved silently. Documentation describes intent across versions; the binary is what runs on this machine today.",
+    "checked": "2026-08-24 against https://code.claude.com/docs/en/hooks and https://code.claude.com/docs/en/sub-agents versus 2.1.241",
+    "why_this_section_exists": "Following the published docs on the first row below would reintroduce, exactly, the bug this repository shipped for ten versions: every escalate-tier rule silently allowing the command it describes. A capability model that only reads documentation is not safer than one that reads nothing.",
+    "disagreements": [
+      {
+        "subject": "permissionDecision values",
+        "docs_say": "allow, deny, escalate",
+        "binary_says": "allow, deny, ask, defer. The string \"escalate\" does not appear in the 2.1.241 binary at all, and the runtime throws \"Unknown hook permissionDecision type ... Valid types are: allow, deny, ask, defer\".",
+        "consequence": "A guard following the documentation emits a value the CLI discards, and the tool call proceeds. This is the highest-stakes row here.",
+        "this_plugin": "hooks/lib/hooklib.py maps its internal `escalate` to the wire value `ask`. Correct against the binary."
+      },
+      {
+        "subject": "TaskCompleted / TaskCreated payload",
+        "docs_say": "task_id, task_title, task_result",
+        "binary_says": "task_id, task_subject, task_description, teammate_name, team_name",
+        "consequence": "A hook reading task_title reads nothing.",
+        "this_plugin": "gate_task_completion.py reads task_subject and task_description."
+      },
+      {
+        "subject": "TeammateIdle payload",
+        "docs_say": "teammate_id, teammate_name, teammate_type",
+        "binary_says": "teammate_name and a deprecated team_name. There is no teammate_id.",
+        "consequence": "A teammate cannot be correlated to a task lease by id, because no id is sent. Only a name is available.",
+        "this_plugin": "teammate_idle.py matches by name and acts only on an unambiguous single match."
+      },
+      {
+        "subject": "WorktreeCreate payload",
+        "docs_say": "worktree_path, branch",
+        "binary_says": "name. WorktreeRemove carries worktree_path.",
+        "consequence": "A hook reading worktree_path on create reads nothing.",
+        "this_plugin": "record_worktree.py reads both and records whichever arrives."
+      },
+      {
+        "subject": "SubagentStart output",
+        "docs_say": "hookSpecificOutput: None",
+        "binary_says": "hookEventName:Ht(\"SubagentStart\"),additionalContext:O().optional() -- it is in the output schema, and injection was confirmed on the wire.",
+        "consequence": "Following the docs, nobody would build context injection at all. This plugin's whole briefing path depends on it.",
+        "this_plugin": "inject_context.py returns additionalContext and it arrives."
+      },
+      {
+        "subject": "SubagentStart payload",
+        "docs_say": "agent_id, agent_type, agent_instructions",
+        "binary_says": "agent_id, agent_type. No agent_instructions.",
+        "consequence": "Nothing here depends on it; recorded so a future version adding it is noticed rather than assumed.",
+        "this_plugin": "reads agent_id and agent_type only."
+      }
+    ]
+  }
 }

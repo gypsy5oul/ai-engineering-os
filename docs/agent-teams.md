@@ -7,9 +7,17 @@ below was checked against the current documentation; check again before building
 on it.
 
 - Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings or environment.
-- Teammates are **not** interactive-only. `-p` carries a full teammate lifecycle
-  and `--teammate-mode in-process` needs no TTY, so the earlier reading no longer
-  holds at 2.1.241. It is a contract reading, not an end-to-end run here.
+- **Spawning a teammate requires an interactive session.** Under `-p`, including
+  SDK sessions, a subagent Claude names runs as an ordinary subagent even with
+  teams enabled. v0.22 claimed the opposite here on the strength of print-mode
+  teammate lifecycle strings in the binary; a print-mode session being able to
+  *be* a teammate is not evidence that one can *spawn* one, and the claim was
+  wrong for four versions.
+- **Teammates are not worktree-isolated.** Two of them editing one file overwrite
+  each other, so a team's work has to be partitioned by file. The execution
+  resolver refuses `team` and isolates instead when the tasks declare
+  overlapping `owns_paths` — and says nothing when they declare none, because
+  the absence of a declaration is not evidence of separation.
 - **No nested teams.** A teammate cannot spawn teammates.
 - A teammate's model is **fixed at spawn**. Permission mode is not: every teammate starts in the lead's mode, and individual teammate modes can be changed after spawning, but not set per teammate at spawn time.
 - When a teammate uses a subagent definition, its `tools` and `model` apply, but

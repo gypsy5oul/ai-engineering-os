@@ -3,6 +3,82 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.27.0] — Read the docs; found they disagree with the binary on six points
+
+Audited against the published documentation (code.claude.com/docs) rather than
+against the binary alone, then checked every disagreement against the binary
+that actually runs here.
+
+### The docs and the shipped CLI disagree, and one of them is dangerous
+
+| | docs say | 2.1.241 says |
+| --- | --- | --- |
+| `permissionDecision` | allow, deny, **escalate** | allow, deny, **ask**, defer. The string `"escalate"` appears in the binary **zero times**, and the runtime throws `Valid types are: allow, deny, ask, defer` |
+| `TaskCompleted` payload | task_id, task_title, task_result | task_id, task_subject, task_description, teammate_name, team_name |
+| `TeammateIdle` payload | teammate_id, teammate_name, teammate_type | teammate_name and a deprecated team_name. **No teammate_id** |
+| `WorktreeCreate` payload | worktree_path, branch | name |
+| `SubagentStart` output | hookSpecificOutput: None | `additionalContext` is in the output schema, and injection works |
+| `SubagentStart` payload | + agent_instructions | agent_id and agent_type only |
+
+The first row is the one that matters. A guard written from the documentation
+emits a value the CLI discards and the tool call proceeds — which is precisely
+the bug this repository shipped for ten versions. This plugin is correct against
+the binary on all six, which is luck as much as judgement, and luck is not a
+control.
+
+So `scripts/check_platform_drift.py` now reads the installed binary and fails
+when a load-bearing belief stops holding. It is a grep over minified JavaScript
+and says so: a pattern it cannot find is reported as "could not check", except
+for load-bearing beliefs, where not being able to look is itself the failure. All
+four beliefs were mutation-tested against a doctored binary.
+
+`policies/platform-capabilities.json` records the six disagreements with a rule:
+**the installed binary wins, and the disagreement is written down rather than
+resolved silently.**
+
+### A claim of mine was wrong for four versions
+
+v0.22 recorded agent teams as no longer interactive-only, on the strength of
+print-mode teammate lifecycle strings in the binary. The documentation is
+explicit that under `-p` a named spawn runs as an ordinary subagent — and a
+print-mode session being able to *be* a teammate is not evidence that one can
+*spawn* one. I over-read the binary.
+
+This is the same error as the `PermissionRequest` entry, mirrored: there an
+absence was inferred from a probe that could not have seen it; here a presence
+was inferred from strings that did not say it.
+
+Nothing can detect this at runtime either — `CLAUDE_CODE_ENTRYPOINT` is `cli`
+under both interactive and `-p`, verified — so `teams_available()` no longer
+claims a check it cannot perform, and the degradation is caught after the fact
+in `execution.actual` instead.
+
+### Execution resolution silently did not apply to decomposed tasks
+
+`resolve()` read `task["execution"]` directly. That became an object in v0.23 for
+any task produced by a decomposition, so `declared` was a dict, no rule matched,
+the dict was returned as the mode, and writing it back failed schema validation
+inside a `try/except`. Three versions of decomposed tasks never had their
+execution resolved at all. Found by testing a real decomposed child rather than
+by reading.
+
+### Teams are not worktree-isolated, and now that is checked
+
+The documentation is explicit that two teammates editing one file overwrite each
+other and that the only remedy is partitioning by file. Tasks have declared
+`owns_paths` since v0.25, so the resolver refuses `team` and isolates instead
+when a live sibling's declared paths overlap — and says nothing when neither
+declares any, because the absence of a declaration is not evidence of
+separation.
+
+### Two claims from the audit that did not survive checking
+
+An agent reported `color` and `effort` as unsupported agent frontmatter. Both are
+documented as working normally for plugin agents, and the binary validates
+`effort` in the plugin loader specifically (`has invalid effort '...' or an
+integer`) and reads `color`. No change made. It also suggested `permissionMode`,
+which is one of the three fields explicitly ignored for plugin agents.
+
 ## [0.26.1] — The P0 that was not, and the bug the new invariant found on its first day
 
 A fresh audit reported `plan --force` as logically inverted: a valid graph

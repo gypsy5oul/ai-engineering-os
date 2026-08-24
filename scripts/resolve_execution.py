@@ -50,9 +50,13 @@ def role_can_write(role):
 def teams_available(project):
     """Whether a team could actually spawn here.
 
-    Both halves matter: the environment variable, and an interactive session. A
-    project that declares teams available in a headless run is declaring something
-    the platform will not do.
+    Only one half is checkable. Spawning a teammate also requires an interactive
+    session -- under -p a named spawn runs as an ordinary subagent -- and no
+    environment variable distinguishes the two: CLAUDE_CODE_ENTRYPOINT is "cli"
+    in both. So this checks the flag and the project's declaration, and the
+    undetectable half is covered downstream instead: a team that silently became
+    a subagent is recorded in execution.actual and the divergence goes to the
+    work item history.
     """
     if os.environ.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") != "1":
         return False, "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is not set"
@@ -98,9 +102,33 @@ def project_override(project, stage):
     return ((cfg.get("ai") or {}).get("execution_overrides") or {}).get(stage)
 
 
+def overlapping_paths(task, siblings):
+    """A description of the first file overlap with a live sibling, or None.
+
+    Only what the tasks have declared. A task that names no paths cannot be
+    checked, and this says nothing rather than assuming disjointness -- the
+    absence of a declaration is not evidence of separation.
+    """
+    mine = set(task.get("owns_paths") or [])
+    if not mine:
+        return None
+    for other in siblings:
+        if other["state"] not in ("assigned", "working", "review"):
+            continue
+        shared = mine & set(other.get("owns_paths") or [])
+        if shared:
+            return "%s also edits %s" % (other["id"], ", ".join(sorted(shared)[:3]))
+    return None
+
+
 def resolve(project, graph, task):
     """(mode, why). The first fact that overrules the declaration wins."""
-    declared = task.get("execution", "subagent")
+    # Through the accessor, not the raw field. Since v0.23 `execution` is an
+    # object on any task that came from a decomposition, and reading it directly
+    # made `declared` a dict: no rule matched, the dict was returned as the mode,
+    # and writing it back failed schema validation inside a try/except -- so
+    # execution resolution silently did not apply to decomposed tasks at all.
+    declared = W.declared_execution(task)
     pinned = project_override(project, task.get("stage"))
     if pinned and pinned != declared:
         # The project knows things the workflow author did not: how big the team
@@ -121,6 +149,15 @@ def resolve(project, graph, task):
             return "subagent", ("declared team, resolved to subagent: %s. Nothing in the "
                                 "lifecycle may depend on an experimental, interactive-only "
                                 "feature." % why)
+        # Teammates are not worktree-isolated -- the documentation is explicit
+        # that two of them editing one file overwrite each other, and that the
+        # only remedy is partitioning the work by file. Where the pieces have
+        # said which files they own, that can be checked rather than trusted.
+        clash = overlapping_paths(task, siblings)
+        if clash:
+            return "worktree", ("declared team, resolved to worktree: %s. Teammates share one "
+                                "checkout, so two of them editing one file overwrite each "
+                                "other." % clash)
 
     if declared == "worktree" and not role_can_write(role):
         return "subagent", ("declared worktree, resolved to subagent: %s holds no write tools, "
