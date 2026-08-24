@@ -7,8 +7,8 @@
   "author": {
     "name": "AI Engineering Platform Team"
   },
-  "homepage": "https://gitlab.example.com/ai-engineering/ai-engineering-os",
-  "repository": "https://gitlab.example.com/ai-engineering/ai-engineering-os",
+  "homepage": "https://github.com/gypsy5oul/ai-engineering-os",
+  "repository": "https://github.com/gypsy5oul/ai-engineering-os",
   "license": "Apache-2.0",
   "keywords": [
     "sdlc",

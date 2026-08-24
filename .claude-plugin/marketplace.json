@@ -5,7 +5,7 @@
   "owner": {
     "name": "AI Engineering Platform Team",
     "email": "ai-platform@example.com",
-    "url": "https://gitlab.example.com/ai-engineering"
+    "url": "https://github.com/gypsy5oul/ai-engineering-os"
   },
   "plugins": [
     {
@@ -24,9 +24,8 @@
         "name": "AI Engineering Platform Team"
       },
       "source": {
-        "source": "url",
-        "url": "https://gitlab.example.com/ai-engineering/ai-engineering-os.git",
-        "ref": "ai-engineering-os--v0.27.1"
+        "source": "github",
+        "repo": "gypsy5oul/ai-engineering-os"
       }
     }
   ]
