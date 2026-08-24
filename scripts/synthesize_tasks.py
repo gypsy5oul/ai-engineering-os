@@ -288,6 +288,8 @@ def main():
                     help="a proposal file, or - for stdin")
     ap.add_argument("--proposed-by", help="the agent that produced the proposal")
     ap.add_argument("--dry-run", action="store_true", help="validate and print, write nothing")
+    ap.add_argument("--no-infer", action="store_true",
+                    help="do not ask the repository about the ordering of the new tasks")
     args = ap.parse_args()
 
     project = os.path.abspath(args.project)
@@ -356,6 +358,39 @@ def main():
                                          ", ".join(t.get("produces") or []) or "-"))
     print("\n%s now waits for all of them and keeps the stage's definition of done."
           % parent["id"])
+
+    if args.no_infer:
+        print("\nDependency inference skipped. Run infer_dependencies.py before the children "
+              "are claimed, or two of them may edit one file at the same time.")
+        return 0
+    return infer_after_graft(project, args.item, [t["id"] for t in made])
+
+
+def infer_after_graft(project, item, children):
+    """Ask the repository about the ordering of the tasks just created.
+
+    Part of the pipeline rather than a separate command anyone has to remember.
+    A decomposition is exactly the moment new ordering appears -- several tasks
+    that did not exist a second ago, some of them editing the same files -- and a
+    tool that has to be invoked by hand at precisely that moment will be missed.
+    """
+    import subprocess
+    proc = subprocess.run(
+        [sys.executable, os.path.join(ROOT, "scripts", "infer_dependencies.py"),
+         "--project", project, "--item", item, "--record"],
+        capture_output=True, text=True, timeout=300)
+    body = (proc.stdout or "").strip()
+    if not body:
+        return 0
+    print("\n--- ordering implied by the repository " + "-" * 34)
+    print(body)
+    if proc.returncode != 0:
+        # An inference that refused something is not a failed decomposition: the
+        # children exist and are correct. It is a cycle in the code, and the exit
+        # code says so without pretending the graft did not happen.
+        print("\nThe decomposition stands; the ordering above did not. Fix the cycle, then "
+              "re-run infer_dependencies.py --record.")
+        return 1
     return 0
 
 

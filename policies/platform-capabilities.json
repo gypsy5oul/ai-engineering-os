@@ -95,6 +95,27 @@
       "used_by": "scripts/lib/workitem.py _GraphLock",
       "load_bearing": true,
       "if_absent": "Run one agent at a time, or set concurrency limits to 1 in policies/concurrency-policy.json. Windows is untested."
+    },
+    "hook.TeammateIdle.can_block": {
+      "available": true,
+      "evidence": "contract",
+      "note": "Declared as hook_event_name:Ht(\"TeammateIdle\"),teammate_name:O(),team_name:O() -- team_name is marked deprecated -- and TeammateIdle is in the CLI's blocking set, so exit 2 keeps the teammate working. It carries NO agent_id, which is what a task lease is keyed by, so a teammate can only be matched to a lease by name. hooks/scripts/teammate_idle.py blocks only on an unambiguous single match and is silent otherwise; the name-to-lease correlation is unverified end to end here because it needs a live team.",
+      "used_by": "hooks/scripts/teammate_idle.py",
+      "load_bearing": false
+    },
+    "hook.Worktree.lifecycle": {
+      "available": true,
+      "evidence": "contract",
+      "note": "WorktreeCreate carries `name`; WorktreeRemove carries `worktree_path`. Neither carries a task or an agent, so the events are recorded as evidence that isolation happened during a change and deliberately not bound to a task -- correlating by timing would look like knowledge and be a guess.",
+      "used_by": "hooks/scripts/record_worktree.py",
+      "load_bearing": false
+    },
+    "hook.SubagentStart.identifies_the_spawn_kind": {
+      "available": false,
+      "evidence": "contract",
+      "note": "The payload is agent_id and agent_type only: no teammate marker, no isolation flag. So execution.actual can be claimed as `subagent` only where agent teams are off; where the flag is on, a spawn could be either and the task records actual_undetermined instead of guessing.",
+      "used_by": "hooks/scripts/inject_context.py observe_actual",
+      "load_bearing": true
     }
   },
   "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent."

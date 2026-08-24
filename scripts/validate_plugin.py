@@ -686,9 +686,20 @@ def check_execution_resolution_is_live():
     stop = os.path.join(ROOT, "hooks", "scripts", "observe_subagent.py")
     with open(stop, encoding="utf-8") as fh:
         stop_code = fh.read()
-    if "actual_execution" not in stop_code:
-        err("hooks/scripts/observe_subagent.py does not record execution.actual, so nothing "
-            "can tell a resolution that was honoured from one that was ignored")
+    # `actual` must come from an observation, not from reading `resolved` back.
+    # observe_subagent used to set it to W.effective_execution(held) -- the
+    # resolution it had just loaded -- so the field recorded that the graph agreed
+    # with itself and proved nothing about what ran.
+    if "actual_execution" in stop_code:
+        err("hooks/scripts/observe_subagent.py sets execution.actual. It is written at "
+            "SubagentStart from the event that is evidence a spawn happened; setting it here "
+            "copies the resolution and calls it an observation.")
+    if "observe_actual" not in hook:
+        err("hooks/scripts/inject_context.py does not record execution.actual from the "
+            "SubagentStart event, so nothing can tell a resolution that was honoured from one "
+            "that was ignored")
+    if "actual_evidence" not in hook:
+        err("hooks/scripts/inject_context.py records execution.actual without evidence")
     if "complete_lease" not in stop_code:
         err("hooks/scripts/observe_subagent.py does not use the atomic complete_lease, so the "
             "result write and the lease release are separate transactions and a concurrent "

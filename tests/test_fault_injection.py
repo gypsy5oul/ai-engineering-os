@@ -43,6 +43,7 @@ class TestFaultsAreHandled(unittest.TestCase):
                        "escalation is still open", "withdrawn", "Agent teams are unavailable",
                        "notification channel", "Evidence outside the repository", "hook policy",
                        "decomposition quietly drops", "files that import each other",
+                       "without satisfying its definition of done",
                        "required model", "nobody moves it", "concurrency limit",
                        "untested rollback", "dimension unanswered",
                        "readiness still not ready", "no runbook",
@@ -64,6 +65,10 @@ class TestFaultsDetectRemovedControls(unittest.TestCase):
         # certifying controls they never exercised. They are mutation-tested first
         # because a fault that tests nothing is worse than a missing one: it is
         # counted as coverage.
+        ("F-28", "acceptance stops consulting the definition of done",
+         "scripts/control_loop.py",
+         '    if args.outcome == "accepted":\n        verdict = refuse_unearned_acceptance(args, t)',
+         "    if False:\n        verdict = refuse_unearned_acceptance(args, t)"),
         ("F-27", "import edges stop being inferred", "scripts/infer_dependencies.py",
          "if resolves_to(target, candidate, known_ext):", "if False:"),
         ("F-26", "the coverage rule stops refusing a dropped artifact",

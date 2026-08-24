@@ -220,6 +220,92 @@ What is not checked is whether a decomposition is any *good*. The rules reject
 one that is incoherent with the graph; they cannot reject one that is merely
 poor. That is what the stage's reviewer is for.
 
+## Accepted means the contract was met
+
+There were two authorities on acceptance. The `TaskCompleted` gate evaluated the
+definition of done. `observe --outcome accepted` set the state and evaluated
+nothing. So the durable graph could say a task was accepted while two of its own
+predicates were failing, and the gate could not object because the mutation never
+went near it.
+
+They are one function now — `check_dod.acceptance()` — and both call it:
+
+```
+   observe --outcome accepted            TaskCompleted hook
+              │                                  │
+              └────────► check_dod.acceptance() ◄┘
+                                 │
+     ┌─────────────┬─────────────┴───┬────────────────┐
+  failing      unsupported      unverifiable       passing
+     │             │                 │                │
+  refuse      refuse if HIGH      say so, and       accept
+              or CRITICAL         accept
+```
+
+The four answers are kept apart deliberately, because collapsing them is how a
+gate ends up deciding that everything it could not check has passed:
+
+| | |
+| --- | --- |
+| **failing** | The repository can see this is not done. Never accepted, at any risk. |
+| **unsupported** | The checker cannot answer: an unparseable entry, a predicate the model does not define, a predicate it does define that nothing implements, or an evaluator that raised. **A broken contract, not evidence living elsewhere.** |
+| **unverifiable** | Real evidence that genuinely lives outside the repository — a pipeline result, an approval in the merge request. Reported, and the acceptance says which predicates rested on it. |
+| **passing** | Satisfied here and now. |
+
+`unsupported` used to be indistinguishable from `unverifiable`, and all three of
+its causes were `continue` in the gate — so an invented predicate was a
+definition of done that always passed. It now blocks HIGH and CRITICAL work and
+is reported everywhere else, because refusing every session over a broken
+predicate would make the gate unusable, and silently passing it makes the gate
+pointless.
+
+A parent stands for its pieces: a decomposed stage is not accepted while any of
+its children are open, whatever its own predicates say.
+
+`observe` with any other outcome is not gated. Recording that something failed is
+the loop's own input, and a system that argues about bad news does not get told
+any.
+
+## What ran, as opposed to what was decided
+
+Three values, and the third is the one that is easy to fake:
+
+```yaml
+execution:
+  declared: team                # the workflow asked, before the situation existed
+  resolved: subagent            # the resolver decided, at claim time
+  actual: subagent              # the runtime is evidence it happened
+  actual_evidence: "SubagentStart fired for agent-7"
+```
+
+`actual` was previously set at `SubagentStop` to the resolution the hook had just
+read back, so the field recorded that the graph agreed with itself. It is written
+at `SubagentStart` now, from the event that is evidence a spawn happened, and it
+carries the evidence with it — a claim about the runtime with no observation
+behind it is worse than no claim, because it is counted as one.
+
+The evidence is thin, and the schema says so rather than rounding up.
+`SubagentStart` carries `agent_id` and `agent_type` and nothing else: no teammate
+marker, no isolation flag. So where agent teams are enabled a spawn could be
+either, and the task records `actual_undetermined` with the reason instead of
+guessing. Where they are off, a subagent is the only thing it can have been.
+
+When `resolved` and `actual` disagree, that is recorded too. The resolver records
+and does not compel, so this is the only place the difference between what was
+decided and what happened becomes visible at all.
+
+**An isolated spawn receives no injected context.** The resolver marks those
+`briefing_required`, `next` says so, and the briefing itself comes from the same
+renderer the hook uses:
+
+```bash
+python3 scripts/control_loop.py brief --project . --item ACME-FEAT-001 --task T-021
+```
+
+Two delivery routes, one text. Written twice they would drift, and the isolated
+route is the one nobody would notice drifting: the agent still gets *a* briefing,
+just not the one the hook would have given it.
+
 ## What the repository knows about its own order
 
 `policies/coupling-policy.json` says file disjointness is necessary and not

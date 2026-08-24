@@ -19,6 +19,8 @@ model cannot argue with.
 | `SubagentStop` | — | `observe_subagent.py` | Records what the agent produced against its task, from `last_assistant_message`, rather than trusting the agent to report it |
 | `SubagentStop` | — | `check_artifacts.py` | The same check when a delegated task ends |
 | `TaskCompleted` | — | `gate_task_completion.py` | Exit 2 blocks a task closing while its definition of done is unmet |
+| `TeammateIdle` | — | `teammate_idle.py` | Refuses idle while the teammate still holds an unaccepted task, when the name matches exactly one lease |
+| `WorktreeCreate` / `WorktreeRemove` | — | `record_worktree.py` | Records that isolation happened during this change; the payload names no task, so it is not bound to one |
 | `SessionStart` | `startup\|resume\|clear\|compact\|fork` | `session_context.py` | Organization presence and project configuration status |
 
 ## The one place the lifecycle is enforced

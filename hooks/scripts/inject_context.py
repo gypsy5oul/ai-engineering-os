@@ -31,10 +31,12 @@ sys.path.insert(0, LIB)
 import hooklib as H  # noqa: E402
 
 sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts", "lib"))
+sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts"))
+import briefing  # noqa: E402
+import workitem as W  # noqa: E402
 
 
 def build(project, agent_type, agent_id=None, session=None):
-    import workitem as W
     wid = W.active_item(project, session, H.plugin_data_dir())
     if not wid:
         return None
@@ -43,63 +45,44 @@ def build(project, agent_type, agent_id=None, session=None):
         return None
     graph = W.load_graph(project, wid) or {"tasks": []}
 
-    lines = ["## Your work item", "",
-             "%s (%s, %s risk, stage %s)" % (item["id"], item["type"], item["risk"],
-                                             item.get("stage", "?")),
-             "",
-             "**Intent, in the requester's words:** %s" % item["intent"],
-             "**Objective, as the organization understood it:** %s" % item["objective"],
-             ""]
-
     # Claim exactly one task for this agent. Matching on role alone briefed an
     # agent on every task its role owned, and two agents on the same one.
     claimed = W.claim(project, wid, agent_type, agent_id, session) if agent_id else None
     if claimed is not None:
-        resolve_and_record(project, wid, claimed)
-    mine = [claimed] if claimed else []
-    if mine:
-        lines.append("## Your task")
-        lines.append("")
-        for t in mine:
-            lines.append("**%s — %s**" % (t["id"], t["title"]))
-            if t.get("produces"):
-                lines.append("- Must produce: %s" % ", ".join(t["produces"]))
-            if t.get("definition_of_done"):
-                lines.append("- Definition of done: %s" % "; ".join(t["definition_of_done"]))
-            if t.get("reviewer"):
-                lines.append("- Reviewed by: %s" % t["reviewer"])
-            if t.get("coupled_surface"):
-                lines.append("- Touches the **%s** surface. It has an owner; if the contract is "
-                             "wrong, raise it rather than changing it." % t["coupled_surface"])
-            ex = t.get("execution") if isinstance(t.get("execution"), dict) else {}
-            if ex.get("resolved") and ex["resolved"] != ex.get("declared"):
-                lines.append("- Execution: declared `%s`, resolved to `%s` — %s"
-                             % (ex.get("declared"), ex["resolved"],
-                                (ex.get("resolution_reason") or "")[:120]))
-            attempts = t.get("attempts", 0)
-            if attempts:
-                lines.append("- Attempt %d of %d. Previously: %s"
-                             % (attempts + 1, t.get("max_attempts", 3),
-                                t.get("result") or "no detail recorded"))
-            lines.append("")
-
-    blocked = [t for t in graph.get("tasks", []) if t["state"] in ("blocked", "escalated")]
-    if blocked:
-        lines.append("## Blocked elsewhere in this change")
-        for t in blocked:
-            lines.append("- %s (%s): %s" % (t["id"], t["state"],
-                                            t.get("blocked_reason") or "no reason recorded"))
-        lines.append("")
-
-    if item.get("replans"):
-        lines.append("This work has been replanned %d time(s). The history is in "
-                     "`.ai-engineering/work/%s/history.jsonl`, and the reasons matter: "
-                     "repeating a superseded approach is the failure mode here."
-                     % (item["replans"], item["id"]))
-    return "\n".join(lines).strip()
+        resolve_and_record(project, wid, claimed, agent_id)
+        graph = W.load_graph(project, wid) or graph
+        claimed = W.task(graph, claimed["id"])
+    return briefing.render(item, claimed, graph)
 
 
-def resolve_and_record(project, wid, task):
+def observe_actual(project, wid, task, agent_id):
+    """Record what the runtime actually did, or why that cannot be determined."""
+    # The environment alone, not resolve_execution.teams_available(), which also
+    # asks whether the project expects teams. That is the right question when
+    # deciding what to spawn and the wrong one here: if the flag is on, a named
+    # spawn becomes a teammate whatever project.yaml says, so a spawn observed in
+    # that environment could be either.
+    teams_on = os.environ.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") == "1"
+    evidence = "SubagentStart fired for %s" % (agent_id or "an unnamed agent")
+    if teams_on:
+        # A teammate spawn and a subagent spawn look the same from here.
+        W.set_execution(task, actual_evidence=evidence,
+                        actual_undetermined="agent teams are enabled in this environment and "
+                                            "SubagentStart does not distinguish a teammate from "
+                                            "a subagent")
+    else:
+        W.set_execution(task, actual="subagent", actual_evidence=evidence)
+    resolved = (task.get("execution") or {}).get("resolved")
+    actual = (task.get("execution") or {}).get("actual")
+    if actual and resolved and actual != resolved:
+        # The resolver records and does not compel, so this is the only place the
+        # difference between what was decided and what happened becomes visible.
+        W.record(project, wid, "execution_diverged", task=task["id"],
+                 resolved=resolved, actual=actual, evidence=evidence,
+                 why="the spawn did not use the mode the resolver decided")
+
+
+def resolve_and_record(project, wid, task, agent_id=None):
     """Resolve how this task should run, and write the answer onto the task.
 
     The resolver was correct and standalone: execution-policy.json named it as its
@@ -112,17 +95,21 @@ def resolve_and_record(project, wid, task):
     try:
         # workitem is imported inside build(), not at module scope, so this needs
         # its own import rather than the caller's name.
-        sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts"))
-        sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts", "lib"))
         import resolve_execution
-        import workitem as W
         graph = W.load_graph(project, wid)
         live = W.task(graph, task["id"])
         result = resolve_execution.record_resolution(project, wid, live, graph)
         if result is None:
             return None
+        # SubagentStart firing is evidence that this task ran as a hook-visible
+        # spawn. It is not evidence of which kind: the payload carries agent_id
+        # and agent_type and nothing else -- no teammate marker, no isolation
+        # flag -- so the mode is claimed only where the environment makes it
+        # unambiguous, and the reason is recorded where it does not.
+        observe_actual(project, wid, live, agent_id)
         W.save_graph(project, graph)
         task["execution"] = live["execution"]
+
         mode, why = result
         if mode != W.declared_execution(live):
             W.record(project, wid, "execution_resolved", task=task["id"],

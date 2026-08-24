@@ -41,6 +41,10 @@ python3 scripts/inject_faults.py | tail -3
 step "Liveness policy"
 python3 scripts/check_liveness.py --project . >/dev/null && echo "checker runs; thresholds validated by tests"
 
+step "Task graph semantics"
+python3 scripts/validate_graph_semantics.py --project . >/dev/null && \
+  echo "invariants hold for every work item in this repository (none is normal here)"
+
 step "Deterministic evaluations"
 python3 scripts/run_evaluations.py
 

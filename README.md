@@ -74,7 +74,7 @@ Three separations do the real work:
 | --- | --- |
 | **30 agents** | An optimized organization: product, architecture, UX, engineering, data, QA, security, platform, release, SRE, incident, documentation, AI governance, and five independent specialist reviewers. |
 | **33 skills** | Reusable capabilities from requirements engineering to root cause analysis. Technology-neutral. |
-| **7 hook events** | Command, write and spawn guards, context injection, result observation, a completion gate and a session self-test. 45 command rules, **risk-tiered failure** so a broken policy file cannot open the guard, and a self-test at session start. |
+| **10 hook events** | Command, write and spawn guards, context injection, result observation, a completion gate, a teammate-idle gate, worktree lifecycle recording and a session self-test. 45 command rules, **risk-tiered failure** so a broken policy file cannot open the guard, and a self-test at session start. |
 | **7 department cycles** | Level 2: human owner → agent head → lead → worker → peer review → rework → accept → rollup. A macro stage cannot advance until its department's internal loop reaches ACCEPTED. |
 | **9 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
 | **28 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution mode, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
@@ -267,7 +267,7 @@ Read in this order and each one builds on the last.
 
 ## Status
 
-Version 0.25.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
+Version 0.26.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
 evaluated on its deterministic cases, and not yet promoted to `production`.
 Promotion requires a human governance decision per `GOVERNANCE.md`.
 

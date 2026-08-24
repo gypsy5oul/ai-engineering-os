@@ -839,6 +839,63 @@ def f27(project):
     return True, "ordered %s after %s, evidenced by the import" % (service, model)
 
 
+@fault("F-28", "A task is declared accepted without satisfying its definition of done",
+       "the acceptance is refused: the durable graph cannot say done without the evidence")
+def f28(project):
+    """The last place a determined agent could make the organization lie.
+
+    The completion gate evaluated the definition of done; `observe --outcome
+    accepted` set the state and evaluated nothing. Two authorities on the same
+    question, and the second never went near the first.
+    """
+    import subprocess
+    loop = os.path.join(ROOT, "scripts", "control_loop.py")
+    opened = subprocess.run([sys.executable, loop, "open", "--project", project,
+                             "--type", "feature", "--risk", "HIGH",
+                             "--intent", "Acceptance without the evidence to support it"],
+                            capture_output=True, text=True, timeout=120)
+    if opened.returncode != 0:
+        return False, "could not open a work item: %s" % (opened.stderr or opened.stdout)[:120]
+    item = opened.stdout.split()[0]
+    if subprocess.run([sys.executable, loop, "plan", "--project", project, "--item", item],
+                      capture_output=True, timeout=120).returncode != 0:
+        return False, "could not plan"
+
+    graph = W.load_graph(project, item)
+    target = None
+    for t in graph["tasks"]:
+        if not t.get("definition_of_done"):
+            continue
+        if check_dod.acceptance(project, t, change=item)["failing"]:
+            target = t
+            break
+    if target is None:
+        return False, "no task in the plan has a failing predicate to accept over"
+
+    r = subprocess.run([sys.executable, loop, "observe", "--project", project, "--item", item,
+                        "--task", target["id"], "--outcome", "accepted"],
+                       capture_output=True, text=True, timeout=120)
+    if r.returncode == 0:
+        return False, ("%s was accepted with a failing definition of done" % target["id"])
+    if W.task(W.load_graph(project, item), target["id"])["state"] == "accepted":
+        return False, "refused and the graph was mutated anyway"
+
+    # And an unanswerable predicate is not a satisfied one either.
+    graph = W.load_graph(project, item)
+    probe = next(t for t in graph["tasks"] if t["id"] != target["id"] and t["state"] == "queued")
+    probe["definition_of_done"] = ["looks_fine(REQ)"]
+    probe["risk"] = "HIGH"
+    probe["depends_on"] = []
+    W.save_graph(project, graph)
+    r2 = subprocess.run([sys.executable, loop, "observe", "--project", project, "--item", item,
+                         "--task", probe["id"], "--outcome", "accepted"],
+                        capture_output=True, text=True, timeout=120)
+    if r2.returncode == 0:
+        return False, ("a predicate nothing can evaluate was treated as satisfied on "
+                       "HIGH-risk work")
+    return True, "refused both the failing contract and the unanswerable one"
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--fault", action="append", help="run only these fault ids")

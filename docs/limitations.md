@@ -93,6 +93,20 @@ calls proceed — fail-open, by design, but worth knowing.
 **Windows is untested**, and one thing is known to differ rather than merely
 untried: `fcntl` is absent, so concurrent claims are not serialised. See above.
 
+**What ran is only as observable as the payload allows.** `execution.actual` is
+recorded from `SubagentStart`, which carries an agent id and an agent type and
+nothing else. Where agent teams are enabled that does not distinguish a teammate
+from a subagent, so the task records `actual_undetermined` rather than a mode.
+`TeammateIdle` carries a teammate name and no agent id, so a teammate is matched
+to a task lease by name and only an unambiguous single match is acted on.
+`WorktreeCreate` and `WorktreeRemove` carry no task at all, so they are recorded
+as evidence that isolation happened during a change and never bound to a task.
+
+**The resolver records and does not compel.** A `PreToolUse` hook can refuse a
+spawn and cannot rewrite one, so a resolved execution mode is a decision with
+evidence, not a mechanically enforced one. The divergence is recorded when it
+happens, which is the most the platform allows.
+
 **Concurrent claims are serialised only where `fcntl` exists.** Two agents
 spawning at once are two processes reading and writing one graph, and
 `scripts/lib/workitem.py` serialises that with `fcntl.flock`. Where the import

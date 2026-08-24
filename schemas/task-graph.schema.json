@@ -140,6 +140,14 @@
                   "briefing_required": {
                     "type": "boolean",
                     "description": "The resolved mode isolates the spawn, and an isolated spawn does not receive SubagentStart's additionalContext. The task briefing has to travel in the spawn prompt instead."
+                  },
+                  "actual_evidence": {
+                    "type": "string",
+                    "description": "The runtime event that determined `actual`. Without this, `actual` is a copy of `resolved` wearing a different name -- which is what it was: observe_subagent set actual to the resolution it had just read back, so the field proved the graph agreed with itself."
+                  },
+                  "actual_undetermined": {
+                    "type": "string",
+                    "description": "Why the runtime evidence could not name the mode. SubagentStart carries only agent_id and agent_type -- no teammate marker, no isolation flag -- so where teams are enabled a spawn could be either and this says so instead of guessing."
                   }
                 }
               }

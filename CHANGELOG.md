@@ -3,6 +3,111 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.26.0] — Accepted means the contract was met
+
+Two P0s, both about the same thing: the last places where the durable graph could
+say a task was done without the evidence supporting it.
+
+### There were two authorities on acceptance
+
+The `TaskCompleted` gate evaluated the definition of done. `observe --outcome
+accepted` set the state and evaluated nothing. Reproduced against a real plan:
+
+```
+task T-003  risk HIGH
+   artifact_exists(FEAS)            -> FAIL
+   required_fields_present(FEAS)    -> FAIL
+
+$ control_loop.py observe --project . --item SFTP-FEAT-001 --task T-003 --outcome accepted
+SFTP-FEAT-001 T-003 -> accepted
+```
+
+The gate could not object because the mutation never went near it. Both paths now
+call one function, `check_dod.acceptance()`, so they cannot reach different
+conclusions about the same task. A parent is refused while any of its children
+are open, whatever its own predicates say. Every other outcome stays ungated:
+recording that something failed is the loop's own input, and a system that argues
+about bad news does not get told any.
+
+### An unanswerable predicate is not a satisfied one
+
+Three ways a predicate could go unevaluated, and all three were `continue`:
+an unparseable entry, a predicate the model does not define, and an evaluator
+that raised. A fourth was subtler — a predicate the model **does** declare and
+nothing implements fell through to `REQUIRES-EVIDENCE`, which made a gap in the
+checker indistinguishable from evidence that legitimately lives in GitLab.
+
+There are four answers now, kept apart on purpose:
+
+| | |
+| --- | --- |
+| **failing** | The repository can see it is not done. Never accepted, at any risk. |
+| **unsupported** | The checker cannot answer. A broken contract. Blocks HIGH and CRITICAL; reported below. |
+| **unverifiable** | Real evidence outside the repository. Reported, and the acceptance says which predicates rested on it. |
+| **passing** | Satisfied here and now. |
+
+Collapsing them is how a gate ends up deciding that everything it could not check
+has passed.
+
+### `actual` execution was a copy of `resolved` wearing another name
+
+`observe_subagent` set `execution.actual` to `W.effective_execution(held)` — the
+resolution it had just loaded — so the field recorded that the graph agreed with
+itself and proved nothing about what ran.
+
+It is written at `SubagentStart` now, from the event that is evidence a spawn
+happened, and carries `actual_evidence` naming it. The evidence is thin and the
+schema says so rather than rounding up: `SubagentStart` carries `agent_id` and
+`agent_type` and nothing else, so where agent teams are enabled a spawn could be
+a teammate or a subagent and the task records `actual_undetermined` with the
+reason. A divergence between `resolved` and `actual` is recorded, which is the
+only place the difference between what was decided and what happened is visible
+at all.
+
+### `briefing_required` was set by the resolver and read by nobody
+
+An isolated spawn receives no injected context — the resolver has flagged that
+since 0.23, and nothing consumed the flag, so an isolated worker ran on its role
+definition and never learned what it was for. `next` now names those tasks and
+`control_loop.py brief` renders the briefing from the same renderer the hook
+uses. Two delivery routes, one text: written twice they would drift, and the
+isolated route is the one nobody would notice drifting.
+
+### Dependency inference is part of the pipeline, not a tool to remember
+
+`synthesize_tasks.py` runs it after a successful graft. A decomposition is
+exactly the moment new ordering appears — several tasks that did not exist a
+second ago, some editing the same files — and a tool that must be invoked by hand
+at precisely that moment will be missed.
+
+### One place for the invariants a schema cannot express
+
+`validate_graph_semantics.py`. Parent exists and is not itself; one agent holds
+one task; one native task binds to one graph task; a terminal task holds no
+lease; `actual` requires evidence and is not both known and unknown; an accepted
+task satisfied its contract; an accepted parent has accepted children; a derived
+dependency points at a real task and was actually applied; the graph is acyclic.
+
+These checks existed, spread across `workitem.py`, `control_loop.py`, the hooks
+and five test files — which means the next field added to the graph would be
+missed by whichever of those nobody thought about. Nine deliberate violations,
+nine findings, and it runs in the gate.
+
+### Also
+
+`TeammateIdle` is registered: an agent that stopped talking has not necessarily
+finished. It blocks idle while the teammate still holds an unaccepted task — but
+only on an unambiguous single match, because the payload carries `teammate_name`
+and no `agent_id`, and a lease is keyed by agent id. Nagging on a guess teaches
+people to ignore the hook.
+
+`WorktreeCreate` and `WorktreeRemove` are recorded as evidence that isolation
+happened during a change, and deliberately not bound to a task: the payload names
+none, and correlating by timing would look like knowledge and be a guess.
+
+The native-task binding in the completion gate is now atomic. It was a bare
+load-modify-save, and several tasks can complete at once.
+
 ## [0.25.0] — Asking the repository what order its work has to happen in
 
 `policies/coupling-policy.json` has said, since the beginning, that file

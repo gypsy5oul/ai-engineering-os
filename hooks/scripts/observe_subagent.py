@@ -64,10 +64,14 @@ def main():
         # time, edit, save, and release -- three separate lock scopes, so a
         # concurrent claim landing between them was overwritten. That is the same
         # lost update the lease exists to prevent, arriving one door further along.
+        # `actual` is NOT set from here. It used to be set to
+        # W.effective_execution(held) -- the resolution this hook had just read
+        # back -- so the field recorded that the graph agreed with itself and
+        # proved nothing about what ran. It is written at SubagentStart, from the
+        # event that is actual evidence a spawn happened.
         t = W.complete_lease(
             project, wid, agent_id,
-            result=message[:400] or "(the agent stopped without a result)",
-            actual_execution=W.effective_execution(held))
+            result=message[:400] or "(the agent stopped without a result)")
         if t is None:
             W.record(project, wid, "subagent_stopped_unattributed", agent=agent_type,
                      agent_id=agent_id,

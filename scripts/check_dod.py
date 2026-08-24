@@ -189,6 +189,79 @@ def _stream_states(rollup):
     return out
 
 
+# The four answers a definition of done can give, and why they are four and not
+# two. A gate that collapses them decides that everything it could not check has
+# passed -- which is the failure mode this repository is arranged against.
+ACCEPTANCE_STATES = ("PASS", "FAIL", "REQUIRES-EVIDENCE", "UNSUPPORTED")
+
+
+def classify(entry, m=None):
+    """Is this definition-of-done entry something the checker can answer at all?
+
+    Returns (fn, args, problem). `problem` is None when the entry names a real
+    predicate with the right arity, and otherwise says what is wrong with it. An
+    unparseable or unknown entry is silently skipped by the evaluator, which makes
+    it a definition of done that always passes.
+    """
+    m = m or model()
+    fn, args = parse_predicate(entry)
+    if fn is None:
+        return None, None, "%r is not a predicate call" % entry
+    spec = (m.get("dod_predicates") or {}).get(fn)
+    if spec is None:
+        return fn, args, "%r is not a predicate in the artifact model" % fn
+    wanted = len(spec.get("args") or [])
+    if len(args or []) != wanted:
+        return fn, args, ("%s takes %d argument(s) and was called with %d"
+                          % (fn, wanted, len(args or [])))
+    return fn, args, None
+
+
+def acceptance(project, task, change=None, artifacts=None):
+    """Whether this task's contract is satisfied, and what could not be answered.
+
+    The single authority on acceptance. It exists because there were two: the
+    completion gate evaluated the definition of done, and `observe --outcome
+    accepted` set the state without evaluating anything, so the durable graph
+    could say a task was accepted while two of its predicates were failing.
+
+    Returns a dict with four lists. They are kept apart deliberately:
+
+      failing        the repository can see this is not done
+      unsupported    the checker cannot answer -- a broken contract, not evidence
+      unverifiable   real evidence that genuinely lives outside the repository
+      passing        satisfied here and now
+    """
+    out = {"failing": [], "unsupported": [], "unverifiable": [], "passing": []}
+    dod = task.get("definition_of_done") or []
+    if not dod:
+        return out
+    if artifacts is None:
+        artifacts = load_artifacts(project)
+        if change:
+            artifacts = scope_to_change(artifacts, change)
+    m = model()
+    for entry in dod:
+        fn, args, problem = classify(entry, m)
+        if problem:
+            out["unsupported"].append("%s -- %s" % (entry, problem))
+            continue
+        try:
+            status, detail = evaluate(fn, args, artifacts, project)
+        except Exception as exc:
+            out["unsupported"].append("%s -- the evaluator raised %r" % (entry, exc))
+            continue
+        if status == "FAIL":
+            out["failing"].append("%s -- %s" % (entry, detail[:90]))
+        elif status == "UNSUPPORTED":
+            out["unsupported"].append("%s -- %s" % (entry, detail[:90]))
+        elif status == "REQUIRES-EVIDENCE":
+            out["unverifiable"].append("%s -- %s" % (entry, detail[:90]))
+        else:
+            out["passing"].append(entry)
+    return out
+
+
 def scope_to_change(artifacts, change):
     """Narrow a project's artifacts to one unit of work.
 
@@ -636,7 +709,11 @@ def evaluate(fn, args, artifacts, project):
         return "REQUIRES-EVIDENCE", ("needs the project's own test run, findings list or written "
                                      "record; not derivable from artifact headers alone")
 
-    return "REQUIRES-EVIDENCE", "no evaluator implemented for %s" % fn
+    # A predicate the model declares and nothing evaluates is a broken contract,
+    # not a piece of evidence living elsewhere. Saying REQUIRES-EVIDENCE here made
+    # the two indistinguishable, and the gate treated both as "not a failure".
+    return "UNSUPPORTED", ("no evaluator implemented for %s. This is a gap in the checker, "
+                           "not evidence held somewhere else." % fn)
 
 
 def run(workflow_id, stage_id, project, change=None):

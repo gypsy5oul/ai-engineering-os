@@ -388,6 +388,32 @@ def graft(graph, parent_id, children, mode="proposed", rationale=None, proposed_
     return made
 
 
+def bind_native_task(project, wid, task_id, native_task):
+    """Associate a Claude task id with a graph task, under the graph lock.
+
+    The completion gate discovered the association from a subject line and wrote
+    it back with a bare load-modify-save. Several tasks can complete at once, and
+    two of those writes overlap: one binding survives and the other is lost, so
+    the next completion falls back to matching prose again.
+    """
+    with _GraphLock(project, wid):
+        graph = load_graph(project, wid)
+        if not graph:
+            return None
+        t = task(graph, task_id)
+        if t is None or t.get("native_task") == native_task:
+            return t
+        clash = next((x for x in graph.get("tasks", [])
+                      if x["id"] != task_id and x.get("native_task") == native_task), None)
+        if clash is not None:
+            # One native task belongs to one graph task. Rebinding it would make
+            # a completion close work it was never about.
+            return None
+        t["native_task"] = native_task
+        save_graph(project, graph)
+        return t
+
+
 def children_of(graph, parent_id):
     return [t for t in graph.get("tasks", []) if t.get("parent") == parent_id]
 

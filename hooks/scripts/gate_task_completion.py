@@ -31,35 +31,21 @@ import hooklib as H  # noqa: E402
 sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts", "lib"))
 
 
-def failing_predicates(project, task, change=None):
-    """Predicates of this task's definition of done that FAIL right now.
+def contract(project, task, change=None):
+    """Ask the one acceptance authority whether this task's contract is met.
 
-    Evidence that cannot be seen from here is not a failure. A GitLab pipeline
-    result is unknowable offline, and blocking on it would make the gate
-    unusable rather than strict.
+    This used to evaluate the definition of done itself and drop three things on
+    the floor: an unparseable entry, a predicate the model does not define, and an
+    evaluator that raised. All three were `continue`, so the gate saw no failure
+    and allowed the completion -- an unknown predicate was a definition of done
+    that always passed. Same evaluation as `observe --outcome accepted`, because
+    two acceptance authorities is how the durable graph came to disagree with the
+    gate in the first place.
     """
-    dod = task.get("definition_of_done") or []
-    if not dod:
-        return []
     sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts"))
+    sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts", "lib"))
     import check_dod
-    artifacts = check_dod.load_artifacts(project)
-    if change:
-        # The one gate that actually blocks was the one place that never scoped.
-        # Unscoped, a finished change's artifacts satisfy a new change's task.
-        artifacts = check_dod.scope_to_change(artifacts, change)
-    out = []
-    for entry in dod:
-        fn, args = check_dod.parse_predicate(entry)
-        if fn is None:
-            continue
-        try:
-            status, detail = check_dod.evaluate(fn, args, artifacts, project)
-        except Exception:
-            continue
-        if status == "FAIL":
-            out.append("%s -- %s" % (entry, detail[:80]))
-    return out
+    return check_dod.acceptance(project, task, change=change)
 
 
 TASK_MARKER = re.compile(r"\bT-[0-9]{3,}\b")
@@ -99,25 +85,46 @@ def main():
         # have to re-derive the association from prose.
         if task_id and held.get("native_task") != task_id:
             try:
-                held["native_task"] = task_id
-                W.save_graph(project, graph)
+                W.bind_native_task(project, wid, held["id"], task_id)
             except Exception:
                 pass
 
-        failing = failing_predicates(project, held, change=wid)
-        if not failing:
+        result = contract(project, held, change=wid)
+        failing, unsupported = result["failing"], result["unsupported"]
+        high = str(risk).upper() in ("HIGH", "CRITICAL")
+
+        # An entry the checker cannot answer is not a satisfied one. On HIGH and
+        # CRITICAL work that difference is the whole point of having a gate; below
+        # it, refusing every session over a broken predicate would make the gate
+        # unusable, so it is allowed and recorded.
+        blocking = list(failing)
+        if unsupported and high:
+            blocking += unsupported
+
+        if not blocking:
             W.record(project, wid, "task_completion_allowed", task=held["id"],
-                     native_task=task_id)
+                     native_task=task_id, unsupported=unsupported,
+                     unverifiable=result["unverifiable"])
+            if unsupported:
+                sys.stderr.write(
+                    "[ai-engineering-os] %s completed with %d predicate(s) its definition of "
+                    "done could not answer:\n  - %s\nThese were not checked. Fix them; an "
+                    "unanswerable predicate is not a satisfied one.\n"
+                    % (held["id"], len(unsupported), "\n  - ".join(unsupported)))
             sys.exit(0)
 
         W.record(project, wid, "task_completion_blocked", task=held["id"],
-                 native_task=task_id, failing=failing)
+                 native_task=task_id, failing=failing, unsupported=unsupported, risk=risk)
         sys.stderr.write(
-            "[ai-engineering-os] %s cannot be completed: %d predicate(s) of its definition "
-            "of done fail.\n  - %s\n"
+            "[ai-engineering-os] %s cannot be completed.\n%s%s"
             "Fix these, or record the outcome with `control_loop.py observe --outcome failed` "
             "so the loop can decide whether to retry, rework or escalate.\n"
-            % (held["id"], len(failing), "\n  - ".join(failing)))
+            % (held["id"],
+               ("  %d predicate(s) of its definition of done fail:\n  - %s\n"
+                % (len(failing), "\n  - ".join(failing))) if failing else "",
+               ("  %d predicate(s) could not be answered at all, and this is %s-risk work:\n"
+                "  - %s\n" % (len(unsupported), risk, "\n  - ".join(unsupported)))
+               if unsupported and high else ""))
         sys.exit(2)
     except SystemExit:
         raise

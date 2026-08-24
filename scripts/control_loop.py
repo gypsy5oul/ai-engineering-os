@@ -336,10 +336,118 @@ def cmd_next(args):
         return 1
 
     print("%s: %d runnable" % (args.item, len(ready)))
+    needs_briefing = []
     for t in ready:
-        print("  %-6s %-30s %-22s %s" % (t["id"], t["title"][:30], t["role"], t["execution"]))
+        ex = t.get("execution") if isinstance(t.get("execution"), dict) else {}
+        mode = ex.get("resolved") or W.declared_execution(t)
+        print("  %-6s %-30s %-22s %s" % (t["id"], t["title"][:30], t["role"], mode))
+        if ex.get("briefing_required"):
+            needs_briefing.append(t["id"])
+    if needs_briefing:
+        # The resolver has been setting this flag since 0.23 and nothing read it.
+        # An isolated spawn receives no additionalContext, so without this the
+        # worker runs on its role definition and never learns what it was for.
+        print("\nThese resolve to an isolated spawn, which receives no injected context. "
+              "Put the briefing in the prompt:")
+        for tid in needs_briefing:
+            print("  python3 scripts/control_loop.py brief --project . --item %s --task %s"
+                  % (args.item, tid))
     if stuck:
         print("\nUnreachable: %s" % ", ".join(stuck))
+    return 0
+
+
+def refuse_unearned_acceptance(args, t):
+    """None when this task may be accepted, or an exit code when it may not.
+
+    Uses the same evaluation as the completion gate, from the same function, so
+    the two cannot reach different conclusions about the same task.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    import check_dod
+    try:
+        result = check_dod.acceptance(args.project, t, change=args.item)
+    except Exception as exc:
+        # The checker breaking is not evidence that the work is done. Tiered the
+        # same way every other guard here is.
+        risk = str(t.get("risk", "MEDIUM")).upper()
+        if risk in ("HIGH", "CRITICAL"):
+            print("REFUSED: the acceptance check could not run for this %s-risk task (%r), and "
+                  "that is not the same as passing." % (risk, exc))
+            return 1
+        print("WARNING: the acceptance check could not run (%r). Accepting anyway because this "
+              "is %s-risk work; the failure is in the audit log." % (exc, risk))
+        return None
+
+    risk = str(t.get("risk", "MEDIUM")).upper()
+    high = risk in ("HIGH", "CRITICAL")
+    blocking = list(result["failing"])
+    if result["unsupported"] and high:
+        blocking += result["unsupported"]
+
+    if blocking:
+        print("REFUSED: %s has not satisfied its definition of done." % t["id"])
+        for line in result["failing"]:
+            print("  fails      %s" % line)
+        if result["unsupported"] and high:
+            for line in result["unsupported"]:
+                print("  unanswered %s" % line)
+            print("\n  An unanswerable predicate is not a satisfied one, and this is %s-risk "
+                  "work." % risk)
+        print("\nRecord what actually happened instead -- `--outcome failed`, `rejected` or "
+              "`blocked` -- and let `decide` choose between retry, rework, replan and escalate.")
+        W.record(args.project, args.item, "acceptance_refused", task=t["id"],
+                 failing=result["failing"], unsupported=result["unsupported"], risk=risk)
+        return 1
+
+    # A parent stands for its children. Accepting it while they are unfinished
+    # would close a stage over work that has not happened.
+    graph = W.load_graph(args.project, args.item)
+    open_children = [c["id"] for c in W.children_of(graph, t["id"])
+                     if c["state"] != "accepted"]
+    if open_children:
+        print("REFUSED: %s was decomposed, and %d of its tasks have not been accepted: %s"
+              % (t["id"], len(open_children), ", ".join(open_children)))
+        print("The stage stands for its pieces. Accept them first.")
+        W.record(args.project, args.item, "acceptance_refused", task=t["id"],
+                 open_children=open_children)
+        return 1
+
+    if result["unsupported"]:
+        print("  %d predicate(s) could not be answered at all: %s"
+              % (len(result["unsupported"]), "; ".join(result["unsupported"])))
+        print("  Accepted because this is %s-risk work. Fix them; an unanswerable predicate is "
+              "not a satisfied one." % risk)
+    if result["unverifiable"]:
+        print("  %d predicate(s) rest on evidence outside the repository: %s"
+              % (len(result["unverifiable"]),
+                 "; ".join(e.split(" -- ")[0] for e in result["unverifiable"])))
+    W.record(args.project, args.item, "acceptance_checked", task=t["id"],
+             passing=result["passing"], unsupported=result["unsupported"],
+             unverifiable=result["unverifiable"], risk=risk)
+    return None
+
+
+def cmd_brief(args):
+    """Print the briefing for a task, for a spawn that will not be injected into.
+
+    `SubagentStart` delivers this as additionalContext. An isolated spawn does not
+    receive that, so the briefing has to travel in the prompt -- and until this
+    existed, `briefing_required` was set by the resolver and read by nobody, which
+    meant an isolated worker silently ran on its role definition alone.
+    """
+    item = W.load_item(args.project, args.item)
+    graph = W.load_graph(args.project, args.item)
+    if item is None or graph is None:
+        print("ERROR %s has no work item or graph." % args.item)
+        return 2
+    task = W.task(graph, args.task) if args.task else None
+    if args.task and task is None:
+        print("ERROR no task %s" % args.task)
+        return 2
+    sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+    import briefing
+    print(briefing.render(item, task, graph))
     return 0
 
 
@@ -357,6 +465,17 @@ def cmd_observe(args):
 
     state = {"accepted": "accepted", "failed": "rework", "rejected": "rework",
              "blocked": "blocked", "escalated": "escalated"}[args.outcome]
+
+    # Acceptance is the one outcome that is not merely an observation. There were
+    # two authorities on it: the TaskCompleted gate evaluated the definition of
+    # done, and this set the state without evaluating anything -- so the durable
+    # graph could say a task was accepted while its own predicates were failing,
+    # and the gate could not object because the mutation never went near it.
+    if args.outcome == "accepted":
+        verdict = refuse_unearned_acceptance(args, t)
+        if verdict is not None:
+            return verdict
+
     if args.outcome in ("failed", "rejected"):
         t["attempts"] = t.get("attempts", 0) + 1
     route = W.path_to(t["state"], state)
@@ -651,6 +770,11 @@ def build_parser():
     r.add_argument("--reason", required=True)
     r.add_argument("--redo-all", action="store_true")
     r.set_defaults(fn=cmd_replan)
+
+    b = common(sub.add_parser("brief"))
+    b.add_argument("--item", required=True)
+    b.add_argument("--task", help="include this task's contract, as SubagentStart would")
+    b.set_defaults(fn=cmd_brief)
 
     s = common(sub.add_parser("status"))
     s.add_argument("--item")
