@@ -19,6 +19,15 @@ PLACEHOLDER = "TODO: fill this in. An unfilled role contract fails validation an
 
 
 def main():
+    if len(sys.argv) == 2 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__.strip())
+        print("\nusage: scaffold_agent.py <agent-name>\n")
+        print("The agent must already exist in policies/agent-registry.json: the registry "
+              "carries\nowner, risk class, model policy and spawn permissions, and this "
+              "renders the file\nfrom it. Adding the registry entry is the decision; "
+              "scaffolding is the consequence.")
+        return 0
+
     if len(sys.argv) != 2:
         print(__doc__)
         return 2

@@ -3,6 +3,79 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.22.1] — The write scope did not survive a shell
+
+The newcomer review from the v0.22.0 sweep finished after the release went out.
+It found the thing forty-two adversarial agents had flagged and the release had
+not fixed, and one worse defect nobody had raised.
+
+### `sed -i` walked past every write scope
+
+`guard_write` is registered on `Write|Edit|NotebookEdit`. Shell writes were not
+scoped at all — and `tests/test_guard_bash.py` had a regression test named
+`test_ordinary_shell_writing_is_untouched` asserting exactly that. Meanwhile four
+documents called the scoping mechanical:
+
+```
+qa-engineer        Write  src/service.py                DENY
+qa-engineer        Bash   sed -i ... src/service.py     ALLOWED
+code-reviewer      Bash   sed -i ... src/payments.py    ALLOWED
+security-reviewer  Bash   echo x >> docs/reviews/r.md   ALLOWED
+```
+
+Six of the seven reviewers hold `Bash`, and none of the seven had an entry in
+`policies/write-scope.json` at all — their independence rested entirely on a
+frontmatter `tools:` line that the shell route never consulted.
+
+Both guards now share one evaluator, `write_scope_violation`, so they cannot
+answer differently about the same path. `WS-SHELL` applies it to redirection,
+`tee`, `sed -i`, `cp`, `mv`, `install`, `truncate` and `dd of=`. Reviewers have
+explicit empty scopes: a reviewer writes nothing, and that is now a rule rather
+than an inference from a tool list.
+
+It escalates rather than denies, and that asymmetry is deliberate. The tool route
+knows the exact path and refuses. This route inferred it from a regex over a
+shell command, so a mis-parse should cost a prompt rather than a blocked task.
+It is also **incomplete by construction** — a command that builds its target, or
+writes through an interpreter, is not caught. `docs/limitations.md` says so, and
+the three documents that claimed "mechanical" now say what is mechanical and what
+is best-effort.
+
+### Two release acts shared one approval id
+
+`policies/release-authority.json` says, in its own description, that collapsing
+any two acts removes the separation of duties. It then gave `release_approval`
+and `deployment_authorization` the same `AP-01`. Since
+`human_approval_recorded(X)` matches an approval id anywhere in the change, the
+content approval satisfied the authorization gate by itself:
+
+```
+AUTHORIZE   deployment authorized separately, at deployment time
+    PASS               human_approval_recorded(AP-01)
+```
+
+v0.22.0 disclosed this in `docs/limitations.md` and left it standing.
+`WF-RELEASE` is now migrated the way `WF-FEATURE` was in 0.9.0: `AUTHORIZE` and
+`ROLLBACK` carry `AP-14`, `DEPLOY` loses its duplicate gate and depends on the
+authorization being recorded. A validator refuses any two release acts sharing a
+policy reference.
+
+### Smaller, all real
+
+**`bind_session()` had no callers.** `active_item()` prefers a session-to-item
+mapping over the project-global `CURRENT` pointer, and nothing ever wrote the
+mapping — so every lookup fell through to a pointer whose own comment says it is
+wrong the moment two sessions are open. `control_loop.py open` now binds the
+session.
+
+**`scaffold_agent.py --help` consumed `--help` as an agent name** and told you to
+add it to the registry. `check_release.py --help` ran a full release scan instead
+of printing usage. Both are the first thing someone would type.
+
+**`docs/examples/README.md` was reachable from nothing.** Linked from the README
+index. **`docs/getting-started.md` said 70 ordinary commands**; there are 68 — the
+one count v0.22.0's sweep of twenty-five missed.
+
 ## [0.22.0] — What a 42-agent adversarial review found, and what it cost to fix
 
 A dynamic workflow ran 42 agents over this repository across seven dimensions,

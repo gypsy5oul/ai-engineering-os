@@ -360,3 +360,44 @@ def escapes_project(path):
         return os.path.commonpath([target, root]) != root
     except Exception:
         return True
+
+
+# --------------------------------------------------------------------------
+# Write scope, in one place
+# --------------------------------------------------------------------------
+
+def agent_role(data):
+    """The role name, however the platform spelled the agent type.
+
+    Plugin agents arrive namespaced (`ai-engineering-os:qa-engineer`). Every hook
+    that keys off the role needs the bare name, and the one hook that forgot made
+    all 22 write scopes inert for ten versions.
+    """
+    return (data.get("agent_type") or "").split(":")[-1]
+
+
+def write_scope_violation(role, path, scope):
+    """Why this role may not write this path, or None.
+
+    Shared by guard_write (the Write/Edit tools) and guard_bash (shell writes) so
+    the two cannot answer differently. They used to: the tool route was scoped and
+    the shell route was not scoped at all, while four documents called the scoping
+    mechanical.
+    """
+    if not role or not path:
+        return None
+    role_scope = (scope.get("roles") or {}).get(role)
+    if role_scope is None:
+        return None
+    if role_scope.get("mode") == "allow":
+        if escapes_project(path):
+            return ("it resolves outside the project directory, and the role is scoped to "
+                    "paths inside it")
+        if not path_matches(path, role_scope.get("allow", [])):
+            allowed = role_scope.get("allow") or []
+            return ("the role may write only to: %s"
+                    % (", ".join(allowed) if allowed else "nothing; it is a reviewer"))
+    elif role_scope.get("mode") == "deny":
+        if path_matches(path, role_scope.get("deny", [])):
+            return "that path belongs to another role"
+    return None

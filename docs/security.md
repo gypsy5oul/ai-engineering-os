@@ -18,7 +18,7 @@ runtime, and never appear in a repository, an image or a pipeline definition.
 | Layer | Enforcement | Example |
 | --- | --- | --- |
 | Tool profiles | Mechanical: the tool is absent | A reviewer has no `Write` and cannot author what it reviews |
-| Write scopes | Mechanical: `guard_write.py` | A QA engineer cannot modify the code under test |
+| Write scopes | Mechanical on `Write`/`Edit` (denied); best-effort on Bash (escalated) | A QA engineer editing `src/` is refused, and `sed -i src/...` reaches the human rather than running silently. A shell is a programming language and a guard is a regex: assume the shell route is incomplete |
 | Command guards | Mechanical: `guard_bash.py` | Production mutation is denied; `terraform apply` escalates |
 | Spawn guard | Mechanical: `guard_spawn.py` | A developer cannot pull in a CRITICAL role |
 | Approval gates | Human | Production deployment, security exceptions |

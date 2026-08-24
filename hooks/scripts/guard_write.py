@@ -74,7 +74,7 @@ def main():
     # Plugin agents arrive as "ai-engineering-os:solution-architect". Matched
     # whole, no role in write-scope.json was ever found and every per-role scope
     # was inert. Every other hook already strips it; this one did not.
-    agent = (data.get("agent_type") or "").split(":")[-1]
+    agent = H.agent_role(data)
     scope = H.policy_required("write-scope.json", "roles")
     overrides = H.project_overrides()
 
@@ -106,29 +106,16 @@ def main():
                  "What to do instead: make the change in a merge request with governance review (AP-10)."
                  % (path, gov.get("why", "")), rule_id="WS-GOV")
 
-    # 4. per-role scope
-    role = scope.get("roles", {}).get(agent)
-    if role:
-        if role.get("mode") == "allow" and H.escapes_project(path):
-            H.audit({"type": "write_guard", "decision": "deny", "rule": "WS-ESCAPE",
-                     "path": path, "agent": agent})
-            H.decide(EVENT, "deny",
-                     "'%s' resolves outside the project directory. Role '%s' is scoped to paths "
-                     "inside the project, and no spelling of a path escapes that.\n"
-                     "What to do instead: write inside the project, or ask the human to move the "
-                     "file in." % (path, agent), rule_id="WS-ESCAPE")
-        if role.get("mode") == "allow" and not H.path_matches(path, role.get("allow", [])):
-            H.audit({"type": "write_guard", "decision": "deny", "rule": "WS-SCOPE", "path": path, "agent": agent})
-            H.decide(EVENT, "deny",
-                     "Role '%s' may write only to: %s. '%s' is outside that scope.\n"
-                     "What to do instead: hand this change to the role that owns the path, or ask the human to reassign it."
-                     % (agent, ", ".join(role.get("allow", [])), path), rule_id="WS-SCOPE")
-        if role.get("mode") == "deny" and H.path_matches(path, role.get("deny", [])):
-            H.audit({"type": "write_guard", "decision": "deny", "rule": "WS-SCOPE", "path": path, "agent": agent})
-            H.decide(EVENT, "deny",
-                     "Role '%s' is not permitted to modify '%s'; that path belongs to another role.\n"
-                     "What to do instead: raise the change with the owning role rather than editing it here."
-                     % (agent, path), rule_id="WS-SCOPE")
+    # 4. per-role scope, from the shared evaluator so the shell route cannot
+    #    reach a different verdict on the same path.
+    why = H.write_scope_violation(agent, path, scope)
+    if why:
+        H.audit({"type": "write_guard", "decision": "deny", "rule": "WS-SCOPE",
+                 "path": path, "agent": agent})
+        H.decide(EVENT, "deny",
+                 "Role '%s' may not write '%s': %s.\n"
+                 "What to do instead: hand this change to the role that owns the path, or ask "
+                 "the human to reassign it." % (agent, path, why), rule_id="WS-SCOPE")
 
     # 5. secret content
     hits = scan_secrets(content)

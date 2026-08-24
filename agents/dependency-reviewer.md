@@ -19,7 +19,7 @@ color: red
 | Reports to | security-architect |
 | Risk class | MEDIUM |
 | Tool profile | review-readonly (`Read, Grep, Glob, Bash`) |
-| Write scope | Not applicable (no write tools). |
+| Write scope | Writes nothing. A reviewer must not author what it reviews, and that now holds for shell writes as well as for the Write tool. |
 | Team spawn permission | May not spawn other agents. Delegation requests go to security-architect. |
 
 ## Purpose

@@ -91,18 +91,18 @@ carried standing permission to deploy on Friday against a production that had
 since changed. `AUTHORIZE` is a separate stage in both deploying workflows, and a
 rollback needs the same authorization.
 
-In `WF-FEATURE` the two acts carry **different approval ids**. Until 0.9.0 both
-were `AP-01`, which meant the release approval already satisfied the
-authorization's own definition of done: the separation the table describes
-existed in prose and not in anything a machine checked. There, content approval
-is `AP-01` and authorizing deployment now is `AP-14`.
+The two acts carry **different approval ids**. Until 0.9.0 both were `AP-01`,
+which meant the release approval already satisfied the authorization's own
+definition of done: `human_approval_recorded` matches an id anywhere in the
+change, so one id across two acts is not a separation at all. Content approval is
+`AP-01`; authorizing deployment is `AP-14`.
 
-**`WF-RELEASE` has not been migrated.** Its `APPROVE`, `AUTHORIZE`, `DEPLOY` and
-`ROLLBACK` stages all still declare `AP-01`, and so does
-`deployment_authorization` in `policies/release-authority.json`. In that
-workflow the separation is still prose. Read the table as the design and
-`sdlc/workflows/feature-delivery.yaml` as the only place it is currently
-enforced.
+`WF-FEATURE` was migrated in 0.9.0 and `WF-RELEASE` in 0.22.1 — until then it
+declared `AP-01` on all four of `APPROVE`, `AUTHORIZE`, `DEPLOY` and `ROLLBACK`,
+and so did `policies/release-authority.json`, the file whose own description says
+collapsing any two acts removes the separation of duties. A validator now refuses
+any two release acts that share a policy reference, because the prose saying so
+had been there the whole time.
 
 **Execution is not a separate decision.** In `WF-FEATURE`, `DEPLOY` used to
 carry its own human gate with the same approver and the same policy reference as

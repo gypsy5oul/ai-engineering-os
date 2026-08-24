@@ -18,6 +18,12 @@ def load(rel):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print(__doc__.strip())
+        print("\nusage: check_release.py\n\nTakes no arguments. Exits non-zero when "
+              "something would block a release.")
+        return 0
+
     manifest = load(".claude-plugin/plugin.json")
     version = manifest.get("version", "")
     tag = os.environ.get("CI_COMMIT_TAG", "")

@@ -340,6 +340,19 @@ def active_item(project, session=None, plugin_data=None):
     return current(project)
 
 
+def plugin_data_dir():
+    """Where runtime state that outlives one process lives.
+
+    Same resolution the hooks use. Duplicated deliberately rather than imported:
+    scripts/lib may not depend on hooks/lib, and a session binding written to a
+    different directory than the one the hooks read is worse than none.
+    """
+    base = os.environ.get("CLAUDE_PLUGIN_DATA")
+    if not base:
+        base = os.path.join(os.path.expanduser("~"), ".claude", "ai-engineering-os")
+    return base
+
+
 def bind_session(plugin_data, session, wid):
     """Record which work item a session is on, outside source control.
 

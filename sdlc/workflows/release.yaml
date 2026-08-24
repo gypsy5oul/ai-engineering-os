@@ -267,12 +267,12 @@ stages:
       - The release artifact is in state 'authorized'
     definition_of_done:
       - release_authorized()
-      - human_approval_recorded(AP-01)
-      - human_identity_recorded(AP-01)
+      - human_approval_recorded(AP-14)
+      - human_identity_recorded(AP-14)
     human_gate:
       approver: named release approver
       approver_role: release-approver
-      policy_ref: AP-01
+      policy_ref: AP-14
       recorded_in: gitlab-release
       decision:
         - authorize
@@ -301,16 +301,11 @@ stages:
       - Rollback still available
     definition_of_done:
       - release_authorized()
-      - human_approval_recorded(AP-01)
+      - human_approval_recorded(AP-14)
       - promoted_through(production)
       - cycle_accepted(CYCLE-DEVOPS)
       - cycle_rollup_reported(CYCLE-DEVOPS)
       - no_open_rework(CYCLE-DEVOPS)
-    human_gate:
-      approver: named release approver
-      recorded_in: gitlab-release
-      policy_ref: AP-01
-      approver_role: release-approver
     coupled_artifacts:
       - deployment-manifest
     department_cycle: CYCLE-DEVOPS
@@ -372,11 +367,11 @@ stages:
       - Cause routed to WF-DEFECT or WF-INCIDENT
     definition_of_done:
       - artifact_status(REL, rolled-back)
-      - human_approval_recorded(AP-01)
+      - human_approval_recorded(AP-14)
     human_gate:
       approver: named release approver
       recorded_in: gitlab-release
-      policy_ref: AP-01
+      policy_ref: AP-14
       approver_role: release-approver
     optional_when:
       - No trigger condition fired.

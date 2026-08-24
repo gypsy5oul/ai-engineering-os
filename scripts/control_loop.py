@@ -107,6 +107,13 @@ def cmd_open(args):
         item["human_owner"] = args.human_owner
     W.save_item(args.project, item)
     W.set_current(args.project, wid)
+    # And bind the session, which is the identity active_item() actually prefers.
+    # Nothing wrote it before, so every lookup fell through to CURRENT -- fine for
+    # one engineer in one checkout, and wrong the moment two sessions are open on
+    # the same project.
+    session = getattr(args, "session", None) or os.environ.get("CLAUDE_SESSION_ID")
+    if session:
+        W.bind_session(W.plugin_data_dir(), session, wid)
     W.record(args.project, wid, "opened", type=wtype, intent=args.intent, risk=args.risk)
     print("%s opened (%s, %s risk)" % (wid, wtype, args.risk))
     print("The intent is preserved verbatim; the objective is what the organization "
@@ -571,6 +578,9 @@ def build_parser():
         return p
 
     o = common(sub.add_parser("open"))
+    o.add_argument("--session", help="bind this work item to a session id, so two sessions on "
+                                     "one project do not brief each other's agents "
+                                     "(defaults to $CLAUDE_SESSION_ID)")
     o.add_argument("--type", required=True, choices=sorted(TYPE_WORKFLOW))
     o.add_argument("--intent", required=True)
     o.add_argument("--objective")

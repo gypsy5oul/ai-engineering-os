@@ -230,6 +230,41 @@
         ".ai-engineering/outbox/**",
         "docs/communications/**"
       ]
+    },
+    "architecture-reviewer": {
+      "mode": "allow",
+      "allow": [],
+      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+    },
+    "security-reviewer": {
+      "mode": "allow",
+      "allow": [],
+      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+    },
+    "code-reviewer": {
+      "mode": "allow",
+      "allow": [],
+      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+    },
+    "performance-reviewer": {
+      "mode": "allow",
+      "allow": [],
+      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+    },
+    "reliability-reviewer": {
+      "mode": "allow",
+      "allow": [],
+      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+    },
+    "dependency-reviewer": {
+      "mode": "allow",
+      "allow": [],
+      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
+    },
+    "test-reviewer": {
+      "mode": "allow",
+      "allow": [],
+      "why": "A reviewer writes nothing. Withholding the write tools said so for the Write/Edit route only; six of the seven reviewers hold Bash, and the shell route was unscoped, so independence rested on a tool list rather than on a rule. An empty allow-list is the rule."
     }
   },
   "governed_paths": {

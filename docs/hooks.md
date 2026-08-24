@@ -161,7 +161,7 @@ Code can enforce them structurally:
 | Boundary | Structural mechanism | What the regex adds |
 | --- | --- | --- |
 | Reading credential files | `permissions.deny Read(//**/.ssh/**)` and friends | Only catches shell reads; the deny rule also stops the `Read` tool |
-| Writing outside a role's scope | Tool profiles plus `write-scope.json` | Nothing; never a command-level concern |
+| Writing outside a role's scope | Tool profiles plus `write-scope.json`, denied outright | `WS-SHELL`: the same scope, applied to shell writes (`>`, `>>`, `tee`, `sed -i`, `cp`, `mv`, `dd of=`), escalated rather than denied because the path is inferred from the command |
 | An agent approving its own work | Reviewers hold no `Write` or `Edit` | Nothing |
 | Spawning above one's authority | `Agent(role-a, role-b)` allowlist plus `guard_spawn` | Nothing |
 | Production mutation | **Credentials the session does not hold** | Second line only |

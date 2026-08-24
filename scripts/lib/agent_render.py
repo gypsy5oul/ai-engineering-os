@@ -51,6 +51,9 @@ def write_scope_line(name, scope, tools):
         return ("Not applicable (no write tools)." if "Write" not in tools
                 else "Unscoped: governed only by the global deny list.")
     if role_scope["mode"] == "allow":
+        if not role_scope["allow"]:
+            return ("Writes nothing. A reviewer must not author what it reviews, and that now "
+                    "holds for shell writes as well as for the Write tool.")
         return "May write only to: `%s`" % "`, `".join(role_scope["allow"])
     if not role_scope["deny"]:
         return "Unscoped within this repository."

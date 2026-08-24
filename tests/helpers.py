@@ -81,8 +81,11 @@ PLATFORM_DECISIONS = ("allow", "deny", "ask", "defer")
 ESCALATE = "ask"
 
 
-def bash(command, **kw):
-    return run_hook("guard_bash", {"tool_name": "Bash", "tool_input": {"command": command}}, **kw)
+def bash(command, agent=None, **kw):
+    payload = {"tool_name": "Bash", "tool_input": {"command": command}}
+    if agent:
+        payload["agent_type"] = agent
+    return run_hook("guard_bash", payload, **kw)
 
 
 def write(path, content="", tool="Write", agent=None):

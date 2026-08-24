@@ -93,6 +93,18 @@ calls proceed — fail-open, by design, but worth knowing.
 **Windows is untested.** The scripts are POSIX-oriented Python and should work,
 but no one has run them there.
 
+**Write scoping through the shell is best-effort, not airtight.** `guard_write`
+covers `Write`, `Edit` and `NotebookEdit` and denies an out-of-scope path
+outright. Shell writes are a second route, and for ten versions they were not
+scoped at all: `sed -i` reached any path, while four documents called the scoping
+mechanical. `WS-SHELL` now applies the same write scope to the obvious shell
+forms -- redirection, `tee`, `sed -i`, `cp`, `mv`, `install`, `truncate`,
+`dd of=` -- and escalates rather than denying, because the path is inferred from
+a regex over a shell command. A command that constructs its target, writes from a
+here-doc into a variable path, or goes through an interpreter will not be caught.
+Withholding `Bash` is the only complete answer, and six of the seven reviewers
+need it to read diffs.
+
 **Cycle acceptance is re-checked, but not entirely determinable.** Every cycle
 declares `determined_by: scripts/check_dod.py`, and until v0.22 that determiner
 was never consulted: acceptance was whatever the lead wrote into the rollup.
@@ -102,12 +114,6 @@ cannot be declared accepted with work still in `CHANGES_REQUESTED`. What remains
 a condition needing evidence from outside the repository — a pipeline result — is
 still the head's word. The predicate says so in its own output rather than
 counting it as satisfied.
-
-**`WF-RELEASE` has not been migrated to the split release authority.** `WF-FEATURE`
-separates content approval (`AP-01`) from deployment authorization (`AP-14`) and
-has no separate gate on `DEPLOY`. `sdlc/workflows/release.yaml` and
-`policies/release-authority.json` still use `AP-01` for both and `DEPLOY` still
-carries its own gate. Two deploying workflows, two models.
 
 **A task lease expires after an hour; it is not a liveness signal.** An agent that
 crashes never releases its task, and a leased task is skipped, so one dead session

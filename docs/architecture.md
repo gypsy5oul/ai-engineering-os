@@ -111,7 +111,7 @@ Three layers, deliberately different in strength:
 | Layer | Strength | Example |
 | --- | --- | --- |
 | **Guards** (hooks) | Mechanical, and tiered on failure. Tier 0 cannot be broken by a bad policy file. | A push to `main` escalates whatever the agent intended; `rm -rf /` is denied even with the policy engine dead. |
-| **Structure** (tool profiles, write scopes) | Mechanical. A tool that is absent cannot be called. | A reviewer has no `Write` tool, so it cannot author what it reviews. |
+| **Structure** (tool profiles, write scopes) | Mechanical for the tool layer; best-effort for the shell. | A reviewer has no `Write` tool and an empty write scope, so authoring what it reviews is refused on both routes -- but only the tool route is airtight. |
 | **Contract** (role definitions, skills) | Behavioural. Strong, but not a guarantee. | "Never invent an availability target." |
 
 Anything that must hold regardless of model behaviour is in the first two layers.

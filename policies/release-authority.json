@@ -13,8 +13,9 @@
       "what": "Production deployment of this approved release is PERMITTED, now.",
       "who": "The named release approver in .ai-engineering/project.yaml under approval.release_approver. A human, always.",
       "artifact_state": "REL moves approved -> authorized",
-      "policy_ref": "AP-01",
-      "does_not_grant": "The ability to perform the deployment. Authorization and execution are different hands."
+      "policy_ref": "AP-14",
+      "does_not_grant": "The ability to perform the deployment. Authorization and execution are different hands.",
+      "why_a_distinct_id": "It shared AP-01 with release_approval while this file's own description said collapsing any two acts removes the separation of duties. human_approval_recorded matches a policy_ref anywhere in the change, so one id across two acts meant the content approval satisfied the authorization gate automatically. Two acts, two ids."
     },
     "deployment_execution": {
       "what": "Running the deployment.",
@@ -35,11 +36,24 @@
     "A rollback is itself an authorized act: it needs the same human authorization as the deployment."
   ],
   "state_machine": {
-    "draft": ["in-review"],
-    "in-review": ["approved", "draft"],
-    "approved": ["authorized", "in-review"],
-    "authorized": ["done", "rolled-back"],
-    "done": ["rolled-back"],
+    "draft": [
+      "in-review"
+    ],
+    "in-review": [
+      "approved",
+      "draft"
+    ],
+    "approved": [
+      "authorized",
+      "in-review"
+    ],
+    "authorized": [
+      "done",
+      "rolled-back"
+    ],
+    "done": [
+      "rolled-back"
+    ],
     "rolled-back": []
   },
   "why_this_matters": "In 0.2.0 approval and authorization were one act, so a release approved on Monday carried standing permission to deploy on Friday against a changed production. Separating them makes the authorization decision current."

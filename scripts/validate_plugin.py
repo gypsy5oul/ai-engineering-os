@@ -830,11 +830,15 @@ def check_documented_commands_parse():
         return
 
     pattern = re.compile(r"control_loop\.py\s+([a-z]+)((?:\\\n|[^\n`])*)")
+    # Only inside fenced blocks. A mention in running text -- "`control_loop.py
+    # open` now binds the session" -- is a reference to the subcommand, not an
+    # invocation, and holding prose to argparse's required arguments is noise.
+    fence = re.compile(r"^```[^\n]*\n(.*?)^```", re.M | re.S)
     seen = set()
     for rel in sorted(glob.glob(os.path.join(ROOT, "docs", "*.md"))
                       + glob.glob(os.path.join(ROOT, "*.md"))):
         with open(rel, encoding="utf-8") as fh:
-            text = fh.read()
+            text = "\n".join(b.group(1) for b in fence.finditer(fh.read()))
         for m in pattern.finditer(text):
             sub, rest = m.group(1), m.group(2).replace("\\\n", " ")
             try:
@@ -1380,6 +1384,29 @@ def check_agent_write_scope_matches_the_policy(registry):
                 "        file:   %s\n        policy: %s" % (a["name"], m.group(1).strip(), want))
 
 
+def check_release_acts_have_distinct_ids():
+    """Two release acts may not share an approval id.
+
+    policies/release-authority.json says collapsing any two acts removes the
+    separation of duties, and then gave release_approval and
+    deployment_authorization the same AP-01. Because human_approval_recorded
+    matches a policy_ref anywhere in the change, one id across two acts meant the
+    content approval satisfied the authorization gate on its own -- the collapse
+    the file exists to prevent, asserted by the file that prevents it.
+    """
+    model = load_json("policies/release-authority.json") or {}
+    seen = {}
+    for name, act in (model.get("acts") or {}).items():
+        ref = act.get("policy_ref")
+        if not ref:
+            continue
+        if ref in seen:
+            err("policies/release-authority.json: acts %r and %r both use %s. The predicate "
+                "matches an approval id anywhere in the change, so one satisfies the other."
+                % (seen[ref], name, ref))
+        seen[ref] = name
+
+
 def check_artifact_contracts(registry):
     """The artifact model is the state model. It must agree with the roles and the write scopes."""
     model = load_json("policies/artifact-model.json") or {}
@@ -1592,6 +1619,7 @@ def main():
     check_coupling()
     check_team_requirements()
     check_agent_write_scope_matches_the_policy(registry)
+    check_release_acts_have_distinct_ids()
     check_artifact_contracts(registry)
     check_department_cycles()
     check_notifications(registry)

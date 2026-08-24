@@ -96,6 +96,35 @@ def active_waivers(overrides):
     return live, rejected
 
 
+# Shell forms that write to a named path. Best-effort by construction: a shell is
+# a programming language and this is a regex. It exists because the alternative
+# was nothing at all -- guard_write covered Write/Edit and the shell route was
+# unscoped, while four documents called the scoping mechanical.
+SHELL_WRITES = [
+    re.compile(r">>?\s*(?P<path>[^\s|;&<>]+)"),
+    re.compile(r"\btee\b(?:\s+-a)?\s+(?P<path>[^\s|;&<>-][^\s|;&<>]*)"),
+    re.compile(r"\bsed\b[^|;&]*?\s-i[^\s]*\s+(?:(?:-e\s+)?[^\s|;&]+\s+)?(?P<path>[^\s|;&<>]+)"),
+    re.compile(r"\b(?:cp|mv|install)\b\s+(?:-[^\s]+\s+)*[^\s|;&]+\s+(?P<path>[^\s|;&<>]+)"),
+    re.compile(r"\btruncate\b[^|;&]*\s(?P<path>[^\s|;&<>]+)"),
+    re.compile(r"\bdd\b[^|;&]*\bof=(?P<path>[^\s|;&<>]+)"),
+]
+# Writes that say nothing about the repository. A role scoped to docs/ is not
+# doing anything untoward by redirecting into a scratch file.
+TRANSIENT = re.compile(r"^(/dev/|/tmp/|\$|/proc/)|(^|/)\.\w+$")
+
+
+def shell_write_targets(command):
+    """Paths this command looks like it writes to."""
+    out = []
+    for rx in SHELL_WRITES:
+        for m in rx.finditer(command):
+            path = (m.group("path") or "").strip("\"'")
+            if not path or TRANSIENT.match(path) or path.startswith("-"):
+                continue
+            out.append(path)
+    return list(dict.fromkeys(out))
+
+
 PUSH_TARGET = re.compile(r"\bgit\s+push\b(?P<rest>[^&|;]*)")
 
 
@@ -180,6 +209,24 @@ def main():
             continue
         if rx.search(command):
             hits.append(rule)
+
+    # The same write scope the Write tool is held to. Escalate rather than deny:
+    # the tool route knows the exact path and refuses, while this route inferred
+    # it from a regex, and a mis-parse should cost a prompt rather than a blocked
+    # task. Either way the command does not proceed unremarked.
+    role = H.agent_role(data)
+    if role:
+        scope = H.policy("write-scope.json") or {}
+        for target in shell_write_targets(command):
+            why = H.write_scope_violation(role, target, scope)
+            if why:
+                hits.append({"id": "WS-SHELL", "category": "write-scope", "action": "escalate",
+                             "message": "This writes '%s' through the shell, and role '%s' may "
+                                        "not write it: %s." % (target, role, why),
+                             "remediation": "Hand the change to the role that owns the path. "
+                                            "The Write tool refuses this outright; the shell is "
+                                            "checked on a best-effort reading of the command."})
+                break
 
     branch_hit = git_branch_check(command)
     if branch_hit:

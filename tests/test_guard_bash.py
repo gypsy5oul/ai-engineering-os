@@ -9,7 +9,7 @@ import sys
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from helpers import bash, run_hook, repo_on_branch  # noqa: E402
+from helpers import ESCALATE, bash, run_hook, repo_on_branch, write  # noqa: E402
 
 
 class TestDestructiveFilesystem(unittest.TestCase):
@@ -443,3 +443,77 @@ class TestWorkingTreeBranch(unittest.TestCase):
                 decision, _, _, _ = bash("git commit -m 'fix: x'", cwd=repo_on_branch(branch))
                 self.assertIsNone(decision, "%s is not protected" % branch)
 
+
+
+class TestWriteScopeReachesTheShell(unittest.TestCase):
+    """A write scope enforced on one route and not the other is not a scope.
+
+    guard_write covered Write/Edit; the shell was unscoped for ten versions while
+    four documents called the scoping mechanical. `sed -i` was all it took.
+    """
+
+    OUT_OF_SCOPE = [
+        ("qa-engineer",       "sed -i s/a/b/ src/service.py"),
+        ("qa-engineer",       "echo x > src/service.py"),
+        ("qa-engineer",       "tee src/service.py < /dev/null"),
+        ("backend-developer", "echo x >> docs/architecture/hld.md"),
+        ("backend-developer", "cp /tmp/a docs/adrs/0001.md"),
+        ("docs-writer",       "sed -i s/x/y/ src/main.go"),
+        ("code-reviewer",     "sed -i s/x/y/ src/payments/service.py"),
+        ("security-reviewer", "echo approved >> docs/reviews/r.md"),
+    ]
+
+    IN_SCOPE = [
+        ("qa-engineer",       "echo x >> tests/test_payments.py"),
+        ("docs-writer",       "sed -i s/a/b/ docs/architecture/hld.md"),
+        ("backend-developer", "echo x >> src/api/handler.go"),
+    ]
+
+    NOT_A_REPO_WRITE = [
+        ("qa-engineer",   "pytest -q > /tmp/out.txt"),
+        ("qa-engineer",   "git diff --stat"),
+        ("code-reviewer", "grep -rn TODO src/ > /dev/null"),
+    ]
+
+    def test_an_out_of_scope_shell_write_does_not_pass_silently(self):
+        for agent, command in self.OUT_OF_SCOPE:
+            with self.subTest(agent=agent, command=command):
+                decision, reason, _, _ = bash(command, agent="ai-engineering-os:" + agent)
+                self.assertEqual(decision, ESCALATE, "%s: %s" % (agent, command))
+                self.assertIn("WS-SHELL", reason)
+
+    def test_a_reviewer_cannot_author_what_it_reviews_through_the_shell(self):
+        """Six of the seven reviewers hold Bash. Independence used to rest on the
+        tool list alone, which the shell route did not consult."""
+        for agent in ("code-reviewer", "test-reviewer", "reliability-reviewer",
+                      "performance-reviewer", "dependency-reviewer"):
+            with self.subTest(agent=agent):
+                decision, _, _, _ = bash("echo x >> src/main.go",
+                                         agent="ai-engineering-os:" + agent)
+                self.assertEqual(decision, ESCALATE)
+
+    def test_a_write_inside_scope_is_untouched(self):
+        for agent, command in self.IN_SCOPE:
+            with self.subTest(agent=agent, command=command):
+                self.assertIsNone(bash(command, agent="ai-engineering-os:" + agent)[0],
+                                  "%s: %s" % (agent, command))
+
+    def test_scratch_and_read_only_commands_are_untouched(self):
+        for agent, command in self.NOT_A_REPO_WRITE:
+            with self.subTest(agent=agent, command=command):
+                self.assertIsNone(bash(command, agent="ai-engineering-os:" + agent)[0],
+                                  "%s: %s" % (agent, command))
+
+    def test_the_main_session_is_not_a_role_and_keeps_its_permissions(self):
+        self.assertIsNone(bash("echo x >> src/main.go")[0])
+
+    def test_both_routes_agree_on_the_same_path(self):
+        """The point of sharing one evaluator: the tool denies, the shell asks,
+        and neither allows."""
+        for agent, path in (("qa-engineer", "src/service.py"),
+                            ("docs-writer", "src/main.go"),
+                            ("backend-developer", "docs/adrs/0001.md")):
+            with self.subTest(agent=agent, path=path):
+                spaced = "ai-engineering-os:" + agent
+                self.assertEqual(write(path, "x", agent=spaced)[0], "deny")
+                self.assertEqual(bash("echo x >> " + path, agent=spaced)[0], ESCALATE)
