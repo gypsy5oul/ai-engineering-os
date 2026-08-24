@@ -83,6 +83,58 @@ def problems(paths):
     return found
 
 
+def header_contract():
+    """The header rules, quoted from the schema, for the refusal message.
+
+    An agent writing an artifact cannot read the plugin's schema: it sits outside
+    the project it is working in. So it guesses at `type` and `status`, is
+    refused, fixes exactly what it was told, and guesses again on the next field.
+    Two agents in a row said so unprompted. The refusal now carries the contract
+    it is enforcing.
+    """
+    try:
+        with open(os.path.join(H.PLUGIN_ROOT, "schemas", "artifact-header.schema.json"),
+                  encoding="utf-8") as fh:
+            schema = json.load(fh)
+    except Exception:
+        return ""
+    props = schema.get("properties") or {}
+    lines = []
+    required = schema.get("required") or []
+    if required:
+        lines.append("required: %s" % ", ".join(required))
+    for name in ("type", "status"):
+        allowed = (props.get(name) or {}).get("enum")
+        if allowed:
+            lines.append("%s must be one of: %s" % (name, ", ".join(allowed)))
+    for name, spec in sorted(props.items()):
+        fmt = spec.get("format") or spec.get("pattern")
+        if fmt and name.endswith(("_at", "date")):
+            lines.append("%s is a %s" % (name, "date (YYYY-MM-DD)" if fmt == "date" else fmt))
+    # The schema's `required` is not the whole contract. The artifact model adds
+    # per-type fields, and `change` is the one that matters most: without it an
+    # artifact is invisible to every change-scoped predicate, so the file exists
+    # and the definition of done still reports "no REQ artifact exists".
+    try:
+        with open(os.path.join(H.PLUGIN_ROOT, "policies", "artifact-model.json"),
+                  encoding="utf-8") as fh:
+            types = json.load(fh)["artifact_types"]
+        if isinstance(types, list):
+            types = {t["code"]: t for t in types}
+        needs_change = sorted(c for c, t in types.items()
+                              if "change" in (t.get("required_fields") or []))
+        if needs_change:
+            lines.append("change: the work item id this belongs to. Required on every type "
+                         "except %s. Without it the artifact is invisible to every "
+                         "change-scoped predicate: the file exists and the definition of done "
+                         "still says no artifact of that type exists."
+                         % ", ".join(sorted(set(types) - set(needs_change))) or "none")
+    except Exception:
+        pass
+    return ("\n\nThe header contract, so this does not take another round trip:\n  "
+            + "\n  ".join(lines)) if lines else ""
+
+
 def release_slot(data):
     """Free the concurrency slot this piece of work was holding.
 
@@ -119,8 +171,8 @@ def main():
         "reason": ("This session wrote %d artifact(s) whose header does not satisfy "
                    "schemas/artifact-header.schema.json. An artifact that cannot be parsed is "
                    "invisible to every definition-of-done predicate, so the work does not count "
-                   "as done. Fix these, then finish:\n  - %s"
-                   % (len(faults), "\n  - ".join(faults))),
+                   "as done. Fix these, then finish:\n  - %s%s"
+                   % (len(faults), "\n  - ".join(faults), header_contract())),
     }))
     sys.exit(0)
 

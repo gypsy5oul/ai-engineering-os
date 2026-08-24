@@ -30,6 +30,17 @@ def find_config(explicit):
 def semantic_checks(cfg):
     errors, warnings = [], []
 
+    # Two fields carry the traceability prefix and work item ids are built from
+    # project.key. The shipped template sets both to the same value, so a
+    # disagreement only appears when somebody fills the config in by hand -- and
+    # then their work items are called PROJ-FEAT-001.
+    key = (cfg.get("project") or {}).get("key")
+    id_prefix = (cfg.get("knowledge") or {}).get("id_prefix")
+    if key and id_prefix and key != id_prefix:
+        errors.append("project.key is %r and knowledge.id_prefix is %r. They are the same fact, "
+                      "and ids are built from project.key, so the other is a decoy."
+                      % (key, id_prefix))
+
     envs = cfg.get("environments") or []
     if not any(e.get("production") for e in envs):
         warnings.append("no environment is marked production: production guards will not be "

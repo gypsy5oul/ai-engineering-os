@@ -74,8 +74,21 @@ def project_config(project):
 
 
 def prefix(project):
+    """The project's traceability prefix.
+
+    Two fields carry it: `project.key`, whose schema description is "Short
+    uppercase prefix for traceability identifiers, e.g. SFTP -> SFTP-REQ-001",
+    and `knowledge.id_prefix`. This read only the second, and the shipped
+    template sets both to the same value -- so a project that filled in the one
+    the schema describes got work items called PROJ-FEAT-001. Found the first
+    time a real project was configured by hand.
+
+    `project.key` wins because it is the one the schema explains.
+    """
     cfg = project_config(project)
-    return ((cfg.get("knowledge") or {}).get("id_prefix")) or "PROJ"
+    key = ((cfg.get("project") or {}).get("key")
+           or (cfg.get("knowledge") or {}).get("id_prefix"))
+    return key or "PROJ"
 
 
 def next_id(project, wtype):
@@ -267,13 +280,33 @@ def cmd_plan(args):
     if item is None:
         print("ERROR no such work item: %s" % args.item)
         return 2
-    existing = W.load_graph(args.project, args.item)
+    # A graph that will not parse is the case --force exists for, and reading it
+    # is how you find that out. Letting the parse error escape meant the repair
+    # tool could not repair its primary case: an agent result containing a
+    # newline made the file unreadable, and `plan --force` then died on the same
+    # line as everything else.
+    unreadable = None
+    try:
+        existing = W.load_graph(args.project, args.item)
+    except Exception as exc:
+        if not args.force:
+            print("ERROR %s has a graph that cannot be read: %s" % (args.item, exc))
+            print("Run `plan --force` to rebuild it. Accepted work in it is lost, because "
+                  "nothing can read what it said.")
+            return 2
+        unreadable, existing = exc, None
+
     if existing and not args.force:
         print("ERROR %s already has a graph. Use `replan --reason` to rebuild it: a plan "
               "replaced without a recorded reason is indistinguishable from thrashing."
               % args.item)
         return 1
-    if existing and args.force:
+    if unreadable is not None:
+        W.record(args.project, args.item, "graph_repaired",
+                 why="the previous graph could not be parsed: %s" % str(unreadable)[:200])
+        print("Repairing an unreadable graph for %s." % args.item)
+        print("  it would not parse: %s" % str(unreadable)[:120])
+    elif existing and args.force:
         # --force is a repair tool, not a second replan. It used to rebuild any
         # graph: it reset the generation to 1, discarded accepted work the replan
         # rule says to carry forward, and never touched item['replans'] -- so it

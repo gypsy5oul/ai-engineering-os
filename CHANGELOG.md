@@ -3,6 +3,69 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.28.0] — Driving a real change through it, and what that cost
+
+Installed from GitHub at project scope into a fresh project and driven as the
+human operator: configure, open a work item, plan, and put real agents on real
+tasks. Five defects in the first two tasks, all of them invisible to 547 tests
+because every one of them needed an agent to actually do something.
+
+### An agent's own words corrupted the work item store
+
+`observe_subagent` writes the agent's last message into the task's `result`. The
+first real one contained a colon, so the emitter quoted it, and it contained
+newlines, which were written raw inside the quotes. That is not YAML. The graph
+became unreadable and nothing could load it.
+
+`_needs_quote` had checked for `": "` since the beginning. What it never checked
+was whether the value contained a newline, and the escape handled backslashes and
+quotes and nothing else. Every artificial test result had been a single line.
+
+### And then `plan --force` could not repair it
+
+`--force` exists for a graph that will not parse. It read the graph before
+deciding what to do, so the parse error escaped and the repair tool died on the
+same line as everything else. It now tolerates an unreadable graph, which is its
+entire purpose.
+
+### The project's declared key was ignored
+
+`project.key` is described in the schema as "Short uppercase prefix for
+traceability identifiers, e.g. SFTP -> SFTP-REQ-001". The reader used
+`knowledge.id_prefix` instead. The shipped template sets both to the same value,
+so it only appeared when a project was configured by hand: the work item came out
+as `PROJ-FEAT-001` for a project that had said `CALC`. Two fields for one fact
+and only one reader — the pattern this repository keeps finding, in a place
+nobody had looked because the template hid it. `project.key` now wins, and a
+disagreement between the two is an error.
+
+### Agents cannot read the schema they are being held to
+
+Two agents in a row said so unprompted: the artifact schema lives in the plugin,
+outside the project they are working in, so they guess at `type` and `status`,
+get refused, fix exactly what they were told, and guess again on the next field.
+The refusal now carries the contract — the required fields, the `type` and
+`status` enums, the date format, and `change`, which is the one that matters
+most: without it an artifact is invisible to every change-scoped predicate, so
+the file exists and the definition of done still reports that no artifact of that
+type exists. That is precisely what happened to the first requirement written.
+
+### What worked, on real agents
+
+The briefing arrives and is used. `SubagentStart` claimed each task, the resolver
+recorded `inline` declared against `subagent` actual, `SubagentStop` attributed
+the result, and the artifact validator caught every bad header before the session
+could finish.
+
+The acceptance gate refused a requirement that looked finished, naming four
+failing predicates. `decide` routed the rejection to rework. The agent was
+re-briefed with the reason and fixed it.
+
+And asked to record a `qa-lead` pass verdict on its own artifact, the
+product-manager refused: *"That predicate needs an actual qa-lead review... not a
+claim embedded in the header by product-manager. I did not fabricate one."*
+Nothing in the prompt told it to refuse.
+
 ## [0.27.1] — It had never actually run
 
 Asked whether this matched best practice, the honest answer was no, for a reason

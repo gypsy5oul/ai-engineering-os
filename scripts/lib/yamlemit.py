@@ -8,6 +8,13 @@ emitter would be a second parser to keep in step with the first.
 def _needs_quote(s):
     if s == "" or s != s.strip():
         return True
+    # Any control character has to be escaped, and escaping requires quoting.
+    # Without this a multi-line value was emitted with real newlines inside a
+    # double-quoted scalar, which is not YAML: the first agent result written to
+    # a work item corrupted the graph so completely that nothing could read it
+    # back.
+    if any(c in s for c in "\n\r\t"):
+        return True
     if s[0] in "-?:,[]{}#&*!|>'\"%@`":
         return True
     if ": " in s or s.endswith(":") or " #" in s:
@@ -31,7 +38,9 @@ def scalar(v):
         return str(v)
     s = str(v)
     if _needs_quote(s):
-        return '"%s"' % s.replace("\\", "\\\\").replace('"', '\\"')
+        body = (s.replace("\\", "\\\\").replace('"', '\\"')
+                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"))
+        return '"%s"' % body
     return s
 
 

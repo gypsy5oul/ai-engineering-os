@@ -131,3 +131,41 @@ class TestPathMatching(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTheEmitterSurvivesAgentText(unittest.TestCase):
+    """An agent's result is arbitrary prose and it goes straight into the graph.
+
+    The first real agent result written to a work item corrupted the store so
+    completely that nothing could read it back: the value contained a colon, so
+    it was quoted, and it contained newlines, which were emitted raw inside the
+    quotes. That is not YAML.
+    """
+
+    def roundtrip(self, value):
+        import yaml
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import yamlemit
+        doc = yamlemit.dump_document({"tasks": [{"id": "T-001", "result": value}]})
+        return yaml.safe_load(doc)["tasks"][0]["result"]
+
+    def test_a_multi_line_result(self):
+        text = "Recorded at path. Five lines:\n1. Confirmed feature\n2. Risk MEDIUM"
+        self.assertEqual(self.roundtrip(text), text)
+
+    def test_tabs_and_carriage_returns(self):
+        text = "a\tb\r\nc: d"
+        self.assertEqual(self.roundtrip(text), text)
+
+    def test_quotes_and_backslashes(self):
+        text = 'he said "no": C:\\path\\to\\thing'
+        self.assertEqual(self.roundtrip(text), text)
+
+    def test_a_result_that_looks_like_yaml(self):
+        text = "id: T-002\nstate: accepted\n- not a list item"
+        self.assertEqual(self.roundtrip(text), text)
+
+    def test_plain_text_is_left_alone(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import yamlemit
+        self.assertEqual(yamlemit.scalar("just text"), "just text")
