@@ -11,6 +11,7 @@ policy.
 """
 import json
 import os
+import sys
 import time
 
 try:
@@ -105,6 +106,17 @@ def _schema(name):
         return json.load(fh)
 
 
+def is_valid(data, schema_name):
+    """True when the data satisfies the schema.
+
+    `validate()` returns the errors, so `not validate(...)` means valid -- which
+    reads backwards at a call site and has been misread by a reviewer tracing the
+    --force path, who concluded the safety condition was inverted. It was not.
+    The confusion was, so callers asking a yes/no question ask it in words.
+    """
+    return not validate(data, schema_name)
+
+
 def validate(data, schema_name):
     """Errors against the schema, or [].
 
@@ -170,8 +182,36 @@ def save_graph(project, graph):
     if errors:
         raise ValueError("task graph for %s does not satisfy its schema: %s"
                          % (graph.get("work_item"), "; ".join(errors[:3])))
+    broken = structural_violations(graph)
+    if broken:
+        # Shape and meaning are different questions, and the schema only answers
+        # the first. Checking meaning after the write tells you an invalid state
+        # was created; checking it here stops it being created, which matters
+        # because every caller writes through this function.
+        raise ValueError("task graph for %s breaks its own invariants: %s"
+                         % (graph.get("work_item"), "; ".join(broken[:3])))
     _write_yaml(os.path.join(item_dir(project, graph["work_item"]), "graph.yaml"), graph)
     return graph
+
+
+def structural_violations(graph):
+    """Cheap invariants that need only the graph, as a list of messages.
+
+    Delegates to scripts/validate_graph_semantics.py so there is one definition.
+    Import failure is not a reason to refuse a write: the checker living
+    elsewhere is a packaging detail, and a store that cannot save because a
+    validator moved is worse than one that saves an odd graph the gate will catch.
+    """
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        scripts = os.path.dirname(here)
+        if scripts not in sys.path:
+            sys.path.insert(0, scripts)
+        import validate_graph_semantics as V
+    except Exception:
+        return []
+    return ["%s: %s" % (name, message)
+            for severity, name, message in V.structural(graph) if severity == "ERROR"]
 
 
 def history(project, wid):
@@ -418,8 +458,7 @@ def children_of(graph, parent_id):
     return [t for t in graph.get("tasks", []) if t.get("parent") == parent_id]
 
 
-def complete_lease(project, wid, agent_id, result=None, native_task=None,
-                   actual_execution=None):
+def complete_lease(project, wid, agent_id, result=None, native_task=None):
     """Record a result against the task this agent holds, and release it. Atomic.
 
     The read-modify-write used to run outside any lock: resolve() loaded the graph,
@@ -439,8 +478,10 @@ def complete_lease(project, wid, agent_id, result=None, native_task=None,
             held["result"] = result
         if native_task:
             held["native_task"] = native_task
-        if actual_execution:
-            set_execution(held, actual=actual_execution)
+        # `actual` is deliberately not settable from here. It is written at
+        # SubagentStart from the event that is evidence a spawn happened; setting
+        # it at the stop meant copying the resolution and calling it an
+        # observation, which is what this field used to be.
         held.pop("owner_agent", None)
         held.pop("owner_session", None)
         save_graph(project, graph)
@@ -469,7 +510,12 @@ def _release_locked(project, wid, agent_id):
         return None
     for t in graph.get("tasks", []):
         if t.get("owner_agent") == agent_id:
+            # Both, as complete_lease does. Clearing only the agent left the
+            # session behind, so a released task still recorded an owner_session
+            # with nobody holding it -- found the day the invariant that forbids
+            # that started running on the write.
             t.pop("owner_agent", None)
+            t.pop("owner_session", None)
             t["last_activity"] = now()
             save_graph(project, graph)
             return t

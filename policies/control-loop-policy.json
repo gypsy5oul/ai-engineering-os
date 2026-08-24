@@ -145,5 +145,27 @@
     "ttl_seconds": 3600,
     "why": "A task claimed by an agent that never stopped is held forever: runnable() skips a leased task, so one crashed session strands every task behind it and the graph looks busy while being finished. The concurrency ledger already expires its slots on the same reasoning -- a stuck slot is worse than a missed one -- and the task lease, which costs more when it sticks, had no such rule.",
     "on_expiry": "The lease is dropped and the task becomes runnable again. Its attempts are unchanged, so a task that keeps being claimed and abandoned still reaches its cap and escalates rather than cycling."
+  },
+  "acceptance": {
+    "why": "The four answers a definition of done can give are not equally serious, and how much each is allowed to hold up an acceptance is an organizational decision rather than a branch in Python. Stating it here means a project can tighten it.",
+    "failing": {
+      "all": "refuse",
+      "why": "The repository can see it is not done. There is no risk level at which that is acceptable."
+    },
+    "unsupported": {
+      "LOW": "allow_and_record",
+      "MEDIUM": "allow_and_record",
+      "HIGH": "refuse",
+      "CRITICAL": "refuse",
+      "why": "The checker cannot answer, which is a broken contract rather than evidence elsewhere. Refusing every session over it would make the gate unusable; passing it silently makes the gate pointless."
+    },
+    "unverifiable": {
+      "LOW": "allow_and_record",
+      "MEDIUM": "allow_and_record",
+      "HIGH": "allow_and_record",
+      "CRITICAL": "allow_and_record",
+      "why": "Real evidence that lives in GitLab or a pipeline. Nothing in a session can confirm it, so refusing would block work on the platform's shape rather than on the work. Every acceptance names which predicates rested on it.",
+      "what_would_change_this": "A project that can read its own pipeline results should set CRITICAL to refuse, because then the evidence is reachable and resting on an assertion is a choice."
+    }
   }
 }

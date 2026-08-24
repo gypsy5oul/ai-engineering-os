@@ -217,6 +217,38 @@ def classify(entry, m=None):
     return fn, args, None
 
 
+def acceptance_policy():
+    """How each kind of unanswered predicate is treated, by risk.
+
+    Read rather than hardcoded, so tightening it is an edit to a policy file and
+    not to a branch in two scripts that could then disagree.
+    """
+    default = {"failing": {"all": "refuse"},
+               "unsupported": {"LOW": "allow_and_record", "MEDIUM": "allow_and_record",
+                               "HIGH": "refuse", "CRITICAL": "refuse"},
+               "unverifiable": {"LOW": "allow_and_record", "MEDIUM": "allow_and_record",
+                                "HIGH": "allow_and_record", "CRITICAL": "allow_and_record"}}
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        with open(os.path.join(os.path.dirname(here), "policies",
+                               "control-loop-policy.json"), encoding="utf-8") as fh:
+            got = (json.load(fh) or {}).get("acceptance")
+        if isinstance(got, dict):
+            for bucket in default:
+                if isinstance(got.get(bucket), dict):
+                    default[bucket] = got[bucket]
+    except Exception:
+        pass
+    return default
+
+
+def refuses(bucket, risk):
+    """Whether a finding in this bucket refuses acceptance at this risk."""
+    rule = acceptance_policy().get(bucket) or {}
+    verdict = rule.get("all") or rule.get(str(risk or "MEDIUM").upper()) or "allow_and_record"
+    return verdict == "refuse"
+
+
 def acceptance(project, task, change=None, artifacts=None):
     """Whether this task's contract is satisfied, and what could not be answered.
 

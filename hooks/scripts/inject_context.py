@@ -48,11 +48,83 @@ def build(project, agent_type, agent_id=None, session=None):
     # Claim exactly one task for this agent. Matching on role alone briefed an
     # agent on every task its role owned, and two agents on the same one.
     claimed = W.claim(project, wid, agent_type, agent_id, session) if agent_id else None
-    if claimed is not None:
+    if claimed is None:
+        return briefing.render(item, None, graph)
+
+    # Everything after the claim can fail, and until this existed a failure left
+    # the task leased to an agent that had received nothing: the organization
+    # recorded that T-007 was being worked on by someone who had never heard of
+    # it, and SubagentStop then attributed whatever that agent did to T-007.
+    # SubagentStart cannot refuse a spawn -- it is not in the CLI's blocking set
+    # -- so the agent runs regardless. What can be fixed is the lie.
+    try:
         resolve_and_record(project, wid, claimed, agent_id)
         graph = W.load_graph(project, wid) or graph
         claimed = W.task(graph, claimed["id"])
-    return briefing.render(item, claimed, graph)
+        return briefing.render(item, claimed, graph)
+    except Exception as exc:
+        return abandon_claim(project, wid, item, claimed, agent_id, exc)
+
+
+def abandon_claim(project, wid, item, claimed, agent_id, exc):
+    """Give the task back, and tell the agent it is running without its contract.
+
+    Releasing is the honest half: an unattributed result is a gap in the record,
+    while a result attributed to a task the agent never saw is a false entry in
+    it, and only one of those can be noticed later.
+    """
+    # The higher of the two. A LOW task inside a CRITICAL change is still work
+    # nobody should do blind, and taking only the task's risk here would let the
+    # finer-grained number talk the coarser one down.
+    order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "CRITICAL": 3}
+    levels = [str((claimed or {}).get("risk") or "MEDIUM").upper(),
+              str(item.get("risk") or "MEDIUM").upper()]
+    risk = max(levels, key=lambda r: order.get(r, 1))
+    released = None
+    try:
+        released = W.release(project, wid, agent_id)
+    except Exception as release_failed:
+        # The release failing is the serious half of this: the alternative to a
+        # released lease is a task the organization believes is being worked on
+        # by an agent that never heard of it.
+        try:
+            H.audit({"type": "lease_release_failed", "work_item": wid,
+                     "task": (claimed or {}).get("id"), "agent": agent_id,
+                     "error": repr(release_failed)[:200]})
+        except Exception:
+            pass
+        if os.environ.get("AIEOS_DEBUG"):
+            sys.stderr.write("release failed: %r\n" % (release_failed,))
+    try:
+        H.audit({"type": "briefing_failed", "work_item": wid,
+                 "task": (claimed or {}).get("id"), "agent": agent_id,
+                 "risk": risk, "error": repr(exc)[:200]})
+        W.record(project, wid, "briefing_failed", task=(claimed or {}).get("id"),
+                 agent_id=agent_id, risk=risk, error=repr(exc)[:200],
+                 why="the lease was released; an unbriefed agent must not own a task")
+    except Exception:
+        pass
+
+    warning = [
+        "## This session has no organizational context",
+        "",
+        "The work item briefing could not be built (%s). The task that had been "
+        "assigned to you has been released, so nothing is recorded as belonging to "
+        "you." % repr(exc)[:120],
+        "",
+    ]
+    if risk in ("HIGH", "CRITICAL"):
+        warning += [
+            "This is %s-risk work. Do not proceed on assumption. Report that the briefing "
+            "failed and stop; the organization cannot tell whether what you produce belongs "
+            "to this change." % risk,
+        ]
+    else:
+        warning += [
+            "Say so before doing anything whose correctness depends on the requirement, the "
+            "architecture or the definition of done, none of which reached you.",
+        ]
+    return "\n".join(warning)
 
 
 def observe_actual(project, wid, task, agent_id):

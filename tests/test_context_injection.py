@@ -260,3 +260,71 @@ class TestTheCompletionGateBindsOnAnIdNotAString(Hooked):
         low = next(t for t in graph["tasks"]
                    if t.get("definition_of_done") and t.get("risk") == "LOW")
         self.assertEqual(self.gate_with(root, "%s done" % low["id"]).returncode, 0)
+
+
+class TestAClaimedTaskIsNeverLeftUnbriefed(Hooked):
+    """SubagentStart is not in the CLI's blocking set, so a spawn cannot be
+    refused. What can be fixed is the lie: a failure after the claim used to
+    leave the task leased to an agent that had received nothing, and SubagentStop
+    then attributed whatever that agent did to it."""
+
+    def broken_renderer(self):
+        root = os.path.join(self.project, "_plugin")
+        shutil.copytree(ROOT, root, ignore=shutil.ignore_patterns(
+            ".git", "__pycache__", "*.pyc", ".ai-engineering", "_plugin"))
+        with open(os.path.join(root, "scripts", "lib", "briefing.py"), "a",
+                  encoding="utf-8") as fh:
+            fh.write("\n\ndef render(*a, **k):\n"
+                     "    raise RuntimeError('the renderer is broken')\n")
+        return root
+
+    def start_with(self, root, agent_type="ai-engineering-os:engineering-director"):
+        env = dict(os.environ, CLAUDE_PLUGIN_ROOT=root, CLAUDE_PROJECT_DIR=self.project)
+        proc = subprocess.run(
+            [sys.executable, os.path.join(root, "hooks", "scripts", "inject_context.py")],
+            input=json.dumps({"hook_event_name": "SubagentStart", "agent_type": agent_type,
+                              "agent_id": "a1", "session_id": "S1"}),
+            capture_output=True, text=True, env=env, timeout=60)
+        self.assertEqual(proc.returncode, 0, "a hook must always exit 0")
+        return json.loads(proc.stdout) if proc.stdout.strip() else None
+
+    def leased(self):
+        return [t["id"] for t in W.load_graph(self.project, "SFTP-FEAT-001")["tasks"]
+                if t.get("owner_agent")]
+
+    def test_the_lease_is_released_when_the_briefing_fails(self):
+        self.start_with(self.broken_renderer())
+        self.assertEqual(self.leased(), [],
+                         "a task is leased to an agent that received nothing")
+
+    def test_the_agent_is_told_it_has_no_context(self):
+        out = self.start_with(self.broken_renderer())
+        ctx = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("no organizational context", ctx)
+
+    def test_high_risk_work_is_told_to_stop(self):
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        W.task(graph, "T-001")["risk"] = "CRITICAL"
+        W.save_graph(self.project, graph)
+        ctx = self.start_with(self.broken_renderer())["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("stop", ctx.lower())
+
+    def test_the_change_risk_is_not_talked_down_by_the_task_risk(self):
+        """A LOW task inside a HIGH change is still work nobody should do blind."""
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        W.task(graph, "T-001")["risk"] = "LOW"
+        W.save_graph(self.project, graph)
+        ctx = self.start_with(self.broken_renderer())["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("HIGH-risk", ctx)
+
+    def test_the_failure_is_recorded(self):
+        self.start_with(self.broken_renderer())
+        failures = [h for h in W.history(self.project, "SFTP-FEAT-001")
+                    if h["kind"] == "briefing_failed"]
+        self.assertTrue(failures)
+        self.assertEqual(failures[0]["task"], "T-001")
+
+    def test_a_working_briefing_keeps_its_lease(self):
+        out = self.start_with(ROOT)
+        self.assertIn("Your task", out["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(self.leased(), ["T-001"])

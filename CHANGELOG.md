@@ -3,6 +3,73 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.26.1] — The P0 that was not, and the bug the new invariant found on its first day
+
+A fresh audit reported `plan --force` as logically inverted: a valid graph
+rebuilt, an invalid one refused. Checked in both directions before touching
+anything, and it is correct as written — `validate()` returns the *errors*, so an
+empty list means valid and `not validate(...)` means "no errors". A valid graph
+with accepted work is refused; a corrupted one is repaired.
+
+But a reviewer tracing implementation paths read it backwards, and that is a real
+defect even when the behaviour is right. There was also **no test for `--force`
+at all**, which is why the ambiguity survived. Both are fixed: `W.is_valid()`
+says what it means at the call site, and six tests assert both directions —
+including that inverting the condition, exactly as the review believed it was,
+fails five of them.
+
+### A claimed task could be left leased to an agent that received nothing
+
+Reproduced: break the briefing renderer, and the hook claims the task, fails,
+exits 0, and leaves `T-001` owned by an agent that never heard of it.
+`SubagentStop` would then attribute whatever that agent did to `T-001`.
+
+`SubagentStart` is not in the CLI's blocking set, so the spawn cannot be refused.
+What can be fixed is the lie. The lease is released, the failure is recorded, and
+the agent receives the one thing that still reaches it — a briefing saying it has
+no organizational context, and on HIGH or CRITICAL work that it should stop and
+report. An unattributed result is a gap in the record; a result attributed to a
+task the agent never saw is a false entry in it, and only one of those can be
+noticed later.
+
+The risk is the higher of the task's and the change's. A LOW task inside a HIGH
+change is still work nobody should do blind.
+
+### Invariants now run on the write, not after it
+
+`save_graph()` checks the structural invariants before persisting, so an invalid
+state cannot be created rather than being found later. The expensive ones — the
+acceptance contract, which reads every artifact and evaluates predicates — stay
+in the gate, because running them on every write would make the store unusable.
+
+**It found a real bug within minutes of being switched on.** `release()` cleared
+`owner_agent` and left `owner_session` behind, so every released task recorded a
+session with nobody holding it. `complete_lease()` had always cleared both. The
+two had been inconsistent since leases existed and no test noticed, because
+nothing was asking the question.
+
+### Also
+
+`actual_undetermined` now requires evidence too. The invariant was one-sided:
+claiming to know what ran needed an observation, and claiming *not* to know
+needed nothing — but "I do not know" is a conclusion from an observation, not a
+substitute for one.
+
+How each kind of unanswered predicate is treated is now policy rather than a
+branch in Python: `failing` always refuses; `unsupported` refuses on HIGH and
+CRITICAL; `unverifiable` is allowed and recorded at every tier, with a note
+saying what would justify tightening it. A project that can read its own pipeline
+results should. Verified live: flipping `unverifiable.HIGH` to `refuse` changes
+the answer.
+
+Skipping dependency inference after a decomposition is now a decision on HIGH and
+CRITICAL work rather than a flag that prints a warning. `--no-infer` alone is
+refused; `--i-know-the-ordering` records that somebody chose it.
+
+`complete_lease()` lost its `actual_execution` parameter. It was vestigial after
+`actual` moved to SubagentStart, and it set the field without evidence — which
+the new write-time invariant correctly refused.
+
 ## [0.26.0] — Accepted means the contract was met
 
 Two P0s, both about the same thing: the last places where the durable graph could

@@ -184,3 +184,65 @@ class TestDerivedDependencies(Semantics):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestInvariantsAreCheckedBeforeThePersistence(Semantics):
+    """A validator that only runs later tells you an invalid state was created.
+    One that runs on the write stops it being created, and every caller writes
+    through save_graph."""
+
+    def test_the_write_is_refused_not_merely_reported(self):
+        cases = {
+            "one_agent_one_task": lambda g, t: [t(x).update(
+                {"owner_agent": "agent-X", "state": "working"}) for x in ("T-001", "T-002")],
+            "dependency_exists": lambda g, t: t("T-004").update({"depends_on": ["T-404"]}),
+            "acyclic": lambda g, t: (t("T-011").update({"depends_on": ["T-012"]}),
+                                     t("T-012").update({"depends_on": ["T-011"]})),
+            "actual_requires_evidence": lambda g, t: t("T-006").update(
+                {"execution": {"declared": "subagent", "actual": "team"}}),
+        }
+        for invariant, mutate in cases.items():
+            with self.subTest(invariant=invariant):
+                graph = W.load_graph(self.project, self.ITEM)
+                mutate(graph, lambda tid: W.task(graph, tid))
+                with self.assertRaises(ValueError) as caught:
+                    W.save_graph(self.project, graph)
+                self.assertIn(invariant, str(caught.exception))
+
+    def test_a_legitimate_write_still_works(self):
+        graph = W.load_graph(self.project, self.ITEM)
+        W.task(graph, "T-001")["state"] = "working"
+        W.save_graph(self.project, graph)
+        self.assertEqual(W.task(W.load_graph(self.project, self.ITEM), "T-001")["state"],
+                         "working")
+
+    def test_the_expensive_checks_do_not_run_on_the_write(self):
+        """Reading every artifact and evaluating predicates on every save would
+        make the store unusable. Those run in the gate."""
+        names = {name for _, name, _ in
+                 V.structural(W.load_graph(self.project, self.ITEM))}
+        self.assertNotIn("accepted_means_the_contract_was_met", names)
+
+    def test_a_missing_validator_does_not_stop_the_store_working(self):
+        real = W.structural_violations
+        W.structural_violations = lambda graph: []
+        try:
+            graph = W.load_graph(self.project, self.ITEM)
+            W.task(graph, "T-001")["state"] = "working"
+            W.save_graph(self.project, graph)
+        finally:
+            W.structural_violations = real
+
+
+class TestNotKnowingIsAlsoAClaim(Semantics):
+    def test_undetermined_needs_evidence_too(self):
+        self.assertCatches("undetermined_requires_evidence", lambda g, t: t("T-006").update(
+            {"execution": {"declared": "subagent",
+                           "actual_undetermined": "teams are on and the payload cannot say"}}))
+
+    def test_undetermined_with_evidence_is_fine(self):
+        self.break_it(lambda g, t: t("T-006").update(
+            {"execution": {"declared": "subagent",
+                           "actual_undetermined": "teams are on and the payload cannot say",
+                           "actual_evidence": "SubagentStart fired for a1"}}))
+        self.assertNotIn("undetermined_requires_evidence", self.names())

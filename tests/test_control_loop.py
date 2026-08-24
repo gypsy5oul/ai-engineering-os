@@ -602,12 +602,17 @@ class TestTheStopIsOneTransaction(Loop):
         finished = [t for t in after["tasks"] if t.get("result") == "A finished"]
         self.assertEqual(len(finished), 1, "A's result was lost to a concurrent claim")
 
-    def test_the_actual_execution_is_recorded_separately_from_the_resolution(self):
+    def test_the_stop_cannot_invent_what_ran(self):
+        """`actual` is written at SubagentStart from the event that is evidence a
+        spawn happened. Setting it at the stop copied the resolution and called
+        it an observation, which is exactly what the field used to be."""
         t = W.claim(self.project, self.item, "engineering-director", "agent-1")
-        W.complete_lease(self.project, self.item, "agent-1", result="done",
-                         actual_execution="subagent")
+        W.complete_lease(self.project, self.item, "agent-1", result="done")
         after = W.task(W.load_graph(self.project, self.item), t["id"])
-        self.assertEqual(after["execution"]["actual"], "subagent")
+        ex = after.get("execution")
+        if isinstance(ex, dict):
+            self.assertIsNone(ex.get("actual"),
+                              "the stop wrote an execution mode it did not observe")
 
 
 class TestAnExpiredLeaseIsAudited(Loop):
@@ -639,3 +644,76 @@ class TestAnExpiredLeaseIsAudited(Loop):
         W.claim(self.project, self.item, "engineering-director", "agent-2")
         self.assertEqual([h for h in W.history(self.project, self.item)
                           if h["kind"] == "lease_expired"], [])
+
+
+class TestForceIsARepairPathNotASecondReplan(Loop):
+    """`--force` used to rebuild any graph: it reset the generation, discarded
+    accepted work the replan rule says to carry forward, and never counted
+    against the replan cap. It is now refused on a graph that validates.
+
+    Both directions are asserted because the condition reads backwards --
+    `validate()` returns the errors, so an empty list means valid -- and a
+    reviewer tracing this path concluded the safety property was inverted. It is
+    not, and this is the test that says so.
+    """
+
+    def setUp(self):
+        Loop.setUp(self)
+        self.item = self.open_item(risk="HIGH")
+        cl(self.project, "plan", "--item", self.item)
+        graph = W.load_graph(self.project, self.item)
+        W.task(graph, "T-001")["state"] = "accepted"
+        W.save_graph(self.project, graph)
+
+    def corrupt(self):
+        import yamlemit
+        graph = W.load_graph(self.project, self.item)
+        W.task(graph, "T-002")["state"] = "not-a-real-state"
+        path = os.path.join(self.project, ".ai-engineering", "work", self.item, "graph.yaml")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(yamlemit.dump_document(W._stringify_dates(graph)))
+
+    def test_a_valid_graph_is_refused(self):
+        proc = cl(self.project, "plan", "--item", self.item, "--force")
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+        self.assertIn("nothing to repair", proc.stdout)
+
+    def test_the_refusal_leaves_accepted_work_alone(self):
+        cl(self.project, "plan", "--item", self.item, "--force")
+        graph = W.load_graph(self.project, self.item)
+        self.assertEqual(W.task(graph, "T-001")["state"], "accepted")
+        self.assertEqual(graph["generation"], 1)
+
+    def test_an_invalid_graph_is_repaired(self):
+        self.corrupt()
+        self.assertFalse(W.is_valid(W.load_graph(self.project, self.item),
+                                    "task-graph.schema.json"))
+        proc = cl(self.project, "plan", "--item", self.item, "--force")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn("Repairing", proc.stdout)
+        self.assertTrue(W.is_valid(W.load_graph(self.project, self.item),
+                                   "task-graph.schema.json"))
+
+    def test_a_repair_is_recorded(self):
+        self.corrupt()
+        cl(self.project, "plan", "--item", self.item, "--force")
+        self.assertTrue([h for h in W.history(self.project, self.item)
+                         if h["kind"] == "graph_repaired"])
+
+    def test_force_is_not_a_way_around_the_replan_cap(self):
+        """The cap refuses at two. Forcing must not be a third plan."""
+        for n in range(3):
+            cl(self.project, "replan", "--item", self.item, "--reason",
+               "probing the replan cap, attempt %d" % (n + 1))
+        item = W.load_item(self.project, self.item)
+        proc = cl(self.project, "plan", "--item", self.item, "--force")
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(W.load_item(self.project, self.item)["replans"], item["replans"])
+
+    def test_is_valid_says_what_it_means(self):
+        """The helper exists because `not validate(...)` reads backwards."""
+        graph = W.load_graph(self.project, self.item)
+        self.assertTrue(W.is_valid(graph, "task-graph.schema.json"))
+        self.corrupt()
+        self.assertFalse(W.is_valid(W.load_graph(self.project, self.item),
+                                    "task-graph.schema.json"))

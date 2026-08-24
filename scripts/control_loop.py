@@ -278,7 +278,7 @@ def cmd_plan(args):
         # graph: it reset the generation to 1, discarded accepted work the replan
         # rule says to carry forward, and never touched item['replans'] -- so it
         # was an unrecorded, unlimited way around a cap that refuses at two.
-        if not W.validate(existing, "task-graph.schema.json"):
+        if W.is_valid(existing, "task-graph.schema.json"):
             print("REFUSED: %s has a valid graph, so there is nothing to repair.\n"
                   "--force exists for a graph that will not parse or validate. To replace one "
                   "that works, use `replan --reason`: it counts against the replan limit, "
@@ -380,10 +380,14 @@ def refuse_unearned_acceptance(args, t):
         return None
 
     risk = str(t.get("risk", "MEDIUM")).upper()
-    high = risk in ("HIGH", "CRITICAL")
-    blocking = list(result["failing"])
+    # From policies/control-loop-policy.json, so the gate and the loop cannot
+    # drift apart on how serious each kind of unanswered predicate is.
+    high = check_dod.refuses("unsupported", risk)
+    blocking = list(result["failing"]) if check_dod.refuses("failing", risk) else []
     if result["unsupported"] and high:
         blocking += result["unsupported"]
+    if result["unverifiable"] and check_dod.refuses("unverifiable", risk):
+        blocking += result["unverifiable"]
 
     if blocking:
         print("REFUSED: %s has not satisfied its definition of done." % t["id"])

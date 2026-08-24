@@ -290,6 +290,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="validate and print, write nothing")
     ap.add_argument("--no-infer", action="store_true",
                     help="do not ask the repository about the ordering of the new tasks")
+    ap.add_argument("--i-know-the-ordering", action="store_true",
+                    help="acknowledge skipping inference on HIGH or CRITICAL work")
     args = ap.parse_args()
 
     project = os.path.abspath(args.project)
@@ -360,6 +362,17 @@ def main():
           % parent["id"])
 
     if args.no_infer:
+        risk = str(parent.get("risk") or "MEDIUM").upper()
+        rule = (policy().get("dependency_inference") or {}).get("skippable") or {}
+        if rule.get(risk, "allowed") != "allowed" and not args.i_know_the_ordering:
+            print("\nThe decomposition stands, and the ordering was NOT inferred.")
+            print("On %s-risk work that is a decision, not a flag: pass --i-know-the-ordering "
+                  "to say you are making it, or drop --no-infer." % risk)
+            W.record(project, args.item, "inference_skipped_unacknowledged",
+                     task=parent["id"], risk=risk)
+            return 1
+        W.record(project, args.item, "inference_skipped", task=parent["id"], risk=risk,
+                 acknowledged=bool(args.i_know_the_ordering))
         print("\nDependency inference skipped. Run infer_dependencies.py before the children "
               "are claimed, or two of them may edit one file at the same time.")
         return 0

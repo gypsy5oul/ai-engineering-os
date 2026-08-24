@@ -28,6 +28,18 @@ TERMINAL_OK_LEASE = ("working", "review", "assigned", "rework")
 
 def invariants(project, item_id, graph, item):
     """Every violation, as (severity, invariant, message)."""
+    return structural(graph) + contractual(project, item_id, graph)
+
+
+def structural(graph):
+    """The invariants that need only the graph.
+
+    Separated from the contractual ones because these are cheap -- no artifact is
+    read and no predicate is evaluated -- which is what makes it possible to run
+    them on every write rather than in the gate afterwards. A validator that only
+    runs later tells you an invalid state was created; one that runs on the write
+    stops it being created.
+    """
     out = []
     tasks = {t["id"]: t for t in graph.get("tasks", [])}
 
@@ -102,6 +114,13 @@ def invariants(project, item_id, graph, item):
                 bad("actual_requires_evidence",
                     "%s claims actual execution %r with no evidence. Without it, `actual` is a "
                     "copy of `resolved` wearing another name." % (tid, ex["actual"]))
+            if ex.get("actual_undetermined") and not ex.get("actual_evidence"):
+                # "I do not know" is still a claim about the runtime, and it is
+                # only worth anything if something was actually observed. The
+                # invariant was one-sided: not knowing needed no observation.
+                bad("undetermined_requires_evidence",
+                    "%s records actual_undetermined with no evidence. Not knowing what ran is a "
+                    "conclusion from an observation, not a substitute for one." % tid)
             if ex.get("actual") and ex.get("actual_undetermined"):
                 bad("actual_is_not_both_known_and_unknown",
                     "%s records both actual=%r and actual_undetermined" % (tid, ex["actual"]))
@@ -124,7 +143,23 @@ def invariants(project, item_id, graph, item):
                     "%s is accepted while it still waits on %s" % (tid, ", ".join(unmet)),
                     severity="WARN")
 
-    # --- acceptance against the contract, which is the expensive one
+    for cycle in cycles(tasks):
+        bad("acyclic", "these tasks wait on each other: %s" % " -> ".join(cycle))
+    return out
+
+
+def contractual(project, item_id, graph):
+    """The invariants that need the artifacts on disk.
+
+    Every one of these reads the project and evaluates predicates, so they run in
+    the gate and from the CLI, not on every write.
+    """
+    out = []
+    tasks = {t["id"]: t for t in graph.get("tasks", [])}
+
+    def bad(name, message, severity="ERROR"):
+        out.append((severity, name, message))
+
     accepted = [t for t in tasks.values()
                 if t["state"] == "accepted" and t.get("definition_of_done")]
     if accepted:
@@ -140,10 +175,6 @@ def invariants(project, item_id, graph, item):
                     "%s is accepted %s-risk work with %d predicate(s) nothing can answer: %s"
                     % (t["id"], t.get("risk"), len(result["unsupported"]),
                        "; ".join(result["unsupported"][:2])))
-
-    # --- the graph as a whole
-    for cycle in cycles(tasks):
-        bad("acyclic", "these tasks wait on each other: %s" % " -> ".join(cycle))
     return out
 
 

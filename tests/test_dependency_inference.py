@@ -145,8 +145,11 @@ class TestImportEdges(Repo):
             if not dev.get("synthesis") else None
         self.infer("--record")
         graph = W.load_graph(self.project, self.ITEM)
+        decomposed = {t["parent"] for t in graph["tasks"] if t.get("parent")}
         for t in graph["tasks"]:
-            if not t.get("parent"):
+            # Not the decomposed stages: a parent stands for its pieces, and
+            # accepting one over an open child is refused on the write.
+            if not t.get("parent") and t["id"] not in decomposed:
                 t["state"] = "accepted"
         for key in ("model", "service"):
             W.task(graph, self.ids[key])["state"] = "accepted"

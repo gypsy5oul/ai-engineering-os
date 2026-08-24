@@ -73,5 +73,16 @@
   "max_depth": 1,
   "not_enforceable": [
     "Whether the decomposition is any good. The rules below reject a decomposition that is incoherent with the graph; they cannot reject one that is merely poor. That is what the reviewer on the stage is for."
-  ]
+  ],
+  "dependency_inference": {
+    "runs": "after every graft, from synthesize_tasks.py",
+    "why": "A decomposition is the moment new ordering appears -- several tasks that did not exist a second ago, some of them editing the same files. A tool that has to be invoked by hand at precisely that moment will be missed.",
+    "skippable": {
+      "LOW": "allowed",
+      "MEDIUM": "allowed",
+      "HIGH": "requires --i-know-the-ordering",
+      "CRITICAL": "requires --i-know-the-ordering",
+      "why": "Skipping is legitimate -- a project may know its ordering better than a regex over its imports does -- but on high-risk work it is a decision, and a decision made by typing a flag that produces a warning is one nobody made."
+    }
+  }
 }

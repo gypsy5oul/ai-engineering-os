@@ -91,7 +91,9 @@ def main():
 
         result = contract(project, held, change=wid)
         failing, unsupported = result["failing"], result["unsupported"]
-        high = str(risk).upper() in ("HIGH", "CRITICAL")
+        sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts"))
+        import check_dod
+        high = check_dod.refuses("unsupported", risk)
 
         # An entry the checker cannot answer is not a satisfied one. On HIGH and
         # CRITICAL work that difference is the whole point of having a gate; below
