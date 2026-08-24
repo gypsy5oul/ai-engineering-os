@@ -59,6 +59,22 @@ a tool once the convention demonstrably holds.
 
 ## Weak spots, named
 
+**Most of this has now run for real, and some of it never has.** Until 0.27.1
+every hook had been tested by feeding hand-written JSON to a Python script:
+547 tests validated the plugin against itself and none of them proved Claude
+Code would ever call any of it. A live run in a throwaway project confirmed the
+spine — SubagentStart claims a task and the briefing reaches the agent,
+SubagentStop attributes the result and releases the lease, an unowned spawn is
+recorded as unattributed, a real execution divergence was detected, and
+`guard_bash` escalated a protected-branch push with the refusal reaching the
+model and the command never running.
+
+What has still never run: **agent teams**, **worktree isolation** and therefore
+the `briefing_required` path, the **TaskCompleted gate** (it needs the native
+task tools), the **23 LLM-judged evaluations**, and **any complete work item** —
+one task has been briefed and observed; no change has been driven from intake to
+acceptance by real agents. Treat those as designed and unproven.
+
 **Behavioural rules are not enforcement.** "Never invent an availability target"
 is a contract, not a guarantee. The evaluation suite tests it; the suite does not
 run on every session.

@@ -3,6 +3,57 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.27.1] — It had never actually run
+
+Asked whether this matched best practice, the honest answer was no, for a reason
+none of the audits had raised: **the plugin had never been installed and had
+never run.** Not once.
+
+Every hook had been tested by feeding hand-written JSON to a Python script. 547
+tests, 28 mutation-tested faults, invariants on the write path, beliefs checked
+against the binary — all of it validated the plugin against itself, and none of
+it proved that Claude Code would ever call any of it. That is a different claim,
+and nobody had checked it.
+
+So it was checked. A throwaway project registered the hooks by absolute path in
+its own `.claude/settings.json`, project scope only, and real `claude -p`
+sessions were run in it.
+
+### What the spine did, live
+
+**The briefing reaches the agent.** Asked to report the work item id and the
+intent, a real subagent returned the intent verbatim, the definition of done and
+its assigned role — none of which were in the prompt it was given. It also
+flagged, unprompted, that the briefing had come from plugin injection rather than
+from its instructions.
+
+**Attribution works by agent id.** `SubagentStop` recorded the result against the
+task `SubagentStart` had claimed, and released the lease.
+
+**An unowned spawn is recorded honestly.** A `general-purpose` agent owns no task
+in the graph, so its result was written as `subagent_stopped_unattributed` with
+the real agent id — the design working, observed rather than asserted.
+
+**The divergence detector caught a real divergence on its first live run.** The
+stage declared `inline`; the work actually ran as a subagent. `execution_diverged`
+recorded both, with the real agent id as evidence. This is the field that was, two
+versions ago, a copy of `resolved` wearing another name.
+
+**A guard blocked a real command.** `git push origin main` never ran; the model
+received the `GIT-00` refusal text and reported it verbatim; the audit recorded
+`decision=escalate rules=GIT-00`. The escalate-to-`ask` mapping — the thing that
+was inert for ten versions — works on the wire.
+
+### What still has never run
+
+Agent teams. Worktree isolation, and therefore the `briefing_required` path. The
+`TaskCompleted` gate, which needs the native task tools. The 23 LLM-judged
+evaluations. And any complete work item: one task has been briefed and observed,
+but no change has been driven from intake to acceptance by real agents.
+
+Those are designed and unproven, and `docs/limitations.md` now says so in those
+words.
+
 ## [0.27.0] — Read the docs; found they disagree with the binary on six points
 
 Audited against the published documentation (code.claude.com/docs) rather than
