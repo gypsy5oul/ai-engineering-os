@@ -39,9 +39,12 @@ only a hook or a script can read back.
 ```
 
 `CURRENT` sits alongside those directories and names the work item this project
-is on. Every hook reads it to decide whether the session is doing tracked work
-or something else, and a session that is doing something else is a normal
-session, not an error.
+is on. Runtime hooks resolve the active work item from the session binding first
+-- `control_loop.py open --session` writes it outside source control -- and fall
+back to `CURRENT` only when there is no binding. That order matters: `CURRENT` is
+one pointer per project, so with two sessions open the second one's agents would
+be briefed on the first one's work. A session with neither is doing something
+other than tracked work, which is a normal session and not an error.
 
 ## Driving one, end to end
 
@@ -191,8 +194,13 @@ A stage declares its execution mode when the workflow is written, which is befor
 the situation exists. `execution: team` is good advice and a bad instruction in a
 headless session, where teammates do not spawn at all.
 
+Resolution happens on the claim path: when `SubagentStart` binds a task to an
+agent, the answer is computed and written onto the task before the agent begins.
+Reading it by hand, or re-recording it after the graph changes:
+
 ```bash
 python3 scripts/resolve_execution.py --project . --item ACME-FEAT-001 --all
+python3 scripts/resolve_execution.py --project . --item ACME-FEAT-001 --all --record
 ```
 
 ```
@@ -213,9 +221,32 @@ The rules, in the order they apply:
 | Writes files, siblings running | `worktree` | Parallel writers in one checkout produce a build output nobody owns |
 | Nothing overruled it | the declared mode | |
 
+Three values are kept, because they answer three different questions:
+
+```yaml
+execution:
+  declared: team            # what the workflow asked for, before the situation existed
+  resolved: subagent        # what the resolver decided at claim time
+  actual: subagent          # what the runtime reported having done
+  resolution_reason: "teams are not enabled in this environment"
+  briefing_required: false  # an isolated spawn receives no injected context
+```
+
+Keeping only one of them means the organization cannot tell a policy it chose
+from a degradation it accepted from a spawn that ignored both. With all three,
+"how often does this organization ask for execution the environment cannot give
+it" becomes a number rather than an impression.
+
 **It resolves and records; it does not compel.** A `PreToolUse` hook can refuse a
-spawn but cannot rewrite one, so nothing forces an agent to honour the answer.
-That limit is in the policy's `not_enforceable`, not left to be discovered.
+spawn but cannot rewrite one, so nothing forces an agent to honour the answer --
+which is exactly why `actual` is recorded separately at `SubagentStop` rather
+than assumed to equal `resolved`. That limit is in the policy's
+`not_enforceable`, not left to be discovered.
+
+`briefing_required` marks the one case that would otherwise fail silently: an
+isolated spawn does not receive `SubagentStart`'s `additionalContext`, so the
+task briefing this plugin exists to deliver never arrives. When it is set, the
+briefing has to travel in the spawn prompt instead.
 
 ## What the hooks do
 

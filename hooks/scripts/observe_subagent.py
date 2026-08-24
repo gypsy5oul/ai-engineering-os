@@ -60,14 +60,22 @@ def main():
 
         message = (data.get("last_assistant_message") or "").strip()
         thin = message.lower() in EMPTY or len(message) < 40
-        graph = W.load_graph(project, wid)
-        t = W.task(graph, held["id"])
-        t["last_activity"] = W.now()
-        t["result"] = message[:400] or "(the agent stopped without a result)"
-        W.save_graph(project, graph)
-        W.release(project, wid, agent_id)
+        # One transaction. This used to resolve, then load the graph a second
+        # time, edit, save, and release -- three separate lock scopes, so a
+        # concurrent claim landing between them was overwritten. That is the same
+        # lost update the lease exists to prevent, arriving one door further along.
+        t = W.complete_lease(
+            project, wid, agent_id,
+            result=message[:400] or "(the agent stopped without a result)",
+            actual_execution=W.effective_execution(held))
+        if t is None:
+            W.record(project, wid, "subagent_stopped_unattributed", agent=agent_type,
+                     agent_id=agent_id,
+                     why="the lease was gone by the time the result arrived")
+            sys.exit(0)
         W.record(project, wid, "subagent_stopped", agent=agent_type,
                  agent_id=agent_id, task=t["id"],
+                 execution=W.effective_execution(t),
                  thin_result=thin, transcript=data.get("agent_transcript_path"))
         mine = [t]
 

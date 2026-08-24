@@ -54,6 +54,8 @@ def build(project, agent_type, agent_id=None, session=None):
     # Claim exactly one task for this agent. Matching on role alone briefed an
     # agent on every task its role owned, and two agents on the same one.
     claimed = W.claim(project, wid, agent_type, agent_id, session) if agent_id else None
+    if claimed is not None:
+        resolve_and_record(project, wid, claimed)
     mine = [claimed] if claimed else []
     if mine:
         lines.append("## Your task")
@@ -69,6 +71,11 @@ def build(project, agent_type, agent_id=None, session=None):
             if t.get("coupled_surface"):
                 lines.append("- Touches the **%s** surface. It has an owner; if the contract is "
                              "wrong, raise it rather than changing it." % t["coupled_surface"])
+            ex = t.get("execution") if isinstance(t.get("execution"), dict) else {}
+            if ex.get("resolved") and ex["resolved"] != ex.get("declared"):
+                lines.append("- Execution: declared `%s`, resolved to `%s` — %s"
+                             % (ex.get("declared"), ex["resolved"],
+                                (ex.get("resolution_reason") or "")[:120]))
             attempts = t.get("attempts", 0)
             if attempts:
                 lines.append("- Attempt %d of %d. Previously: %s"
@@ -90,6 +97,50 @@ def build(project, agent_type, agent_id=None, session=None):
                      "repeating a superseded approach is the failure mode here."
                      % (item["replans"], item["id"]))
     return "\n".join(lines).strip()
+
+
+def resolve_and_record(project, wid, task):
+    """Resolve how this task should run, and write the answer onto the task.
+
+    The resolver was correct and standalone: execution-policy.json named it as its
+    enforcement, and nothing on the spawn path called it. A stage could declare
+    `team`, the resolver could say `subagent`, and the spawn could do a third
+    thing with nothing recording that the three disagreed. This is the claim path,
+    which is the only moment where the situation is known and the spawn has not
+    happened yet.
+    """
+    try:
+        # workitem is imported inside build(), not at module scope, so this needs
+        # its own import rather than the caller's name.
+        sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts"))
+        sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts", "lib"))
+        import resolve_execution
+        import workitem as W
+        graph = W.load_graph(project, wid)
+        live = W.task(graph, task["id"])
+        result = resolve_execution.record_resolution(project, wid, live, graph)
+        if result is None:
+            return None
+        W.save_graph(project, graph)
+        task["execution"] = live["execution"]
+        mode, why = result
+        if mode != W.declared_execution(live):
+            W.record(project, wid, "execution_resolved", task=task["id"],
+                     declared=W.declared_execution(live), resolved=mode, why=why)
+        return result
+    except Exception as exc:
+        # A resolver that breaks a spawn is worse than a spawn that runs as
+        # declared. The declaration is a considered default, not a guess. It is
+        # still recorded: a resolver that silently never runs is the defect this
+        # whole path exists to close.
+        if os.environ.get("AIEOS_DEBUG"):
+            sys.stderr.write("resolve_and_record failed: %r\n" % (exc,))
+        try:
+            H.audit({"type": "execution_resolution_failed", "task": task.get("id"),
+                     "work_item": wid, "error": repr(exc)[:200]})
+        except Exception:
+            pass
+        return None
 
 
 def main():

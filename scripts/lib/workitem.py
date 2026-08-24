@@ -216,8 +216,14 @@ class _GraphLock(object):
 
     Best-effort by design. If the lock cannot be taken the work still proceeds,
     because a lease that blocks a spawn is worse than a lease that occasionally
-    races.
+    races. `taken` records which of the two happened, so the difference is
+    visible rather than assumed: on a platform without `fcntl` this class is a
+    no-op and concurrent claims are NOT serialised. That is a real behavioural
+    difference between platforms and it is stated in docs/limitations.md rather
+    than left for someone to discover.
     """
+
+    taken = False
 
     def __init__(self, project, wid):
         self.path = os.path.join(item_dir(project, wid), ".graph.lock")
@@ -229,8 +235,10 @@ class _GraphLock(object):
             os.makedirs(os.path.dirname(self.path), exist_ok=True)
             self.handle = open(self.path, "w")
             fcntl.flock(self.handle.fileno(), fcntl.LOCK_EX)
+            self.taken = True
         except Exception:
             self.handle = None
+            self.taken = False
         return self
 
     def __exit__(self, *exc):
@@ -280,6 +288,15 @@ def _claim_locked(project, wid, agent_type, agent_id, session=None):
     for t in runnable(graph):
         if t.get("role") != agent_type:
             continue
+        # A task being handed out because its previous holder's lease expired is
+        # an event worth keeping. Without it, a crash looks in the history exactly
+        # like an orderly handover, and nobody can tell afterwards which it was.
+        if t.get("owner_agent") and lease_expired(t):
+            record(project, wid, "lease_expired", task=t["id"],
+                   previous_owner=t["owner_agent"], expired_at=t.get("last_activity"),
+                   reclaimed_by=agent_id, ttl_seconds=_lease_ttl(),
+                   why="the holder stopped reporting; the task returned to the queue with its "
+                       "attempts unchanged")
         t["owner_agent"] = agent_id
         if session:
             t["owner_session"] = session
@@ -288,6 +305,35 @@ def _claim_locked(project, wid, agent_type, agent_id, session=None):
         save_graph(project, graph)
         return t
     return None
+
+
+def complete_lease(project, wid, agent_id, result=None, native_task=None,
+                   actual_execution=None):
+    """Record a result against the task this agent holds, and release it. Atomic.
+
+    The read-modify-write used to run outside any lock: resolve() loaded the graph,
+    the caller loaded it again, edited a task and saved, then release() loaded it a
+    third time. Three windows for a concurrent claim to be overwritten -- the same
+    lost-update the lease exists to prevent, one door further along.
+    """
+    with _GraphLock(project, wid):
+        graph = load_graph(project, wid)
+        if not graph:
+            return None
+        held = next((t for t in graph.get("tasks", []) if t.get("owner_agent") == agent_id), None)
+        if held is None:
+            return None
+        held["last_activity"] = now()
+        if result is not None:
+            held["result"] = result
+        if native_task:
+            held["native_task"] = native_task
+        if actual_execution:
+            set_execution(held, actual=actual_execution)
+        held.pop("owner_agent", None)
+        held.pop("owner_session", None)
+        save_graph(project, graph)
+        return held
 
 
 def resolve(project, wid, agent_id):
@@ -463,6 +509,57 @@ def dependencies_met(graph, t):
         if d is None or d["state"] != "accepted":
             return False
     return True
+
+
+def declared_execution(task):
+    """What the workflow asked for, whichever shape the field is in."""
+    ex = task.get("execution")
+    if isinstance(ex, dict):
+        return ex.get("declared") or "subagent"
+    return ex or "subagent"
+
+
+def effective_execution(task):
+    """What will actually be used: the resolution if there is one, else the
+    declaration. Callers deciding how to spawn must read this and not `declared`,
+    which is a request made before the situation existed."""
+    ex = task.get("execution")
+    if isinstance(ex, dict):
+        return ex.get("resolved") or ex.get("declared") or "subagent"
+    return ex or "subagent"
+
+
+def set_execution(task, **fields):
+    """Record part of the execution triple, promoting the string form on first use."""
+    ex = task.get("execution")
+    if not isinstance(ex, dict):
+        ex = {"declared": ex or "subagent"}
+    ex.update({k: v for k, v in fields.items() if v is not None})
+    task["execution"] = ex
+    return ex
+
+
+def runtime_binding(work_item_id, task):
+    """The five identities that have to agree for one unit of work.
+
+    They lived as separate fields on separate objects, and every correlation bug
+    this repository has had came from two components reading two of them and
+    assuming the rest. One accessor, so a component resolves through the binding
+    rather than reconstructing it.
+    """
+    ex = task.get("execution") if isinstance(task.get("execution"), dict) else {}
+    return {
+        "work_item": work_item_id,
+        "graph_task": task.get("id"),
+        "native_task": task.get("native_task"),
+        "agent_id": task.get("owner_agent"),
+        "session_id": task.get("owner_session"),
+        "execution": {
+            "declared": declared_execution(task),
+            "resolved": ex.get("resolved"),
+            "actual": ex.get("actual"),
+        },
+    }
 
 
 def _lease_ttl():

@@ -87,6 +87,14 @@
       "available": true,
       "evidence": "contract",
       "note": "A .lsp.json at the plugin root. Deliberately not shipped: extensionToLanguage is not variable-expanded and extension claims are global across plugins, so a placeholder would outrank a project's real server."
+    },
+    "host.fcntl_flock": {
+      "available": true,
+      "evidence": "empirical",
+      "note": "POSIX only. scripts/lib/workitem.py serialises concurrent task claims with fcntl.flock and falls through when the import fails, so on a host without it claims are NOT serialised and two agents can be handed one task. The lease, the graph and every predicate still work; only the concurrency guarantee is absent.",
+      "used_by": "scripts/lib/workitem.py _GraphLock",
+      "load_bearing": true,
+      "if_absent": "Run one agent at a time, or set concurrency limits to 1 in policies/concurrency-policy.json. Windows is untested."
     }
   },
   "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent."

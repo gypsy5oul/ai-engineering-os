@@ -51,10 +51,24 @@ def concurrency_check(caller, target, data):
         per_role, default_max, session_max, ttl = concurrency_limits()
         session = data.get("session_id")
         if not session:
-            # Without a session id there is no boundary to count within, and every
-            # caller would share one ledger: unrelated work would contend for the
-            # same slots and eventually block each other. A limit that cannot be
-            # scoped correctly is not applied.
+            # Without a session id there is no boundary to count within, and one
+            # shared ledger would make unrelated work contend for the same slots.
+            # So the count is not applied -- but "the control cannot be scoped"
+            # is not the same as "the control does not apply", and silently
+            # disabling a limit for HIGH and CRITICAL roles reads as the second.
+            risk = (H.policy("agent-registry.json") or {})
+            entry = next((a for a in risk.get("agents", []) if a["name"] == target), {})
+            level = str(entry.get("risk", "MEDIUM")).upper()
+            H.audit({"type": "concurrency_unscoped", "caller": caller, "target": target,
+                     "risk": level, "why": "no session_id in the payload"})
+            if level == "CRITICAL":
+                return True, ("This spawn carries no session id, so the concurrency limit cannot "
+                              "be counted against anything -- and '%s' is a CRITICAL role.\n"
+                              "What to do instead: confirm this fan-out is intended. The limit is "
+                              "not being enforced here, so you are the limit." % target)
+            # HIGH and below are allowed and audited. Escalating every one of them
+            # would put a prompt in front of ordinary work on the strength of a
+            # missing field, which is how a guard trains people to click through it.
             return False, ""
         mine = len(ledger.open_spawns(H.plugin_data_dir(), session, ttl, caller))
         cap = (per_role.get(caller) or {}).get("max_concurrent", default_max)

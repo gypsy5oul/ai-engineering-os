@@ -3,6 +3,115 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.23.0] — Making the arrows authoritative
+
+An implementation-path review of the current branch reached a conclusion the
+earlier audits had not: the architecture is right and the remaining work is
+making sure the runtime actually consumes it. Eleven claims, all verified before
+anything was touched, all real.
+
+### The execution resolver was correct and nobody called it
+
+`policies/execution-policy.json` named its enforcement as
+`scripts/resolve_execution.py, and control_loop.py next --resolve`. The second
+does not exist. The first was a standalone CLI that computed the right answer,
+printed it, and persisted nothing. Nothing on the spawn path consulted it.
+
+So a stage could declare `team`, the resolver could say `subagent`, and the spawn
+could do a third thing — with no record that the three had ever disagreed. This
+is the pattern the repository keeps producing, in the one place that decides how
+work actually runs.
+
+Resolution now happens at claim time, inside `SubagentStart`, which is the only
+moment where the situation is known and the spawn has not happened yet. The
+answer is written onto the task, a degradation is recorded in history, and the
+agent is told what changed:
+
+```
+- Execution: declared `team`, resolved to `subagent` — the project pinned
+  subagent for stage ARCH in ai.execution_overrides
+```
+
+### Three execution values, because there are three questions
+
+```yaml
+execution:
+  declared: team            # what the workflow asked for, before the situation existed
+  resolved: subagent        # what the resolver decided at claim time
+  actual: subagent          # what the runtime reported having done
+  resolution_reason: "teams are not enabled in this environment"
+  briefing_required: false
+```
+
+Keeping one of them means the organization cannot tell a policy it chose from a
+degradation it accepted from a spawn that ignored both. `actual` is recorded at
+`SubagentStop` rather than assumed equal to `resolved`, because a `PreToolUse`
+hook can refuse a spawn and cannot rewrite one.
+
+`briefing_required` marks the case that would otherwise fail in silence: an
+isolated spawn receives no `additionalContext`, so the task briefing never
+arrives and the agent works from its role definition alone. The flag says the
+briefing has to travel in the spawn prompt instead.
+
+### The stop was four transactions pretending to be one
+
+`resolve()` loaded the graph, the caller loaded it again, edited a task, saved,
+and `release()` loaded it a third time. Three windows for a concurrent claim to
+be overwritten — the same lost update the lease exists to prevent, arriving one
+door further along. `complete_lease()` now does the whole thing under one lock,
+and a test runs a stop against three concurrent claims to prove it.
+
+### One runtime binding
+
+Five identities have to agree for one unit of work: work item, graph task, native
+Claude task, agent, session. They lived as separate fields on separate objects,
+and every correlation bug this repository has had came from two components
+reading two of them and assuming the rest. `runtime_binding()` returns them as
+one object, and `native_task` is now recorded rather than re-derived from prose.
+
+### The completion gate matched a substring
+
+```
+'T-001' in 'T-0010 done'  ->  True
+```
+
+Both ids are valid under the schema, so the gate could close the wrong task. It
+now matches whole tokens, prefers the native task id it recorded earlier, and
+writes the binding down the first time it resolves one.
+
+More seriously, the gate **failed open on its own exceptions**. It is the only
+place the platform will actually refuse, and it turned "the check could not run"
+into "the check passed". It is now risk-tiered like every other guard here:
+HIGH and CRITICAL work blocks with an explanation, below that it allows and
+audits.
+
+### Smaller, all verified
+
+**An expired lease is now an event.** A crash and an orderly handover looked
+identical in the history. The reclaim records the previous owner, when it went
+quiet, and who took over.
+
+**Concurrency limits no longer vanish with a missing session id.** They still
+cannot be counted without one — but a CRITICAL-role spawn escalates rather than
+proceeding unremarked, and every unscoped case is audited. HIGH and below are
+allowed, because a prompt in front of ordinary work on the strength of a missing
+field is how a guard teaches people to click through it.
+
+**`fcntl` is now a declared capability.** Claims are serialised only where it
+exists; where it does not, the lock is a no-op and the work proceeds. That is a
+real behavioural difference between platforms, and it is in
+`platform-capabilities.json` and `docs/limitations.md` rather than in a comment.
+
+**Documentation.** `CURRENT` is the fallback, not what every hook reads — the
+session binding is preferred, and that ordering is the point. The resolver page
+no longer says "resolves and records" about something that only resolved.
+
+### And four validators, so none of this can go decorative again
+
+The resolver must persist; the claim path must call it; the stop must record
+`actual` and use the atomic path. Each was mutation-tested by removing the thing
+it checks and confirming the check fails.
+
 ## [0.22.1] — The write scope did not survive a shell
 
 The newcomer review from the v0.22.0 sweep finished after the release went out.

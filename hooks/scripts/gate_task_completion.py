@@ -21,6 +21,7 @@ a gate that cannot be satisfied offline would just teach people to turn it off.
 import json
 import os
 import subprocess
+import re
 import sys
 
 LIB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib")
@@ -61,9 +62,13 @@ def failing_predicates(project, task, change=None):
     return out
 
 
+TASK_MARKER = re.compile(r"\bT-[0-9]{3,}\b")
+
+
 def main():
     data = H.read_input()
     task_id = data.get("task_id")
+    risk = "MEDIUM"
     if not task_id:
         sys.exit(0)
 
@@ -77,13 +82,27 @@ def main():
         if not graph:
             sys.exit(0)
 
-        # The native task carries our graph task id in its subject or description,
-        # which is how the two are bound. A native task with no binding is somebody
-        # else's bookkeeping and none of this hook's business.
+        # The native task is bound to a graph task by the marker the spawner
+        # writes into its subject or description. Matched as whole tokens, not as
+        # a substring: `T-001 in "T-0010 done"` is true, and the schema permits
+        # both ids, so substring matching could close the wrong task.
         blob = "%s %s" % (data.get("task_subject") or "", data.get("task_description") or "")
-        held = next((t for t in graph.get("tasks", []) if t["id"] in blob), None)
+        mentioned = set(TASK_MARKER.findall(blob))
+        held = next((t for t in graph.get("tasks", []) if t.get("native_task") == task_id), None)
+        if held is None:
+            held = next((t for t in graph.get("tasks", []) if t["id"] in mentioned), None)
         if held is None:
             sys.exit(0)
+        risk = held.get("risk") or (W.load_item(project, wid) or {}).get("risk") or "MEDIUM"
+
+        # Bind the two ids now that they are known, so the next event does not
+        # have to re-derive the association from prose.
+        if task_id and held.get("native_task") != task_id:
+            try:
+                held["native_task"] = task_id
+                W.save_graph(project, graph)
+            except Exception:
+                pass
 
         failing = failing_predicates(project, held, change=wid)
         if not failing:
@@ -102,9 +121,30 @@ def main():
         sys.exit(2)
     except SystemExit:
         raise
+    except Exception as exc:
+        # A gate that breaks a session is worse than one that misses a case --
+        # but this gate is the only place the platform will actually refuse, and
+        # turning "the check could not run" into "the check passed" is the
+        # failure mode the whole repository is arranged against. So it is
+        # risk-tiered, the same way every other guard here is.
+        fail_open(risk, exc, task_id)
+
+
+def fail_open(risk, exc, task_id):
+    """What to do when the gate itself breaks, by the risk of the work."""
+    try:
+        H.audit({"type": "task_gate_failed", "risk": risk, "native_task": task_id,
+                 "error": repr(exc)[:200]})
     except Exception:
-        # A gate that breaks a session is worse than one that misses a case.
-        sys.exit(0)
+        pass
+    if str(risk).upper() in ("HIGH", "CRITICAL"):
+        sys.stderr.write(
+            "[ai-engineering-os] The definition-of-done gate could not run for this %s-risk "
+            "task: %r\nIt is not being treated as satisfied. Re-run the check, or record the "
+            "outcome with `control_loop.py observe` and let the loop decide.\n"
+            % (risk, exc))
+        sys.exit(2)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "ai-engineering-os",
   "displayName": "AI Engineering OS",
-  "version": "0.22.1",
+  "version": "0.23.0",
   "description": "A governed, versioned AI engineering organization for Claude Code: SDLC agents, skills, safety hooks, agent-team patterns, evaluation and governance for any technology stack.",
   "author": {
     "name": "AI Engineering Platform Team"

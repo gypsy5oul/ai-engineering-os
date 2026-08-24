@@ -14,6 +14,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
 import workitem as W  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 
 class Resolver(unittest.TestCase):
@@ -151,3 +152,96 @@ class TestRiskOverrules(Resolver):
         r = self.resolved()[t["id"]]
         self.assertEqual(r["resolved"], "subagent")
         self.assertIn("nobody is watching", r["why"])
+
+
+class TestResolutionIsOnTheLivePath(unittest.TestCase):
+    """A correct resolver nobody calls is the defect this repository keeps
+    producing. execution-policy.json named it as its enforcement for two versions
+    while the spawn path never consulted it and the answer went to a terminal."""
+
+    def setUp(self):
+        self.project = tempfile.mkdtemp(prefix="aieos-exec-")
+        self.addCleanup(shutil.rmtree, self.project, True)
+        os.makedirs(os.path.join(self.project, ".ai-engineering"))
+        src = os.path.join(ROOT, "templates", "project", "project.yaml")
+        with open(src, encoding="utf-8") as fh:
+            cfg = fh.read().replace("    blocking: true", "    blocking: false")
+        with open(os.path.join(self.project, ".ai-engineering", "project.yaml"), "w",
+                  encoding="utf-8") as fh:
+            fh.write(cfg)
+        for argv in (["open", "--type", "feature", "--risk", "HIGH",
+                      "--intent", "Execution resolution on the live path"],
+                     ["plan", "--item", "SFTP-FEAT-001"]):
+            subprocess.run([sys.executable, os.path.join(ROOT, "scripts", "control_loop.py")]
+                           + argv + ["--project", self.project], capture_output=True, timeout=120)
+
+    def start(self, agent_type, agent_id="a1"):
+        env = dict(os.environ, CLAUDE_PLUGIN_ROOT=ROOT, CLAUDE_PROJECT_DIR=self.project)
+        subprocess.run([sys.executable, os.path.join(ROOT, "hooks", "scripts", "inject_context.py")],
+                       input=json.dumps({"hook_event_name": "SubagentStart",
+                                         "agent_type": "ai-engineering-os:" + agent_type,
+                                         "agent_id": agent_id, "session_id": "S1"}),
+                       capture_output=True, text=True, env=env, timeout=60)
+        return W.load_graph(self.project, "SFTP-FEAT-001")
+
+    def held(self, graph, agent_id="a1"):
+        return next(t for t in graph["tasks"] if t.get("owner_agent") == agent_id)
+
+    def test_claiming_a_task_records_its_resolution(self):
+        t = self.held(self.start("engineering-director"))
+        self.assertIsInstance(t["execution"], dict,
+                              "execution stayed a bare string, so nothing resolved")
+        self.assertIn("resolved", t["execution"])
+        self.assertTrue(t["execution"].get("resolved"))
+        self.assertTrue(t["execution"].get("resolution_reason"))
+        self.assertTrue(t["execution"].get("resolved_at"))
+
+    def test_a_degradation_is_recorded_in_history(self):
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        team = [t for t in graph["tasks"] if W.declared_execution(t) == "team"]
+        self.assertTrue(team, "the fixture has no team-declared task to degrade")
+        target = team[0]
+        for t in graph["tasks"]:
+            if t["id"] == target["id"]:
+                t["depends_on"] = []
+            else:
+                t["state"] = "accepted"
+        W.save_graph(self.project, graph)
+
+        after = self.start(target["role"], agent_id="team-1")
+        t = W.task(after, target["id"])
+        self.assertEqual(t["execution"]["declared"], "team")
+        self.assertNotEqual(t["execution"]["resolved"], "team",
+                            "teams are not enabled here, so this must have degraded")
+        kinds = [h["kind"] for h in W.history(self.project, "SFTP-FEAT-001")]
+        self.assertIn("execution_resolved", kinds,
+                      "a degradation the organization accepted was not written down")
+
+    def test_declared_and_effective_are_different_questions(self):
+        t = self.held(self.start("engineering-director"))
+        W.set_execution(t, resolved="worktree")
+        self.assertEqual(W.declared_execution(t), t["execution"]["declared"])
+        self.assertEqual(W.effective_execution(t), "worktree")
+
+    def test_an_isolated_resolution_flags_that_the_briefing_will_not_arrive(self):
+        """An isolated spawn receives no additionalContext, so the task briefing
+        this plugin exists to deliver silently does not reach the agent."""
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        t = graph["tasks"][0]
+        import resolve_execution
+        W.set_execution(t, declared="worktree")
+        t["role"] = "backend-developer"
+        resolve_execution.record_resolution(self.project, "SFTP-FEAT-001", t, graph)
+        if t["execution"]["resolved"] == "worktree":
+            self.assertTrue(t["execution"]["briefing_required"])
+        else:
+            self.assertFalse(t["execution"]["briefing_required"])
+
+    def test_the_runtime_binding_names_every_identity(self):
+        t = self.held(self.start("engineering-director"))
+        b = W.runtime_binding("SFTP-FEAT-001", t)
+        self.assertEqual(b["work_item"], "SFTP-FEAT-001")
+        self.assertEqual(b["graph_task"], t["id"])
+        self.assertEqual(b["agent_id"], "a1")
+        self.assertEqual(b["session_id"], "S1")
+        self.assertIn("declared", b["execution"])

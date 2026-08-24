@@ -646,6 +646,54 @@ def check_execution_resolution_is_live():
             err("policies/execution-policy.json: resolution rule %r has no implementation in "
                 "resolve_execution.py" % name)
 
+    # A correct resolver nobody calls is the defect this repository keeps
+    # producing. The policy named an enforcement path for two versions while the
+    # spawn path never consulted it and the answer was never written down.
+    if "def record_resolution" not in code:
+        err("scripts/resolve_execution.py resolves but does not persist. Without "
+            "record_resolution the answer exists only in a terminal, and the runtime "
+            "cannot honour or contradict it.")
+    if "W.set_execution" not in code:
+        err("scripts/resolve_execution.py does not write execution.resolved onto the task")
+
+    inject = os.path.join(ROOT, "hooks", "scripts", "inject_context.py")
+    with open(inject, encoding="utf-8") as fh:
+        hook = fh.read()
+    # Defining a resolver and never calling it is the same defect one level in,
+    # so this looks for the resolver being called by the function that claims --
+    # not merely mentioned somewhere in the file.
+    import ast as _ast
+
+    def calls_in(node):
+        out = set()
+        for n in _ast.walk(node):
+            if isinstance(n, _ast.Call):
+                f = n.func
+                out.add(f.id if isinstance(f, _ast.Name) else getattr(f, "attr", ""))
+        return out
+
+    claiming = [fn for fn in _ast.walk(_ast.parse(hook))
+                if isinstance(fn, _ast.FunctionDef) and "claim" in calls_in(fn)]
+    if not claiming:
+        err("hooks/scripts/inject_context.py never calls claim(), so no task is bound to the "
+            "agent being started")
+    for fn in claiming:
+        if not ({"resolve_and_record", "record_resolution"} & calls_in(fn)):
+            err("hooks/scripts/inject_context.py: %s() claims a task without resolving its "
+                "execution. The claim path is the only moment the situation is known and the "
+                "spawn has not happened yet; resolving anywhere else is advice." % fn.name)
+
+    stop = os.path.join(ROOT, "hooks", "scripts", "observe_subagent.py")
+    with open(stop, encoding="utf-8") as fh:
+        stop_code = fh.read()
+    if "actual_execution" not in stop_code:
+        err("hooks/scripts/observe_subagent.py does not record execution.actual, so nothing "
+            "can tell a resolution that was honoured from one that was ignored")
+    if "complete_lease" not in stop_code:
+        err("hooks/scripts/observe_subagent.py does not use the atomic complete_lease, so the "
+            "result write and the lease release are separate transactions and a concurrent "
+            "claim between them is lost")
+
 
 def telemetry_keys():
     """Every identifier telemetry.py actually emits.

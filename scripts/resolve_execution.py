@@ -147,6 +147,31 @@ def resolve(project, graph, task):
     return declared, "no fact overruled the stage's recommendation"
 
 
+# An isolated spawn does not receive SubagentStart's additionalContext -- verified
+# against 2.1.241 and recorded in platform-capabilities.json. The briefing this
+# plugin exists to deliver silently does not arrive, so the resolver has to say
+# that the briefing must travel in the spawn prompt instead.
+ISOLATING = ("worktree",)
+
+
+def record_resolution(project, wid, task, graph=None):
+    """Resolve this task's execution and persist the decision on the task.
+
+    This is the difference between a resolver and an advisory CLI. The policy
+    named `resolve_execution.py` as its enforcement for two versions while nothing
+    on the spawn path called it and nothing wrote its answer down, so a stage
+    could declare `team`, the resolver could say `subagent`, and the spawn could
+    do a third thing with no record that the three ever disagreed.
+    """
+    graph = graph if graph is not None else W.load_graph(project, wid)
+    if graph is None:
+        return None
+    mode, why = resolve(project, graph, task)
+    W.set_execution(task, resolved=mode, resolution_reason=why, resolved_at=W.now(),
+                    briefing_required=mode in ISOLATING)
+    return mode, why
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--project", default=".")
@@ -154,6 +179,8 @@ def main():
     ap.add_argument("--task")
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--record", action="store_true",
+                    help="persist the resolution onto the task, as the claim path does")
     args = ap.parse_args()
 
     project = os.path.abspath(args.project)
@@ -169,10 +196,16 @@ def main():
 
     out = []
     for t in tasks:
-        mode, why = resolve(project, graph, t)
+        if args.record:
+            mode, why = record_resolution(project, args.item, t, graph)
+        else:
+            mode, why = resolve(project, graph, t)
         out.append({"task": t["id"], "declared": t.get("execution", "subagent"),
                     "resolved": mode, "changed": mode != t.get("execution", "subagent"),
                     "why": why})
+
+    if args.record:
+        W.save_graph(project, graph)
 
     if args.json:
         print(json.dumps(out, indent=2))

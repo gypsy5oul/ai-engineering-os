@@ -90,8 +90,17 @@ an enforced rule. Enforcement needs Premium approval rules.
 **The guards require `python3` on `PATH`.** Without it they fail to start and
 calls proceed — fail-open, by design, but worth knowing.
 
-**Windows is untested.** The scripts are POSIX-oriented Python and should work,
-but no one has run them there.
+**Windows is untested**, and one thing is known to differ rather than merely
+untried: `fcntl` is absent, so concurrent claims are not serialised. See above.
+
+**Concurrent claims are serialised only where `fcntl` exists.** Two agents
+spawning at once are two processes reading and writing one graph, and
+`scripts/lib/workitem.py` serialises that with `fcntl.flock`. Where the import
+fails the lock is a no-op and the work proceeds unserialised, because a lease
+that blocks a spawn is worse than one that occasionally races -- but that is a
+real behavioural difference between platforms, not a detail. On a host without
+`fcntl`, run one agent at a time or set the concurrency limits to 1. Windows is
+untested.
 
 **Write scoping through the shell is best-effort, not airtight.** `guard_write`
 covers `Write`, `Edit` and `NotebookEdit` and denies an out-of-scope path

@@ -193,3 +193,70 @@ class TestSubagentObservation(Hooked):
                 out = self.stop("product-manager", msg)
                 self.assertTrue(out is None or "decision" not in out,
                                 "the observer tried to block a stop it had no business blocking")
+
+
+class TestTheCompletionGateBindsOnAnIdNotAString(Hooked):
+    """`T-001 in "T-0010 done"` is true, and the schema permits both ids, so
+    substring matching could close the wrong task. The gate is also the only place
+    the platform will actually refuse, so its own failure must not read as a pass."""
+
+    def gate(self, subject, task_id="n1"):
+        env = dict(os.environ, CLAUDE_PLUGIN_ROOT=ROOT, CLAUDE_PROJECT_DIR=self.project)
+        return subprocess.run(
+            [sys.executable, os.path.join(ROOT, "hooks", "scripts", "gate_task_completion.py")],
+            input=json.dumps({"hook_event_name": "TaskCompleted", "task_id": task_id,
+                              "task_subject": subject}),
+            capture_output=True, text=True, env=env, timeout=60)
+
+    def test_a_longer_id_is_not_matched_by_a_shorter_one(self):
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        target = next(t for t in graph["tasks"] if t.get("definition_of_done"))
+        self.assertEqual(self.gate("%s0 done" % target["id"]).returncode, 0,
+                         "T-0010 was matched as T-001")
+
+    def test_the_native_task_id_is_bound_to_the_graph_task(self):
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        target = next(t for t in graph["tasks"] if t.get("definition_of_done"))
+        self.gate("%s done" % target["id"], task_id="native-77")
+        after = W.task(W.load_graph(self.project, "SFTP-FEAT-001"), target["id"])
+        self.assertEqual(after.get("native_task"), "native-77",
+                         "the two ids were matched once and never written down")
+
+    def test_an_unrelated_native_task_is_none_of_its_business(self):
+        self.assertEqual(self.gate("refactor the parser").returncode, 0)
+
+    def broken_plugin(self):
+        """A copy of the plugin whose predicate evaluator raises."""
+        root = os.path.join(self.project, "_plugin")
+        shutil.copytree(ROOT, root, ignore=shutil.ignore_patterns(
+            ".git", "__pycache__", "*.pyc", ".ai-engineering", "_plugin"))
+        with open(os.path.join(root, "scripts", "check_dod.py"), "a", encoding="utf-8") as fh:
+            fh.write("\nraise RuntimeError('the checker is broken')\n")
+        return root
+
+    def gate_with(self, root, subject):
+        env = dict(os.environ, CLAUDE_PLUGIN_ROOT=root, CLAUDE_PROJECT_DIR=self.project)
+        return subprocess.run(
+            [sys.executable, os.path.join(root, "hooks", "scripts", "gate_task_completion.py")],
+            input=json.dumps({"hook_event_name": "TaskCompleted", "task_id": "n9",
+                              "task_subject": subject}),
+            capture_output=True, text=True, env=env, timeout=60)
+
+    def test_a_broken_gate_does_not_pass_high_risk_work(self):
+        root = self.broken_plugin()
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        high = next(t for t in graph["tasks"]
+                    if t.get("definition_of_done") and t.get("risk") in ("HIGH", "CRITICAL"))
+        proc = self.gate_with(root, "%s done" % high["id"])
+        self.assertEqual(proc.returncode, 2, "a broken checker read as a satisfied one")
+        self.assertIn("could not run", proc.stderr)
+
+    def test_a_broken_gate_does_not_block_low_risk_work(self):
+        """A gate that breaks a session is worse than one that misses a case --
+        below HIGH, where the cost of being wrong is lower than the cost of a
+        stuck session."""
+        root = self.broken_plugin()
+        graph = W.load_graph(self.project, "SFTP-FEAT-001")
+        low = next(t for t in graph["tasks"]
+                   if t.get("definition_of_done") and t.get("risk") == "LOW")
+        self.assertEqual(self.gate_with(root, "%s done" % low["id"]).returncode, 0)

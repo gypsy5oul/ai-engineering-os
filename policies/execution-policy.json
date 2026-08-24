@@ -188,5 +188,7 @@
     },
     "enforced_by": "scripts/resolve_execution.py, and control_loop.py next --resolve",
     "not_enforceable": "Nothing makes an agent honour the resolved mode. A PreToolUse hook can refuse a spawn but cannot rewrite one, so this resolves and records; it does not compel."
-  }
+  },
+  "enforced_by": "hooks/scripts/inject_context.py resolves and persists at claim time; scripts/resolve_execution.py --record does the same by hand. The resolution is written to the task's execution.resolved, and the runtime's own answer to execution.actual at SubagentStop.",
+  "why_enforced_by_changed": "It previously named `scripts/resolve_execution.py, and control_loop.py next --resolve`. The second does not exist and the first was a standalone CLI that printed and never persisted, so nothing on the spawn path consulted the resolver at all: a stage could declare team, the resolver could say subagent, and the spawn could do a third thing with no record that the three disagreed."
 }

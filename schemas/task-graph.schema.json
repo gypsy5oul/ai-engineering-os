@@ -77,14 +77,72 @@
             ]
           },
           "execution": {
-            "type": "string",
-            "enum": [
-              "inline",
-              "subagent",
-              "background",
-              "team",
-              "worktree",
-              "dynamic-workflow"
+            "description": "How this task runs. Three values, because they answer three different questions: `declared` is what the workflow author asked for before the situation existed, `resolved` is what the resolver decided at claim time, and `actual` is what the runtime reports having done. Recording only one of them means the organization cannot tell the difference between a policy it chose, a degradation it accepted, and a spawn that ignored both.",
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "inline",
+                  "subagent",
+                  "background",
+                  "team",
+                  "worktree",
+                  "dynamic-workflow"
+                ],
+                "description": "Shorthand for declared, before anything has been resolved."
+              },
+              {
+                "type": "object",
+                "required": [
+                  "declared"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "declared": {
+                    "type": "string",
+                    "enum": [
+                      "inline",
+                      "subagent",
+                      "background",
+                      "team",
+                      "worktree",
+                      "dynamic-workflow"
+                    ]
+                  },
+                  "resolved": {
+                    "type": "string",
+                    "enum": [
+                      "inline",
+                      "subagent",
+                      "background",
+                      "team",
+                      "worktree",
+                      "dynamic-workflow"
+                    ]
+                  },
+                  "actual": {
+                    "type": "string",
+                    "enum": [
+                      "inline",
+                      "subagent",
+                      "background",
+                      "team",
+                      "worktree",
+                      "dynamic-workflow"
+                    ]
+                  },
+                  "resolution_reason": {
+                    "type": "string"
+                  },
+                  "resolved_at": {
+                    "type": "string"
+                  },
+                  "briefing_required": {
+                    "type": "boolean",
+                    "description": "The resolved mode isolates the spawn, and an isolated spawn does not receive SubagentStart's additionalContext. The task briefing has to travel in the spawn prompt instead."
+                  }
+                }
+              }
             ]
           },
           "risk": {
@@ -159,6 +217,10 @@
           "failure_signature": {
             "type": "string",
             "description": "A stable identity for the most recent failure. Compared with the previous one to tell a repeat from progress; comparing the observed wording read 'API returns 401' and 'endpoint still returns 401' as two different failures."
+          },
+          "native_task": {
+            "type": "string",
+            "description": "The Claude Code task this graph task is bound to, when one exists. Written at claim time so the completion gate can match on an id rather than on a substring of a subject line."
           }
         }
       }

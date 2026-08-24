@@ -550,3 +550,92 @@ class TestAnAbandonedLeaseDoesNotStrandTheGraph(Loop):
         graph, held = self._held()
         held["last_activity"] = "2020-01-01T00:00:00"
         self.assertFalse(W.lease_expired(held, ttl=10 ** 12))
+
+
+class TestTheStopIsOneTransaction(Loop):
+    """resolve, load, modify, save, release used to be four separate lock scopes.
+    A concurrent claim landing between them was overwritten -- the same lost
+    update the lease exists to prevent, one door further along."""
+
+    def setUp(self):
+        Loop.setUp(self)
+        self.item = self.open_item()
+        cl(self.project, "plan", "--item", self.item)
+
+    def test_completing_a_lease_records_and_releases_together(self):
+        t = W.claim(self.project, self.item, "engineering-director", "agent-1")
+        done = W.complete_lease(self.project, self.item, "agent-1", result="produced X")
+        self.assertEqual(done["id"], t["id"])
+        after = W.task(W.load_graph(self.project, self.item), t["id"])
+        self.assertEqual(after["result"], "produced X")
+        self.assertIsNone(after.get("owner_agent"), "the lease outlived its result")
+
+    def test_a_stop_with_no_lease_changes_nothing(self):
+        self.assertIsNone(W.complete_lease(self.project, self.item, "never-started",
+                                           result="from nowhere"))
+
+    def test_a_concurrent_claim_is_not_lost_when_another_agent_stops(self):
+        """The exact race: agent A stops while agent B claims."""
+        import concurrent.futures as cf
+        W.claim(self.project, self.item, "engineering-director", "agent-A")
+        graph = W.load_graph(self.project, self.item)
+        for t in graph["tasks"][1:4]:
+            t["depends_on"], t["state"] = [], "queued"
+            t["role"] = "product-manager"
+            t.pop("coupled_surface", None)
+        W.save_graph(self.project, graph)
+
+        def stop():
+            return W.complete_lease(self.project, self.item, "agent-A", result="A finished")
+
+        def claim(n):
+            return W.claim(self.project, self.item, "product-manager", "agent-%d" % n)
+
+        with cf.ThreadPoolExecutor(max_workers=4) as pool:
+            futures = [pool.submit(stop)] + [pool.submit(claim, n) for n in range(3)]
+            [f.result() for f in futures]
+
+        after = W.load_graph(self.project, self.item)
+        owners = [t["owner_agent"] for t in after["tasks"] if t.get("owner_agent")]
+        self.assertEqual(len(owners), len(set(owners)), "one agent id holds two tasks")
+        self.assertNotIn("agent-A", owners, "the stopped agent still holds its task")
+        finished = [t for t in after["tasks"] if t.get("result") == "A finished"]
+        self.assertEqual(len(finished), 1, "A's result was lost to a concurrent claim")
+
+    def test_the_actual_execution_is_recorded_separately_from_the_resolution(self):
+        t = W.claim(self.project, self.item, "engineering-director", "agent-1")
+        W.complete_lease(self.project, self.item, "agent-1", result="done",
+                         actual_execution="subagent")
+        after = W.task(W.load_graph(self.project, self.item), t["id"])
+        self.assertEqual(after["execution"]["actual"], "subagent")
+
+
+class TestAnExpiredLeaseIsAudited(Loop):
+    """A crash and an orderly handover look identical in the history unless the
+    reclaim is written down."""
+
+    def setUp(self):
+        Loop.setUp(self)
+        self.item = self.open_item()
+        cl(self.project, "plan", "--item", self.item)
+
+    def test_reclaiming_an_expired_lease_records_who_held_it(self):
+        t = W.claim(self.project, self.item, "engineering-director", "agent-DEAD")
+        graph = W.load_graph(self.project, self.item)
+        W.task(graph, t["id"])["last_activity"] = "2020-01-01T00:00:00"
+        W.save_graph(self.project, graph)
+
+        again = W.claim(self.project, self.item, "engineering-director", "agent-NEW")
+        self.assertEqual(again["id"], t["id"])
+        expiries = [h for h in W.history(self.project, self.item) if h["kind"] == "lease_expired"]
+        self.assertEqual(len(expiries), 1)
+        self.assertEqual(expiries[0]["previous_owner"], "agent-DEAD")
+        self.assertEqual(expiries[0]["reclaimed_by"], "agent-NEW")
+        self.assertTrue(expiries[0].get("expired_at"))
+
+    def test_an_orderly_handover_records_no_expiry(self):
+        W.claim(self.project, self.item, "engineering-director", "agent-1")
+        W.complete_lease(self.project, self.item, "agent-1", result="done properly")
+        W.claim(self.project, self.item, "engineering-director", "agent-2")
+        self.assertEqual([h for h in W.history(self.project, self.item)
+                          if h["kind"] == "lease_expired"], [])
