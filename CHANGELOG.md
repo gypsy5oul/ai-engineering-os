@@ -3,6 +3,34 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.30.0] — Three the build hit and I worked around instead of fixing
+
+Reviewing what the calculator run actually cost, three defects turn out to have
+been steered past in the prompt rather than fixed. Each one cost a round trip
+every time an agent met it, and a person without a prompt to steer them would
+have paid it too.
+
+**One concept, two names.** A story's required field was `owned_paths`; the task
+graph's property is `owns_paths`. They have differed since v0.25, and the
+development-lead had to be told which was which mid-run. Now both are
+`owns_paths`, and `story-decomposition` names the field instead of describing it
+in prose.
+
+**Reviews became linkable.** v0.29.0 gave reviews their own storage and made
+them first-class artifacts, and `links` still had no `reviews` kind while
+forbidding extra keys. Three separate agents cited a review, had the key
+rejected, and dropped the traceability rather than arguing. The link they were
+trying to record is the one connecting a verdict to the thing it judged.
+
+**Two vocabularies for one verdict.** A reviewer's verdict could be `block`; a
+department cycle calls the same situation `CHANGES_REQUESTED`. Agents kept
+writing `changes-requested` into a field that did not accept it, and one
+translated it and said so in the body. `changes-requested` is now the word to
+reach for, `block` is kept as the older spelling of the same verdict.
+
+None of these break anything mechanically. They are friction, and friction in a
+governed system is paid on every artifact by everyone.
+
 ## [0.29.0] — A reviewer with findings and nowhere to put them
 
 An architecture-reviewer, given a real design to review, found two genuine

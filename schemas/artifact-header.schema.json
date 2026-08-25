@@ -219,6 +219,13 @@
             "type": "string"
           },
           "description": "Open decisions blocking or shaping this artifact."
+        },
+        "reviews": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Review artifacts covering this one. Reviews got their own storage in v0.29.0 and remained unlinkable: every agent that tried to cite one had its key rejected and dropped the traceability."
         }
       }
     },
@@ -260,9 +267,11 @@
             "enum": [
               "pass",
               "pass-with-conditions",
+              "changes-requested",
               "block",
               "not-applicable"
-            ]
+            ],
+            "description": "A reviewer's finding, never an approval on the organization's behalf. `changes-requested` is the word to reach for: it matches the CHANGES_REQUESTED state a department cycle uses for the same situation. `block` is the older spelling of the same verdict and is still accepted."
           },
           "at": {
             "type": "string",

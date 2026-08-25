@@ -648,7 +648,7 @@
         "business_context",
         "technical_context",
         "acceptance_criteria",
-        "owned_paths",
+        "owns_paths",
         "test_expectations",
         "definition_of_done"
       ],
@@ -667,8 +667,9 @@
         "REL"
       ],
       "immutable_after_creation": false,
-      "notes": "owned_paths is what keeps parallel work from overwriting itself.",
-      "append_only": false
+      "notes": "owns_paths is what keeps parallel work from overwriting itself.",
+      "append_only": false,
+      "renamed_field": "owned_paths became owns_paths so the story and the task graph use one name for one concept. They differed since v0.25 and it cost a round trip the first time a real story was written."
     },
     {
       "code": "TP",

@@ -79,7 +79,10 @@ def problems(paths):
         errors = list(jsvalidate(fm, schema))
         if errors:
             rel = os.path.relpath(path, H.PROJECT_DIR)
-            found.append("%s: %s" % (rel, "; ".join(str(e) for e in errors[:3])))
+            # All of them. Capping at three cost a round trip per three fields,
+            # and an agent noticed the cap and converted everything defensively
+            # rather than trusting what it had been told.
+            found.append("%s: %s" % (rel, "; ".join(str(e) for e in errors)))
     return found
 
 

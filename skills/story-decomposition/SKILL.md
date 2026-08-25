@@ -22,7 +22,9 @@ A story is a unit of work that one person can finish and another can verify with
 5. **Non-functional requirements** that apply to this story specifically.
 6. **Test expectations** — which levels, which scenarios from the QA baseline.
 7. **Definition of done** — the project's standard plus anything specific to this story.
-8. **Files or modules it owns** — used to keep parallel stories disjoint.
+8. **Files or modules it owns** — as `owns_paths` in the header, the same name a
+   task uses. It keeps parallel stories disjoint, and it is what
+   `infer_dependencies.py` reads to order the work that is not.
 
 ## Sizing
 
