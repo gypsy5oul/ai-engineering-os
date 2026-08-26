@@ -1,6 +1,6 @@
 # Skill catalogue
 
-33 skills. A skill is a capability many roles share; it is not an organizational
+34 skills. A skill is a capability many roles share; it is not an organizational
 role and does not have authority of its own. The rule for choosing between them
 is in `docs/agent-model.md`.
 
@@ -45,6 +45,7 @@ guides work that can damage production, data or the security boundary.
 | [`test-automation`](../skills/test-automation/SKILL.md) | Implement reliable automated tests from an approved test design, and diagnose flaky or low-value tests. | `qa-lead`, `qa-engineer`, `test-reviewer` | MEDIUM |
 | [`test-design`](../skills/test-design/SKILL.md) | Produce a test strategy, scenarios and coverage mapping from requirements, acceptance criteria and architectural risk. | `qa-lead`, `qa-engineer`, `test-reviewer` | MEDIUM |
 | [`threat-modeling`](../skills/threat-modeling/SKILL.md) | Build or update a threat model for a system or change - assets, trust boundaries, entry points, threats and controls. | `security-architect`, `security-reviewer` | HIGH |
+| [`work-item`](../skills/work-item/SKILL.md) | Open, plan and drive a unit of work through the control loop: what to do next, how to record what happened, and what the loop does with it. | `engineering-director`, `development-lead` | LOW |
 | [`traceability`](../skills/traceability/SKILL.md) | Assign artifact identifiers and maintain the links between requirements, stories, architecture, ADRs, tests, defects, merge requests, releases, incidents and RCAs. | `engineering-director`, `product-manager`, `requirements-analyst`, `development-lead`, `backend-developer`, `frontend-developer`, `data-engineer`, `docs-writer`, `qa-lead`, `release-manager`, `rca-analyst`, `code-reviewer` | LOW |
 
 ## Invoking a skill

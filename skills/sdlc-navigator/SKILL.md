@@ -41,7 +41,10 @@ State, in this order:
 3. **Missing inputs** — what the stage needs that does not exist yet.
 4. **Gate** — `approval_gate.type`. If `human`, name the approval and its policy reference from `${CLAUDE_PLUGIN_ROOT}/policies/approval-policy.json`.
 5. **Skipped stages** — which stages this change does not need, each with a reason. Skipping is normal; skipping silently is not.
-6. **Next action** — one sentence.
+6. **Next action** — one sentence. If the change is not yet tracked, that action
+   is to open a work item: point at the `work-item` skill, which is the control
+   loop's own instructions. Do not invent a command; the entry points are the
+   skills in this plugin and `${CLAUDE_PLUGIN_ROOT}/scripts/control_loop.py`.
 
 ## Rules
 

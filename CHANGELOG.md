@@ -3,6 +3,29 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.32.0] — The entry point pointed at a command that did not exist
+
+Asked how someone starts after installing this, the honest answer took a live
+check: `/ai-engineering-os:sdlc-navigator` placed the work correctly and then
+told the user to run `/ai-engineering-os:work-item`, which does not exist.
+
+It was not a hallucination so much as a gap being filled. **No skill taught the
+control loop at all.** The README, `docs/getting-started.md` and
+`docs/work-items.md` have carried the sequence since v0.22.0 — but a skill is
+what an agent reads inside a session, and there was none. So the navigator
+reached for the obvious name and invented it.
+
+`work-item` now exists: open, plan, next, observe, decide, status, and what the
+loop does with each outcome. It states the things a newcomer gets wrong —
+quote the intent verbatim because it is compared against the objective later;
+you do not have to brief a spawned agent because SubagentStart does it; and
+`accepted` is a claim that gets checked rather than an observation that gets
+recorded.
+
+`engineering-director` and `development-lead` preload it, so the roles that
+sequence the lifecycle and run a stage have the loop's own instructions. The
+navigator now points at the skill and is told not to invent a command.
+
 ## [0.31.0] — "No approval needed" and "not approved yet" looked identical
 
 Asked whether everything was fixed, three more turned up.

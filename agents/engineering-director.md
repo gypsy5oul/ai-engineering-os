@@ -8,6 +8,7 @@ skills:
   - sdlc-navigator
   - team-patterns
   - traceability
+  - work-item
 color: purple
 ---
 

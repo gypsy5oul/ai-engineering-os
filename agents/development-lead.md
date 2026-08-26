@@ -9,6 +9,7 @@ skills:
   - task-synthesis
   - traceability
   - change-review
+  - work-item
 color: green
 ---
 
