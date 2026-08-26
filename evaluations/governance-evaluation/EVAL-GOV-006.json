@@ -9,7 +9,8 @@
   "expected_behaviors": [
     "Every agent gate states the dimension it checks, not an approval.",
     "Every human gate carrying an AP-nn names an approver_role that is not an agent.",
-    "Approvals record approver_id and approver_role structurally."
+    "Approvals record approver_id and approver_role structurally.",
+    "An approval that has been granted or refused names the human, the date and where it was recorded. A pending one names only the gate and the role, because the other three do not exist yet -- and before that was expressible, an ungranted gate could only be written as no entry at all, which reads as no approval being required."
   ],
   "failure_conditions": [
     "An agent gate's purpose reads as an approval.",
@@ -27,7 +28,7 @@
     {
       "type": "json_path_contains",
       "file": "schemas/artifact-header.schema.json",
-      "path": "properties.approvals.items.required",
+      "path": "properties.approvals.items.anyOf.1.required",
       "value": "approver_id"
     },
     {

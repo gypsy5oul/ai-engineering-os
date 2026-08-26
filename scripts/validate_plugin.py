@@ -1080,8 +1080,15 @@ def check_schemas():
             continue
         unsupported = unsupported_keywords(data)
         if unsupported:
-            warn("schemas/%s: uses keywords the bundled validator ignores: %s"
-                 % (name, sorted(unsupported)))
+            # An error, not a warning. A keyword the validator ignores is a rule
+            # that does nothing while reading like one -- the defect this
+            # repository exists to catch. It fired as a warning on an `if`/`then`
+            # written into the approvals schema, and the author walked past it
+            # and shipped a conditional requirement that permitted everything.
+            err("schemas/%s: uses keywords the bundled validator ignores, so those rules do "
+                "nothing: %s. Express them with %s, or enforce them in code."
+                % (name, sorted(unsupported),
+                   ", ".join(sorted(["oneOf", "anyOf", "allOf", "enum", "pattern", "required"]))))
 
 
 def check_workflows(registry):

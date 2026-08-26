@@ -40,6 +40,12 @@ def json_path(doc, path):
             if not match:
                 raise KeyError("no element with %s=%s in %s" % (key, value, container))
             cur = match[0]
+        elif isinstance(cur, list) and part.isdigit():
+            # A numeric segment indexes a list. Without this, any rule expressed
+            # as a branch of an anyOf was unreachable by a check, so moving a
+            # requirement into a conditional put it beyond what the evaluations
+            # could assert.
+            cur = cur[int(part)]
         else:
             cur = cur[part]
     return cur

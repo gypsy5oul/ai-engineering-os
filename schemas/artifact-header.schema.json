@@ -294,10 +294,8 @@
         "type": "object",
         "required": [
           "id",
-          "approver_id",
+          "policy_ref",
           "approver_role",
-          "at",
-          "recorded_in",
           "decision"
         ],
         "additionalProperties": false,
@@ -333,10 +331,12 @@
           "decision": {
             "type": "string",
             "enum": [
+              "pending",
               "approved",
               "rejected",
               "approved-with-conditions"
-            ]
+            ],
+            "description": "`pending` records that this approval is required and has not been granted. Without it, an ungranted gate could only be written as no entry at all, which reads as no approval being required -- the opposite claim."
           },
           "conditions": {
             "type": "string"
@@ -347,7 +347,28 @@
           "artifact": {
             "type": "string"
           }
-        }
+        },
+        "anyOf": [
+          {
+            "description": "A pending approval names the gate and the role and nothing else, because who granted it, when and where do not exist yet.",
+            "properties": {
+              "decision": {
+                "const": "pending"
+              }
+            },
+            "required": [
+              "decision"
+            ]
+          },
+          {
+            "description": "A granted or refused approval names who, when and where.",
+            "required": [
+              "approver_id",
+              "at",
+              "recorded_in"
+            ]
+          }
+        ]
       }
     },
     "dependencies": {

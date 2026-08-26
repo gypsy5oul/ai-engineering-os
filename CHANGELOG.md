@@ -3,6 +3,35 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.31.0] — "No approval needed" and "not approved yet" looked identical
+
+Asked whether everything was fixed, three more turned up.
+
+**A pending approval could not be written down.** `approvals` required
+`approver_id`, `at`, `recorded_in` and a `decision` of approved, rejected or
+approved-with-conditions — and none of those has an honest value before a human
+acts. So a qa-lead facing four ungranted gates wrote `approvals: []`, which says
+no approval is required here: the opposite claim. `decision: pending` now exists,
+and a pending entry names the gate and the role and nothing else.
+
+**The first attempt at that fix was decoration.** The conditional was written as
+`allOf: [{if, then}]`. The bundled validator implements `allOf` and ignores
+`if`/`then`, so the branch had no recognised keywords and passed everything — a
+granted approval with no human named was accepted. Rewritten with `anyOf`, which
+the validator actually implements, and the refusal was verified against all three
+cases.
+
+**The validator said so and it was a warning.** `check_schema_keywords` had
+reported "uses keywords the bundled validator ignores: ['if', 'then']" the whole
+time, and the author walked past it. A keyword the validator ignores is a rule
+that does nothing while reading like one — the exact defect this repository
+exists to catch — so it is an error now.
+
+Moving that requirement into a branch then broke the governance evaluation that
+asserts a granted approval names a human. The rule had not weakened, it had
+moved; but `json_path` could not index a list, so no check could reach into an
+`anyOf` at all. It can now.
+
 ## [0.30.0] — Three the build hit and I worked around instead of fixing
 
 Reviewing what the calculator run actually cost, three defects turn out to have
