@@ -220,7 +220,7 @@ class TestTheCheckerActuallyFails(unittest.TestCase):
     def test_a_documented_value_argparse_rejects_is_an_error(self):
         proc = self.sandboxed(lambda d: self.edit(
             d, "skills/work-item/SKILL.md",
-            "onboarding or operations", "onboarding, operations or telepathy"))
+            "ai-change or operations", "ai-change, operations or telepathy"))
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("argparse rejects telepathy", proc.stdout)
 
@@ -228,8 +228,8 @@ class TestTheCheckerActuallyFails(unittest.TestCase):
         """The quieter direction, and the one that hides a capability nobody uses."""
         proc = self.sandboxed(lambda d: self.edit(
             d, "skills/work-item/SKILL.md",
-            "dependency, agent-change, onboarding or operations",
-            "agent-change, onboarding or operations"))
+            "dependency, agent-change, onboarding, ai-change or operations",
+            "agent-change, onboarding, ai-change or operations"))
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("without dependency", proc.stdout)
 

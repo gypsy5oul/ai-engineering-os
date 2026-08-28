@@ -1,0 +1,90 @@
+{
+  "version": "1",
+  "description": "How the AI behaviour a project builds is measured. A baseline, a candidate, a dataset, and a comparison between them. This is about the product; policies/evaluation-policy.json is about this organization's own agents, and the two are kept apart on purpose -- same discipline, different subject, and a suite that mixes them measures neither.",
+  "why_a_comparison": {
+    "statement": "A meaningful AI evaluation result is a difference against a baseline, not a number.",
+    "reason": "An absolute figure answers almost nothing on its own. 87% correct is good or catastrophic depending entirely on what it was before, and the questions that decide a release are comparative: did the thing being fixed improve, did anything else get worse, and is the difference bigger than the noise between two runs of the same configuration.",
+    "consequence": "A change with no baseline has nothing to compare against and cannot be assessed. Establishing the baseline is a stage of the workflow rather than a preparation for it."
+  },
+  "the_four_versions": {
+    "description": "Every evaluation result names four versions, or it cannot be reproduced and cannot be compared with another.",
+    "versions": ["prompt", "model", "retrieval_index", "dataset"],
+    "why": "These four change independently and each changes behaviour. A result that names fewer is a number whose provenance is a guess, and two results that name different sets are not comparable at all.",
+    "one_variable_rule": "Baseline and candidate differ in at most one of the four. A prompt change and a model upgrade evaluated together produce a delta nobody can attribute, and the attribution is the entire value of the exercise."
+  },
+  "artifacts": {
+    "AIBC": "The behaviour contract: what the system must do, stated precisely enough to be measured. Written before the change, not after.",
+    "EVALSET": "The evaluation dataset. Versioned, reviewed, in the repository.",
+    "EVALRUN": "One run of one configuration against one dataset. Baseline and candidate are both EVALRUNs; what distinguishes them is which one the other is compared against."
+  },
+  "dataset": {
+    "rules": [
+      "Built from real inputs. Invented examples encode what the author expected, and what the author expected is not what is failing.",
+      "Includes the hard cases: ambiguous inputs, inputs whose correct answer is a refusal or a null, inputs that resemble a different category. A dataset of easy cases reports a high number and predicts nothing.",
+      "Every case carries an expected outcome somebody stands behind, and where that outcome is a judgement, whose.",
+      "Part of it is held out. A dataset the prompt was tuned against measures the tuning.",
+      "It is an artifact: versioned, reviewed, changed deliberately. A dataset edited to make a run pass is the same defect as a test edited to make a build pass, and it is harder to see."
+    ],
+    "growth": "A defect found in production becomes a permanent case. That is the mechanism by which the dataset keeps describing reality rather than describing what the authors first imagined."
+  },
+  "metrics": {
+    "description": "Dimensions a run may report. Report what the system's decision depends on; a metric nobody can act on is noise with a number.",
+    "dimensions": {
+      "correctness": {"means": "The output was right for the input.", "kind": "either"},
+      "task_success": {"means": "The end-to-end task completed, not just one call.", "kind": "either"},
+      "hallucination": {"means": "The output asserted something not supported by its input or context. Measured as a rate, and it is the failure mode that looks most like success.", "kind": "model-judged"},
+      "groundedness": {"means": "The answer came from the provided context rather than from the model's own knowledge. An ungrounded correct answer is a wrong system that happens to be right today.", "kind": "either"},
+      "retrieval_quality": {"means": "Was the right context available at all: recall at k, precision, and the rate at which nothing relevant was returned. Measured before answer quality, because almost every retrieval failure is debugged as a generation failure.", "kind": "deterministic"},
+      "tool_call_correctness": {"means": "Right tool, right arguments, right order.", "kind": "deterministic"},
+      "refusal_behaviour": {"means": "It refuses what it should and only what it should. Over-refusal is a failure and is usually unmeasured.", "kind": "either"},
+      "latency": {"means": "Per call and per completed task, not per token.", "kind": "deterministic"},
+      "cost": {"means": "Per completed task. Tokens in, tokens out, calls per task.", "kind": "deterministic"},
+      "robustness": {"means": "Behaviour under paraphrase, typos, adversarial input and injected instructions.", "kind": "either"},
+      "regression": {"means": "Not a dimension of its own: the change in any dimension against the baseline. Reported per dimension, because an improvement in the target and a loss elsewhere is the normal shape of a bad change.", "kind": "either"}
+    },
+    "evidence_rule": "Every reported metric names the EVALRUN that produced it, and that run names its four versions and its dataset. A metric with no run behind it is not evidence, and reporting one is the failure this whole model exists to prevent.",
+    "never": [
+      "Reporting a metric the run did not produce.",
+      "Reporting a metric from a different dataset version as though it were comparable.",
+      "Reporting an aggregate that hides a category that got worse."
+    ]
+  },
+  "modes": {
+    "deterministic": {
+      "means": "Exact match, schema validity, a rule, a retrieval hit, a tool-call comparison.",
+      "properties": "Cheap, reproducible, runs on every change.",
+      "rule": "Anything that can be deterministic is. A judged case where a rule would do is cost and variance bought for nothing."
+    },
+    "model-judged": {
+      "means": "A rubric applied by a model where correctness is a judgement.",
+      "properties": "Real signal, and it carries a measurement error of its own: judges favour longer answers, favour their own outputs, and are affected by option order.",
+      "rules": [
+        "Never auto-passed. Pending is a result; assumed is not.",
+        "Never the only gate on a safety-critical requirement. Back it with a deterministic case.",
+        "Validated against human labels on a sample before it is trusted.",
+        "Never judged by the model under test, on its own output."
+      ]
+    },
+    "kept_apart": "A run reports the two separately and never averages them into one figure. Merging them is how a suite stops meaning anything: the deterministic part stops being reproducible and the judged part stops being visible."
+  },
+  "thresholds": {
+    "shape": "Gates on the comparison, not on the absolute.",
+    "why": "'No dimension drops by more than x against baseline' survives a dataset getting harder; 'correctness above 90%' fails the moment the dataset starts including the cases that were always failing.",
+    "noise": "A delta smaller than the variation between two runs of the same configuration is not a result. Run the baseline twice before believing a small difference.",
+    "regression_is_blocking": "A regression in any dimension is a finding, including when the targeted dimension improved. Whether it is accepted is a human decision under the change's approval, not an averaging exercise."
+  },
+  "enforcement": {
+    "mechanism": "artifact contracts and definition-of-done predicates on WF-AI-CHANGE",
+    "predicates": [
+      "baseline_recorded()",
+      "one_variable_changed()",
+      "no_unexplained_regression()",
+      "metrics_have_evidence(EVALRUN)"
+    ],
+    "not_enforceable": [
+      "Nothing verifies that a dataset is representative. A dataset of easy cases satisfies every predicate here and predicts nothing, and the only control is review by somebody who knows the domain.",
+      "Nothing verifies that a reported number was actually produced by the run it names. The predicate checks that the run exists and names its versions; it cannot re-execute it.",
+      "Nothing prevents a dataset being edited to make a run pass. It is an artifact under review like any other, and that is the whole of the control."
+    ]
+  }
+}

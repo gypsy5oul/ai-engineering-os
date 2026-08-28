@@ -26,8 +26,8 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/control_loop.py open --project . \
 ```
 
 `--type` is one of feature, defect, incident, release, change-request, migration,
-dependency, agent-change, onboarding or operations — `sdlc-navigator` will tell
-you which if it is not obvious. Each one routes to the workflow that governs it,
+dependency, agent-change, onboarding, ai-change or operations — `sdlc-navigator`
+will tell you which if it is not obvious. Each one routes to the workflow that governs it,
 and `operations` is the one that does not have its own: operational work follows
 the feature lifecycle.
 
@@ -42,6 +42,7 @@ the feature lifecycle.
 | `dependency` | WF-DEPENDENCY | `<KEY>-DEP-NNN` |
 | `agent-change` | WF-AGENT-CHANGE | `<KEY>-AGT-NNN` |
 | `onboarding` | WF-ONBOARDING | `<KEY>-ONB-NNN` |
+| `ai-change` | WF-AI-CHANGE | `<KEY>-AIC-NNN` |
 | `operations` | WF-FEATURE | `<KEY>-OPS-NNN` |
 
 `--risk` is one of LOW, MEDIUM, HIGH or CRITICAL. It defaults to MEDIUM and drives

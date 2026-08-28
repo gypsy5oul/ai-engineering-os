@@ -1,0 +1,555 @@
+# Generated against schemas/sdlc-workflow.schema.json v3.
+# Edit here, then run: python3 scripts/validate_plugin.py
+
+id: WF-AI-CHANGE
+name: AI behaviour change
+version: 1.0.0
+description: >-
+  A change to behaviour that comes from a model rather than from code somebody
+  wrote. Prompts, model versions, retrieval, tool definitions, agent behaviour,
+  evaluators and evaluation datasets all reach production through here. It is not
+  a parallel lifecycle: the same work item, task graph, artifact model, review
+  routing and release model, with the stages that a sampled behaviour needs and a
+  specified one does not - a behaviour contract before the change, a baseline
+  before the work, and a comparison rather than a number at the end.
+applies_when:
+  - A prompt, a model version, a retrieval configuration, a tool definition or an
+    evaluation dataset changes.
+  - A change alters what an AI component decides, or what the system does with
+    what it decided.
+skip_when:
+  - The change is to code around a model call that does not alter behaviour; use
+    WF-FEATURE or WF-DEFECT.
+  - The project declares no AI features in .ai-engineering/project.yaml. This
+    workflow has nothing to measure.
+entry_conditions:
+  - The project declares ai_system.builds_ai_features, with an approved provider.
+  - An evaluation dataset exists, or producing one is the first thing this change does.
+exit_conditions:
+  - The candidate reached production and a post-deployment evaluation was recorded
+    against real traffic.
+  - Every regression against the baseline is either resolved or explained and accepted
+    by a named human.
+cancellation:
+  terminal_status: cancelled
+  who: the human who owns the change, recorded like any other decision
+  requires:
+    - Every department cycle this change entered reaches a terminal state.
+    - The reason is written on the artifact that opened the change.
+    - Anything already shadowed or canaried is withdrawn, and which one is recorded.
+  note: >-
+    An abandoned AI change leaves a candidate configuration that somebody may still
+    be routing traffic to. Ending tidily includes turning it off.
+definition_of_done:
+  - artifact_status(AIBC, approved)
+  - artifact_exists(EVALSET)
+  - baseline_recorded()
+  - one_variable_changed()
+  - no_unexplained_regression()
+  - metrics_have_evidence(EVALRUN)
+  - agent_verdict(architecture-reviewer, pass)
+  - agent_verdict(qa-lead, pass)
+  - no_unresolved_findings(high)
+  - human_approval_recorded(AP-03)
+  - rollback_plan_or_acknowledged()
+  - no_blocking_open_decisions(all)
+failure_paths:
+  - when: The behaviour cannot be stated precisely enough to measure
+    goto: CONTRACT
+    note: An AI change whose success nobody can define is a change nobody can review.
+  - when: No baseline can be established because no dataset exists
+    goto: BASELINE
+  - when: The candidate regresses a dimension nobody is willing to accept
+    goto: IMPLEMENT
+  - when: Shadow or canary traffic contradicts the offline result
+    goto: OFFLINE-EVAL
+    note: >-
+      The dataset did not represent production. Extending it is the fix; re-running
+      the same dataset is not.
+stages:
+  - id: INTENT
+    name: Intake
+    owner: engineering-director
+    participants:
+      - product-manager
+    skills:
+      - sdlc-navigator
+      - work-item
+    risk: LOW
+    complexity: routine
+    execution: inline
+    entry_criteria:
+      - A human has stated what the AI behaviour should do differently.
+    actions:
+      - Establish which of prompt, model, retrieval, tools, evaluator or dataset is
+        changing, and say so. The rest of the workflow depends on it being one of them.
+      - Name the stages being skipped and why.
+    inputs:
+      - The request as stated
+      - The project's declared ai_system configuration
+    outputs:
+      - Stage plan
+      - Recorded skips
+    exit_criteria:
+      - The changing element is named
+      - Every skipped stage has a written reason
+    definition_of_done:
+      - every_skip_recorded()
+      - config_valid()
+    emits:
+      - AI_CHANGE_CREATED
+  - id: CONTRACT
+    name: Behaviour contract
+    owner: solution-architect
+    participants:
+      - qa-lead
+      - product-manager
+    skills:
+      - ai-system-design
+      - requirements-engineering
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - The changing element is named
+    actions:
+      - State what the behaviour must do, precisely enough that a case can pass or fail it.
+      - Enumerate the ways the output can be wrong - wrong content, wrong shape, refusal,
+        truncation, injected instruction - and what the system does with each.
+      - State the autonomy, from suggests through to acts irreversibly, because it decides
+        how much of the rest matters.
+      - Name the dimensions this change will be measured on, before anything is measured.
+    inputs:
+      - The stated intent
+      - The current behaviour, as it is
+    outputs:
+      - Behaviour contract
+      - The measurement dimensions
+    produces:
+      - AIBC
+    artifacts:
+      - docs/ai/contracts/
+    exit_criteria:
+      - Every wrong-answer mode has a stated behaviour
+      - The dimensions to be measured are named
+    definition_of_done:
+      - artifact_exists(AIBC)
+      - artifact_status(AIBC, approved)
+      - required_fields_present(AIBC)
+      - artifact_owned_by(AIBC, solution-architect)
+      - no_open_blocking_decisions_for(AIBC)
+    agent_gate:
+      reviewer: qa-lead
+      blocking: true
+      recorded_in: the behaviour contract
+      verdict:
+        - measurable
+        - not-measurable
+      purpose: >-
+        measurability - can each stated behaviour pass or fail on a case. Not whether
+        the behaviour is the right one, which is the requester's question.
+    department_cycle: CYCLE-ARCH
+    cycle_role: enters
+    emits:
+      - AI_CONTRACT_APPROVED
+  - id: BASELINE
+    name: Baseline evaluation
+    owner: qa-lead
+    participants:
+      - qa-engineer
+    skills:
+      - ai-evaluation
+      - test-design
+    risk: MEDIUM
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - The behaviour contract is approved
+    actions:
+      - Build or extend the evaluation dataset from real inputs, including the hard cases
+        and the ones whose right answer is a refusal.
+      - Hold part of it out.
+      - Run the current production configuration against it and record the result as the
+        baseline, naming all four versions.
+      - Run the baseline twice where a small delta is expected to matter, so the noise
+        between two runs of one configuration is known before it is mistaken for a result.
+    inputs:
+      - The behaviour contract
+      - Real production inputs
+    outputs:
+      - Evaluation dataset
+      - Baseline run
+    produces:
+      - EVALSET
+      - EVALRUN
+    artifacts:
+      - docs/ai/evaluation/
+    exit_criteria:
+      - A baseline run exists naming its prompt, model, index and dataset versions
+      - The dataset holds cases the current behaviour is known to fail
+    definition_of_done:
+      - artifact_exists(EVALSET)
+      - required_fields_present(EVALSET)
+      - baseline_recorded()
+      - metrics_have_evidence(EVALRUN)
+    agent_gate:
+      reviewer: test-reviewer
+      blocking: true
+      recorded_in: the evaluation dataset
+      purpose: >-
+        dataset quality - are the cases real, are the hard ones present, and is the
+        held-out part genuinely held out. A dataset of easy cases satisfies every
+        predicate and predicts nothing.
+    department_cycle: CYCLE-QA
+    cycle_role: enters
+    emits:
+      - AI_BASELINE_RECORDED
+  - id: DESIGN
+    name: AI design
+    owner: solution-architect
+    participants:
+      - security-architect
+      - backend-developer
+    skills:
+      - ai-system-design
+      - prompt-engineering
+      - rag-engineering
+      - agent-tool-design
+      - engineering-simplicity
+    risk: HIGH
+    complexity: novel
+    execution: subagent
+    entry_criteria:
+      - A baseline exists
+    actions:
+      - Design the change against the contract, and say which single element it moves.
+      - Say what a deterministic alternative would fail to do. The most reliable AI
+        design is the one that uses less of it.
+      - Record the complexity ledger for anything the change introduces.
+    inputs:
+      - The behaviour contract
+      - The baseline result
+    outputs:
+      - The design
+      - The complexity ledger
+    produces:
+      - ADR
+    artifacts:
+      - docs/adrs/
+    exit_criteria:
+      - Exactly one of prompt, model, retrieval, tools or dataset is changing
+      - The deterministic alternative was named and assessed
+    definition_of_done:
+      - artifact_status(ADR, accepted)
+      - complexity_justified(ADR)
+      - agent_verdict(architecture-reviewer, pass)
+      - cycle_accepted(CYCLE-ARCH)
+      - cycle_rollup_reported(CYCLE-ARCH)
+      - no_open_rework(CYCLE-ARCH)
+    agent_gate:
+      reviewer: architecture-reviewer
+      blocking: true
+      recorded_in: the decision record
+      verdict:
+        - approve
+        - approve-with-conditions
+        - reject
+      purpose: >-
+        proportionality and attribution - is the change confined to one variable, and
+        does the complexity it introduces carry a requirement.
+    optional_when:
+      - The change is a dataset extension only, which alters no behaviour.
+    department_cycle: CYCLE-ARCH
+    cycle_role: completes
+  - id: IMPLEMENT
+    name: Implementation
+    owner: development-lead
+    participants:
+      - backend-developer
+    skills:
+      - llm-integration
+      - prompt-engineering
+      - git-workflow
+    risk: MEDIUM
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - The design is accepted, or the change is a dataset extension
+    actions:
+      - Make the change, and only that change.
+      - Pin every version the change does not move, so the comparison stays attributable.
+    inputs:
+      - The design
+      - The behaviour contract
+    outputs:
+      - The candidate configuration
+    exit_criteria:
+      - The candidate differs from the baseline in exactly one version
+    definition_of_done:
+      - tests_pass(unit)
+      - no_unresolved_findings(high)
+    department_cycle: CYCLE-DEV
+    cycle_role: enters
+  - id: OFFLINE-EVAL
+    name: Offline evaluation
+    owner: qa-lead
+    participants:
+      - qa-engineer
+    skills:
+      - ai-evaluation
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - A candidate configuration exists
+    actions:
+      - Run the candidate against the same dataset the baseline ran against.
+      - Record deterministic and model-judged results separately. Never average them
+        into one figure.
+      - Report every dimension, not only the one the change targeted.
+    inputs:
+      - The candidate
+      - The evaluation dataset
+      - The baseline run
+    outputs:
+      - Candidate run
+    produces:
+      - EVALRUN
+    artifacts:
+      - docs/ai/evaluation/runs/
+    exit_criteria:
+      - A candidate run exists on the same dataset version as the baseline
+      - Every reported metric names the run that produced it
+    definition_of_done:
+      - artifact_exists(EVALRUN)
+      - one_variable_changed()
+      - metrics_have_evidence(EVALRUN)
+      - required_fields_present(EVALRUN)
+    department_cycle: CYCLE-QA
+    cycle_role: continues
+    emits:
+      - AI_CANDIDATE_EVALUATED
+  - id: REGRESSION
+    name: Regression analysis
+    owner: qa-lead
+    participants:
+      - test-reviewer
+      - solution-architect
+    skills:
+      - ai-evaluation
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Baseline and candidate runs both exist
+    actions:
+      - Compare every dimension, not the targeted one.
+      - For each dimension that got worse, say whether it is noise, a defect, or an
+        accepted cost - and which, in writing.
+      - Where the delta is smaller than the difference between two baseline runs, say
+        that it is not a result.
+    inputs:
+      - Baseline run
+      - Candidate run
+    outputs:
+      - The comparison, per dimension
+      - Explanations for every regression
+    exit_criteria:
+      - Every dimension that regressed carries an explanation
+    definition_of_done:
+      - no_unexplained_regression()
+      - agent_verdict(test-reviewer, pass)
+      - cycle_accepted(CYCLE-QA)
+      - cycle_rollup_reported(CYCLE-QA)
+      - no_open_rework(CYCLE-QA)
+    agent_gate:
+      reviewer: test-reviewer
+      blocking: true
+      recorded_in: the candidate run
+      verdict:
+        - no-regression
+        - regression-explained
+        - regression-blocking
+      purpose: >-
+        did anything else get worse. An improvement in the targeted dimension
+        alongside a silent loss elsewhere is the normal shape of a bad AI change.
+    department_cycle: CYCLE-QA
+    cycle_role: completes
+  - id: REVIEW
+    name: Review
+    owner: code-reviewer
+    participants:
+      - security-reviewer
+      - architecture-reviewer
+    skills:
+      - change-review
+      - prompt-engineering
+      - security-assessment
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Regression analysis is complete
+    actions:
+      - Review the change as a change, routed by policies/review-routing.json.
+      - Review the prompt as source rather than as prose - what it now permits, what it
+        now refuses, and what untrusted content it reads.
+    inputs:
+      - The diff
+      - The comparison
+      - The behaviour contract
+    outputs:
+      - Review record
+    produces:
+      - REVIEW
+    artifacts:
+      - docs/reviews/
+    exit_criteria:
+      - Every routed reviewer recorded a verdict
+    definition_of_done:
+      - agent_verdict(code-reviewer, pass)
+      - agent_verdict(security-reviewer, pass)
+      - no_unresolved_findings(high)
+      - artifact_exists(REVIEW)
+      - cycle_accepted(CYCLE-DEV)
+      - cycle_rollup_reported(CYCLE-DEV)
+      - no_open_rework(CYCLE-DEV)
+    agent_gate:
+      reviewer: security-reviewer
+      blocking: true
+      recorded_in: the review record
+      purpose: >-
+        what the change lets the system do that it could not before, and what the
+        model now reads that it did not.
+    department_cycle: CYCLE-DEV
+    cycle_role: completes
+  - id: SHADOW
+    name: Shadow or canary
+    owner: sre
+    participants:
+      - devops-engineer
+      - qa-lead
+    skills:
+      - ai-observability
+      - observability
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - Review passed
+      - A rollback path exists
+    actions:
+      - Run the candidate against real traffic without acting on its output, or on a
+        bounded share of it.
+      - Compare against the offline result. A disagreement means the dataset did not
+        represent production, which is a dataset finding rather than a candidate one.
+      - Watch cost per request, not only correctness.
+    inputs:
+      - The candidate
+      - The offline comparison
+    outputs:
+      - Shadow or canary result
+    exit_criteria:
+      - Real traffic agrees with the offline result, or the disagreement is explained
+    definition_of_done:
+      - rollback_plan_or_acknowledged()
+      - no_unresolved_findings(high)
+    optional_when:
+      - The autonomy is suggests-to-a-human and the blast radius of a wrong answer is
+        a single rejected suggestion.
+    human_gate:
+      approver: engineering owner
+      recorded_in: project-decision-log
+      policy_ref: AP-03
+      approver_role: engineering-owner
+    department_cycle: CYCLE-SRE
+    cycle_role: enters
+  - id: PRODUCTION
+    name: Production
+    owner: release-manager
+    participants:
+      - devops-engineer
+    skills:
+      - release-management
+      - ci-cd
+    risk: CRITICAL
+    complexity: complex
+    execution: inline
+    entry_criteria:
+      - Shadow or canary is clean, or was skipped with a recorded reason
+      - A named human authorized the deployment
+    actions:
+      - Promote the candidate. The configuration that goes to production is the one
+        that was evaluated, by version, not an equivalent of it.
+      - Record which four versions are now live.
+    inputs:
+      - The candidate
+      - The authorization
+    outputs:
+      - The live configuration
+    produces:
+      - REL
+    exit_criteria:
+      - The live versions are recorded and match the evaluated candidate
+    definition_of_done:
+      - release_authorized()
+      - human_approval_recorded(AP-01)
+      - human_identity_recorded(AP-01)
+      - promoted_through(production)
+      - cycle_accepted(CYCLE-DEVOPS)
+      - cycle_rollup_reported(CYCLE-DEVOPS)
+      - no_open_rework(CYCLE-DEVOPS)
+    human_gate:
+      approver: release approver
+      recorded_in: gitlab-release
+      policy_ref: AP-01
+      approver_role: release-approver
+    department_cycle: CYCLE-DEVOPS
+    cycle_role: completes
+    emits:
+      - AI_CHANGE_DEPLOYED
+  - id: POST-DEPLOY
+    name: Post-deployment evaluation
+    owner: qa-lead
+    participants:
+      - sre
+    skills:
+      - ai-evaluation
+      - ai-observability
+    risk: HIGH
+    complexity: complex
+    execution: subagent
+    entry_criteria:
+      - The candidate is live
+    actions:
+      - Score a sample of real traffic and compare against what the offline run predicted.
+      - Add every production failure to the dataset. This is the loop that keeps the
+        dataset describing reality rather than what its authors first imagined.
+      - Record the live configuration as the new baseline for the next change.
+    inputs:
+      - Production traffic
+      - The candidate run
+    outputs:
+      - Post-deployment result
+      - The new baseline
+      - New dataset cases
+    produces:
+      - EVALRUN
+    exit_criteria:
+      - Production agrees with the offline prediction, or the difference is recorded
+      - The live configuration is recorded as the baseline for the next change
+      - Every production failure found is in the dataset. This is an exit criterion
+        rather than a predicate because no predicate can tell a case that came from
+        production from one somebody wrote; asking for corrective_actions_tracked
+        here would only have forced a defect to be invented, which is the failure
+        that predicate exists to prevent
+    definition_of_done:
+      - baseline_recorded()
+      - metrics_have_evidence(EVALRUN)
+      - cycle_accepted(CYCLE-SRE)
+      - cycle_rollup_reported(CYCLE-SRE)
+      - no_open_rework(CYCLE-SRE)
+    department_cycle: CYCLE-SRE
+    cycle_role: completes
+    emits:
+      - AI_BASELINE_RECORDED

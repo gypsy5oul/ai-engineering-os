@@ -10,6 +10,8 @@ description: Story to accepted implementation. The lead decomposes and assigns; 
 used_by_stages:
   - WF-FEATURE/DEV
   - WF-DEFECT/FIX
+  - WF-AI-CHANGE/IMPLEMENT
+  - WF-AI-CHANGE/REVIEW
 work_item:
   kind: task within a story
   artifact: STORY

@@ -773,6 +773,73 @@
       "category": "quality",
       "default_severity": "normal",
       "default_status": "completed"
+    },
+    {
+      "type": "AI_CHANGE_CREATED",
+      "level": "organization",
+      "emitted_by": "WF-AI-CHANGE/INTENT",
+      "meaning": "A change to model-backed behaviour entered the lifecycle.",
+      "payload_fields": [
+        "changing_element",
+        "requester"
+      ],
+      "category": "lifecycle",
+      "default_severity": "normal",
+      "default_status": "started"
+    },
+    {
+      "type": "AI_CONTRACT_APPROVED",
+      "level": "department",
+      "emitted_by": "WF-AI-CHANGE/CONTRACT",
+      "meaning": "What the behaviour must do is stated precisely enough to be measured.",
+      "payload_fields": [
+        "dimensions",
+        "autonomy"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "approved"
+    },
+    {
+      "type": "AI_BASELINE_RECORDED",
+      "level": "department",
+      "emitted_by": "WF-AI-CHANGE/BASELINE",
+      "meaning": "The current behaviour was measured, so a change to it can be a finding rather than a number.",
+      "payload_fields": [
+        "dataset_version",
+        "run"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "AI_CANDIDATE_EVALUATED",
+      "level": "department",
+      "emitted_by": "WF-AI-CHANGE/OFFLINE-EVAL",
+      "meaning": "A candidate was measured against the same dataset as the baseline.",
+      "payload_fields": [
+        "run",
+        "changed_version"
+      ],
+      "category": "quality",
+      "default_severity": "normal",
+      "default_status": "completed"
+    },
+    {
+      "type": "AI_CHANGE_DEPLOYED",
+      "level": "organization",
+      "emitted_by": "WF-AI-CHANGE/PRODUCTION",
+      "meaning": "A model-backed behaviour change reached production. The four live versions are named, because a behaviour that changed without a deployment is the failure this records against.",
+      "payload_fields": [
+        "prompt_version",
+        "model_version",
+        "retrieval_index_version",
+        "dataset_version"
+      ],
+      "category": "deployment",
+      "default_severity": "normal",
+      "default_status": "completed"
     }
   ],
   "categories": {

@@ -1,0 +1,90 @@
+{
+  "id": "EVAL-ORG-017",
+  "suite": "organization-evaluation",
+  "subject": "an AI change is measured against a baseline, not asserted",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "An AI change is the one kind where 'it looks better' is a sentence somebody will say and mean, because the output is prose and the improvement is visible. The structure is bypassed in three ways, all of which feel reasonable at the time: ship without a baseline, so there is nothing the result can be worse than; change the prompt and the model together, so the delta cannot be attributed and the better number is claimed for whichever change the author preferred; or report the dimension that improved and not the two that did not. The fourth bypass is architectural: give the AI change its own lifecycle, its own artifacts and its own reviewers, and the organization now has two definitions of done.",
+  "expected_behaviors": [
+    "WF-AI-CHANGE gates on baseline_recorded, one_variable_changed, no_unexplained_regression and metrics_have_evidence.",
+    "The baseline stage comes before implementation, and the contract before the baseline.",
+    "Production carries a named human approval and CRITICAL risk.",
+    "The workflow uses the department cycles, approval categories and work-item mechanism that already exist.",
+    "The AI evaluation model says what it cannot check rather than implying it checks everything."
+  ],
+  "failure_conditions": [
+    "A candidate can reach production with no baseline.",
+    "Baseline and candidate may differ in more than one version.",
+    "A regression can go unmentioned: an absent regression list reads the same as an empty one.",
+    "A metric can be reported with no run behind it.",
+    "The workflow invents a cycle, an approval category or an agent."
+  ],
+  "checks": [
+    {
+      "type": "file_exists",
+      "file": "sdlc/workflows/ai-change.yaml"
+    },
+    {
+      "type": "file_exists",
+      "file": "policies/ai-evaluation-model.json"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/ai-change.yaml",
+      "pattern": "^  - baseline_recorded\\(\\)$",
+      "description": "The workflow cannot be done without one."
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/ai-change.yaml",
+      "pattern": "^  - one_variable_changed\\(\\)$"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/ai-change.yaml",
+      "pattern": "^  - no_unexplained_regression\\(\\)$"
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/ai-change.yaml",
+      "pattern": "^  - metrics_have_evidence\\(EVALRUN\\)$"
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/check_dod.py",
+      "pattern": "does not say whether anything regressed",
+      "description": "An absent regression list is refused; an empty one passes. The two must not read the same."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/ai-evaluation-model.json",
+      "path": "the_four_versions.one_variable_rule",
+      "value": "Baseline and candidate differ in at most one of the four. A prompt change and a model upgrade evaluated together produce a delta nobody can attribute, and the attribution is the entire value of the exercise."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/ai-evaluation-model.json",
+      "pattern": "cannot re-execute",
+      "description": "The predicate checks provenance and says it cannot check accuracy."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/ai-evaluation-model.json",
+      "pattern": "Nothing verifies that a dataset is representative",
+      "description": "The largest thing this model cannot do, said out loud."
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "agent_set_is_frozen_at_thirty",
+      "description": "A new lifecycle is where a new role would arrive."
+    },
+    {
+      "type": "file_contains",
+      "file": "schemas/artifact-header.schema.json",
+      "pattern": "AIC",
+      "description": "An artifact belonging to an ai-change work item can validate. The change pattern and the work-item id pattern drifted twice; check_work_item_id_patterns_agree now holds them equal."
+    }
+  ],
+  "notes": "The behavioural half is tests/test_ai_change_workflow.py, and scripts/simulate_sdlc.py --scenario ai-change drives all eleven stages against real artifacts. Without the simulation, WF-AI-CHANGE would be the only workflow never shown to be completable and the four predicates would never meet a real artifact."
+}

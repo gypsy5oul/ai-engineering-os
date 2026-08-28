@@ -1690,6 +1690,181 @@
       "immutable_after_creation": true,
       "append_only": false,
       "notes": "One record per rung of the ladder, so each environment carries its own evidence rather than the release carrying one undifferentiated claim that tests passed. `what_this_does_not_prove` is copied from the environment's differs_from_next at the moment of promotion, which is deliberate duplication: the ladder can be edited later and the record of what was believed at the time should not move. Immutable after creation for the same reason - a promotion record that can be revised is a record of the present, not of what was known when the decision was made. may_modify is empty because immutable means immutable: a promotion is amended by promoting again, not by editing what was recorded last time."
+    },
+    {
+      "code": "AIBC",
+      "type": "ai-behaviour-contract",
+      "workflow": "WF-AI-CHANGE",
+      "produced_by_stage": "CONTRACT",
+      "owner_role": "solution-architect",
+      "may_modify": [
+        "solution-architect"
+      ],
+      "may_review": [
+        "architecture-reviewer",
+        "qa-lead"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/ai/contracts/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "change",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "behaviour",
+        "inputs",
+        "outputs",
+        "wrong_answer_modes",
+        "autonomy",
+        "measured_by"
+      ],
+      "links_required": [
+        "requirements"
+      ],
+      "depends_on": [
+        "REQ",
+        "NFR"
+      ],
+      "consumed_by": [
+        "EVALSET",
+        "EVALRUN",
+        "ARCH"
+      ],
+      "immutable_after_creation": false,
+      "notes": "What the AI behaviour must do, stated precisely enough to be measured, and what happens when it is wrong. Written before the change rather than derived from it: a contract written afterwards describes what was built, which is the one thing an evaluation cannot check. `wrong_answer_modes` is the field that is skipped and is the reason the artifact exists -- for a model-backed component, confidently wrong is a normal output rather than an error condition.",
+      "append_only": false
+    },
+    {
+      "code": "EVALSET",
+      "type": "evaluation-dataset",
+      "workflow": "WF-AI-CHANGE",
+      "produced_by_stage": "BASELINE",
+      "owner_role": "qa-lead",
+      "may_modify": [
+        "qa-lead",
+        "qa-engineer"
+      ],
+      "may_review": [
+        "test-reviewer",
+        "solution-architect"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/ai/evaluation/",
+      "statuses": [
+        "draft",
+        "in-review",
+        "approved",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "change",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "cases",
+        "held_out",
+        "expected_outcome_owner",
+        "hard_cases"
+      ],
+      "links_required": [
+        "requirements"
+      ],
+      "depends_on": [
+        "AIBC"
+      ],
+      "consumed_by": [
+        "EVALRUN"
+      ],
+      "immutable_after_creation": false,
+      "notes": "The dataset an AI behaviour is measured against. Versioned like code, because a dataset edited to make a run pass is the same defect as a test edited to make a build pass and is harder to see. `held_out` is required: a dataset the prompt was tuned against measures the tuning. Nothing here verifies that the cases are representative -- that is a review by somebody who knows the domain, and policies/ai-evaluation-model.json says so.",
+      "append_only": false
+    },
+    {
+      "code": "EVALRUN",
+      "type": "evaluation-run",
+      "workflow": "WF-AI-CHANGE",
+      "produced_by_stage": "OFFLINE-EVAL",
+      "owner_role": "qa-lead",
+      "may_modify": [],
+      "may_review": [
+        "test-reviewer",
+        "architecture-reviewer"
+      ],
+      "may_approve": {
+        "kind": "none"
+      },
+      "storage": "docs/ai/evaluation/runs/",
+      "statuses": [
+        "draft",
+        "done",
+        "superseded"
+      ],
+      "required_fields": [
+        "id",
+        "change",
+        "type",
+        "title",
+        "status",
+        "owner",
+        "version",
+        "created_at",
+        "updated_at",
+        "source",
+        "reviewers",
+        "approvals",
+        "dependencies",
+        "links",
+        "role",
+        "prompt_version",
+        "model_version",
+        "retrieval_index_version",
+        "dataset_version",
+        "deterministic_metrics",
+        "judged_metrics"
+      ],
+      "links_required": [
+        "requirements"
+      ],
+      "depends_on": [
+        "EVALSET",
+        "AIBC"
+      ],
+      "consumed_by": [
+        "REL"
+      ],
+      "immutable_after_creation": true,
+      "notes": "One run of one configuration against one dataset. Baseline and candidate are both EVALRUNs; `role` says which. Immutable once done, because a run whose numbers can be edited is not evidence. The four version fields are required together: a result naming fewer cannot be reproduced, and two results naming different sets are not comparable. Deterministic and judged metrics are separate fields and are never averaged into one figure. `may_modify` is empty by the same logic as EVID: an immutable record with an editor is not immutable.",
+      "append_only": false
     }
   ],
   "dod_predicates": {
@@ -1874,6 +2049,28 @@
       ],
       "checkable": "project",
       "means": "The artifact carries a complexity ledger: every item of complexity it introduces names the requirement, measurement or constraint that forces it, the simpler alternative that was considered, and why that alternative fails. An empty ledger is a valid answer and passes; an absent one fails, because it means the question was never asked. The predicate checks that the justification exists and is complete, never whether the judgement was right -- that is architecture-reviewer's finding and the human's decision under AP-02. See policies/simplicity-policy.json."
+    },
+    "baseline_recorded": {
+      "args": [],
+      "checkable": "project",
+      "means": "An EVALRUN with role 'baseline' exists for the behaviour under change, naming its four versions. A change with no baseline has nothing to compare against, so its result is a number rather than a finding. Establishing it is a stage rather than a preparation."
+    },
+    "one_variable_changed": {
+      "args": [],
+      "checkable": "project",
+      "means": "The candidate EVALRUN differs from the baseline in at most one of prompt, model, retrieval index and dataset version. Two changed together produce a delta nobody can attribute, and the attribution is the entire value of the comparison."
+    },
+    "no_unexplained_regression": {
+      "args": [],
+      "checkable": "project",
+      "means": "Every dimension in which the candidate scored worse than the baseline carries a written explanation. Not an absence of regression -- an accepted regression is a legitimate outcome -- but an absence of one nobody noticed. An improvement in the targeted dimension alongside a silent loss elsewhere is the normal shape of a bad AI change."
+    },
+    "metrics_have_evidence": {
+      "args": [
+        "artifact_code"
+      ],
+      "checkable": "project",
+      "means": "Every metric the artifact reports names the EVALRUN that produced it, and that run names its four versions. A metric with no run behind it is not evidence. This checks provenance, never accuracy: it cannot re-execute the run, and policies/ai-evaluation-model.json says so."
     }
   },
   "checkability": {

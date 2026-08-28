@@ -118,6 +118,7 @@ workflow declares entry and exit conditions and its failure paths.
 | `WF-AGENT-CHANGE` OS change | A gap or governance finding in this plugin | single-agent | Evaluation, Security, Governance (AP-10) | Merged, versioned, released with a migration note |
 | `WF-CHANGE` change request | A commitment the organization already made is to change | single-agent | Impact assessment (independent), Decision (AP-15) | Every affected artifact updated or recorded as unaffected |
 | `WF-MIGRATION` data migration | Existing data must be transformed, moved or backfilled | single-agent, except `REHEARSE`, which runs as a team | Design (independent), Rehearsal (independent), Authorization (AP-05) | Executed and verified, with the rollback path open or explicitly closed |
+| `WF-AI-CHANGE` AI behaviour change | A prompt, model, retrieval, tool or evaluation dataset changes | single-agent | Behaviour contract measurability (independent), Regression analysis (independent), Shadow or canary (AP-03), Production (AP-01) | Live, with a post-deployment run recorded against real traffic and every regression explained |
 
 ## Stages that are dimensions, not stages
 
@@ -414,3 +415,47 @@ gaps by stage, and corrective actions **typed** as defect, technical debt,
 architecture change, new requirement, monitoring improvement, automation or
 process. Each has an owner and an acceptance criterion, and each becomes a real
 backlog item. That is the arrow back into the next cycle.
+
+
+## WF-AI-CHANGE: why a sampled behaviour needs its own stages
+
+Every other workflow assumes behaviour is *specified* — somebody wrote it, a test
+asserts it, and it is either right or it is a defect. A model-backed behaviour is
+**sampled**, and three things follow that no existing stage covers.
+
+**A contract before the change.** `CONTRACT` states what the behaviour must do
+precisely enough that a case can pass or fail it, and enumerates the ways the
+output can be wrong. A contract written afterwards describes what was built, which
+is the one thing an evaluation cannot check.
+
+**A baseline before the work.** `BASELINE` is a stage, not a preparation for one.
+An AI result is a *difference*: 87% correct is good or catastrophic depending
+entirely on what it was before, and a change with no baseline produces a number
+rather than a finding.
+
+**A comparison at the end, not a threshold.** `REGRESSION` compares every
+dimension, not the one the change targeted. An improvement in the target alongside
+a quiet loss elsewhere is the normal shape of a bad AI change, and
+`no_unexplained_regression()` refuses a candidate that does not say either way —
+an *empty* regression list is an answer, an *absent* one is not.
+
+Four predicates carry it, from `policies/ai-evaluation-model.json`:
+
+| Predicate | Refuses |
+| --- | --- |
+| `baseline_recorded()` | A change with nothing to compare against |
+| `one_variable_changed()` | A prompt change and a model upgrade shipped together, whose delta nobody can attribute |
+| `no_unexplained_regression()` | A dimension that got worse and nobody said so |
+| `metrics_have_evidence(EVALRUN)` | A number with no run behind it |
+
+**It is not a parallel lifecycle.** Same work item (`--type ai-change`), same task
+graph, same department cycles, same approval categories, same release model. What
+is new is three artifacts — `AIBC`, `EVALSET`, `EVALRUN` — and the four predicates
+above. Everything else is the organization that already existed.
+
+What the model **cannot** check is written into the policy rather than implied:
+nothing verifies that a dataset is representative, nothing re-executes a run to
+confirm a reported number, and nothing prevents a dataset being edited to make a
+run pass. Those are reviews by somebody who knows the domain, and saying so is
+what keeps the predicates honest about their own scope.
+

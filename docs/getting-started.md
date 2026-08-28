@@ -17,10 +17,10 @@ An engineering organization, not a tool.
 | **30 agents** | Roles with contracts: authority, forbidden actions, inputs, outputs, escalation. Frozen — see [organization freeze](organization-freeze.md). |
 | **42 skills** | Shared capabilities. Technology-neutral. |
 | **4 guards** | Hooks that deny, escalate or audit every command, write and spawn. Tiered so a broken policy file cannot open them. |
-| **30 policies** | Model routing, risk, approvals, artifacts, execution and isolation, workflow intensity, coupling, simplicity, system of record. |
-| **9 workflows** | Level 1: stage to stage. |
+| **31 policies** | Model routing, risk, approvals, artifacts, execution and isolation, workflow intensity, coupling, simplicity, system of record. |
+| **10 workflows** | Level 1: stage to stage. |
 | **7 department cycles** | Level 2: the delegation loop inside a stage. |
-| **28 artifact types** | The state model. Each with an owner, a lifecycle and a review path. |
+| **31 artifact types** | The state model. Each with an owner, a lifecycle and a review path. |
 
 It mandates no technology. Python, Go, React, Postgres, Kubernetes — all project
 decisions, recorded by a human.
@@ -387,7 +387,7 @@ python3 scripts/check_dod.py --workflow WF-FEATURE --stage REQ --project .
 
 - **Behavioural rules are contracts, not guarantees.** "Never invent an
   availability target" is tested by evaluation, not enforced by a hook.
-- **28 of 84 evaluation cases need a model run** and are reported pending, never
+- **28 of 85 evaluation cases need a model run** and are reported pending, never
   auto-passed.
 - **Secret detection is heuristic.** Use a dedicated scanner in CI as well.
 - **Agent teams are experimental.** Every workflow works without them; team

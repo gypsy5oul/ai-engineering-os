@@ -19,6 +19,8 @@ used_by_stages:
   - WF-FEATURE/READINESS
   - WF-RELEASE/READINESS
   - WF-FEATURE/OBSERVABILITY
+  - WF-AI-CHANGE/SHADOW
+  - WF-AI-CHANGE/POST-DEPLOY
 work_item:
   kind: observability change, runbook or investigation thread
   artifact: INC

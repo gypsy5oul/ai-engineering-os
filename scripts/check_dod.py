@@ -33,6 +33,20 @@ def model():
         return json.load(fh)
 
 
+_EVAL_VERSIONS = ("prompt_version", "model_version", "retrieval_index_version",
+                  "dataset_version")
+
+
+def _missing_versions(run):
+    """The four versions an EVALRUN must name, or it cannot be reproduced.
+
+    They change independently and each changes behaviour, so a result naming
+    fewer has a provenance that is a guess, and two results naming different sets
+    are not comparable at all.
+    """
+    return [f for f in _EVAL_VERSIONS if not str(run.get(f, "")).strip()]
+
+
 def _simplicity_policy():
     path = os.path.join(ROOT, "policies", "simplicity-policy.json")
     if not os.path.exists(path):
@@ -494,6 +508,92 @@ def evaluate(fn, args, artifacts, project):
                     return "PASS", "%s recorded on %s in %s" % (args[0], a["id"], ap.get("recorded_in"))
         return "REQUIRES-EVIDENCE", ("%s must be recorded in GitLab. A session cannot see it; "
                                      "check the merge request or release." % args[0])
+
+    # ---- the AI evaluation model, policies/ai-evaluation-model.json ----
+    #
+    # These read EVALRUN artifacts. All four check provenance and completeness and
+    # none of them checks accuracy: nothing here can re-execute a run, and the
+    # policy says so rather than implying otherwise.
+
+    if fn == "baseline_recorded":
+        runs = by_code(artifacts, "EVALRUN")
+        if not runs:
+            return "FAIL", "no EVALRUN exists, so there is nothing to compare a change against"
+        base = [r for r in runs if str(r.get("role", "")).lower() == "baseline"]
+        if not base:
+            return "FAIL", ("%d EVALRUN(s) and none with role 'baseline'. A change with no "
+                            "baseline produces a number rather than a finding" % len(runs))
+        incomplete = [r["id"] for r in base if _missing_versions(r)]
+        if incomplete:
+            return "FAIL", ("baseline %s does not name all four versions, so nothing can be "
+                            "compared against it" % ", ".join(incomplete))
+        return "PASS", "baseline %s recorded with all four versions" % base[0]["id"]
+
+    if fn == "one_variable_changed":
+        runs = by_code(artifacts, "EVALRUN")
+        base = [r for r in runs if str(r.get("role", "")).lower() == "baseline"]
+        cand = [r for r in runs if str(r.get("role", "")).lower() == "candidate"]
+        if not base or not cand:
+            return "FAIL", "need a baseline and a candidate EVALRUN; found %d and %d" % (
+                len(base), len(cand))
+        b, c = base[0], cand[0]
+        moved = [f for f in _EVAL_VERSIONS
+                 if str(b.get(f, "")).strip() != str(c.get(f, "")).strip()]
+        if len(moved) > 1:
+            return "FAIL", ("%s changed together (%s), so the delta cannot be attributed to any "
+                            "one of them" % (" and ".join(moved), c["id"]))
+        if not moved:
+            return "PASS", "candidate %s changed no version; the comparison is a noise check" % c["id"]
+        return "PASS", "%s is the only version that moved" % moved[0]
+
+    if fn == "no_unexplained_regression":
+        runs = [r for r in by_code(artifacts, "EVALRUN")
+                if str(r.get("role", "")).lower() == "candidate"]
+        if not runs:
+            return "FAIL", "no candidate EVALRUN to check for regressions"
+        unexplained = []
+        for r in runs:
+            for entry in (r.get("regressions") or []):
+                if not isinstance(entry, dict):
+                    unexplained.append("%s: a regression entry is not a record" % r["id"])
+                elif not str(entry.get("explanation", "")).strip():
+                    unexplained.append("%s/%s has no explanation"
+                                       % (r["id"], entry.get("dimension", "?")))
+        if unexplained:
+            return "FAIL", "; ".join(unexplained[:5])
+        # An absent list is not the same as an empty one. Empty says the comparison
+        # was made and found nothing; absent says nobody looked, and an improvement
+        # in the target alongside a silent loss elsewhere is the normal shape of a
+        # bad AI change.
+        silent = [r["id"] for r in runs if r.get("regressions") is None]
+        if silent:
+            return "FAIL", ("%s does not say whether anything regressed. An empty list is an "
+                            "answer; an absent one is not" % ", ".join(silent))
+        return "PASS", "every regression carries an explanation"
+
+    if fn == "metrics_have_evidence":
+        hits = by_code(artifacts, args[0])
+        if not hits:
+            return "FAIL", "no %s artifact exists" % args[0]
+        bad = []
+        for a in hits:
+            for field in ("deterministic_metrics", "judged_metrics"):
+                reported = a.get(field)
+                if not isinstance(reported, dict):
+                    continue
+                for name, value in reported.items():
+                    # A bare number is a metric with no provenance. A record that
+                    # names its run is evidence; the difference is the whole rule.
+                    if not isinstance(value, dict):
+                        bad.append("%s/%s is a bare value with no run behind it" % (a["id"], name))
+                    elif not str(value.get("run", "")).strip():
+                        bad.append("%s/%s names no run" % (a["id"], name))
+            if a.get("type") == "evaluation-run" and _missing_versions(a):
+                bad.append("%s does not name %s"
+                           % (a["id"], ", ".join(_missing_versions(a))))
+        if bad:
+            return "FAIL", "; ".join(bad[:5])
+        return "PASS", "every reported metric names the run that produced it"
 
     if fn == "complexity_justified":
         # Checks that the justification exists and is complete, never whether the
