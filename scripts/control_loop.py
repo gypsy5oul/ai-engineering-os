@@ -246,6 +246,10 @@ def build_graph(project, item, generation=1, reason=None, carry=None):
             "state": "accepted" if done else "queued",
             "execution": s.get("execution", "subagent"),
             "risk": s.get("risk", "MEDIUM"),
+            # Carried so the intensity resolver can read it without re-opening
+            # the workflow. It is a statement about the work, not about the
+            # stage's position, so it belongs on the task.
+            "complexity": s.get("complexity", "routine"),
             "attempts": 0, "max_attempts": cap,
             "depends_on": [],
             "definition_of_done": list(s.get("definition_of_done") or []),
@@ -290,6 +294,26 @@ def build_graph(project, item, generation=1, reason=None, carry=None):
     if reason:
         graph["replan_reason"] = reason
     return graph, skipped
+
+
+def resolve_intensity_for(project, item, graph):
+    """Resolve every task's intensity at plan time, and count what it saved.
+
+    At plan time rather than at claim time, because intensity decides who is
+    going to look at the work and the lead needs that before it assigns anything.
+    It is re-resolved on a replan, since the facts that set it -- risk, coupled
+    surfaces, gates -- are exactly what a replan changes.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    try:
+        import resolve_intensity as I
+    except Exception:
+        return {}
+    counts = {}
+    for t in graph.get("tasks", []):
+        level, _why = I.record(t, item)
+        counts[level] = counts.get(level, 0) + 1
+    return counts
 
 
 def cmd_plan(args):
@@ -338,14 +362,20 @@ def cmd_plan(args):
                  why="the previous graph did not validate")
         print("Repairing an invalid graph for %s." % args.item)
     graph, skipped = build_graph(args.project, item)
+    counts = resolve_intensity_for(args.project, item, graph)
     W.save_graph(args.project, graph)
     item["status"] = "in-progress"
     W.save_item(args.project, item)
     W.record(args.project, args.item, "planned", generation=1,
-             tasks=len(graph["tasks"]), skipped=[s for s, _ in skipped])
+             tasks=len(graph["tasks"]), skipped=[s for s, _ in skipped],
+             intensity=counts)
     print("%s planned: %d task(s) from %s" % (args.item, len(graph["tasks"]), item["workflow"]))
     for sid, why in skipped:
         print("  skipped %-14s %s" % (sid, why[:90]))
+    if counts:
+        print("  intensity  %s" % "  ".join(
+            "%s %d" % (k, counts[k]) for k in ("MICRO", "STANDARD", "COMPLEX", "CRITICAL")
+            if counts.get(k)))
     return 0
 
 
@@ -701,6 +731,7 @@ def cmd_replan(args):
               if all(st == "accepted" for st in states)} if not args.redo_all else {})
     new, skipped = build_graph(args.project, item, generation=graph["generation"] + 1,
                                reason=args.reason, carry=carry)
+    resolve_intensity_for(args.project, item, new)
     W.record(args.project, args.item, "replanned",
              generation=new["generation"], reason=args.reason,
              superseded=graph["generation"], carried=sorted(carry))

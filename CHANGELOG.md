@@ -3,6 +3,75 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.38.0] — A two-predicate intake step paid for a peer review and a lead review
+
+The department cycle is correct and it is not free. Worker, self-check, peer
+review, lead review, rollup, acceptance is the right shape for a novel change to
+a coupled surface, and it is what `WF-FEATURE/IDEA` got too — a step with two
+predicates, no reviewer, no gate, and no artifact anyone depends on. The cycle had
+one path and every task walked all of it.
+
+**Intensity selects a path through the cycle that already exists.** Four levels,
+not four cycles: four machines would be four things to keep in step.
+
+| Level | Path | Skips |
+| --- | --- | --- |
+| `MICRO` | worker → self-check → done | `PEER_REVIEW`, `LEAD_REVIEW` |
+| `STANDARD` | + peer review | `LEAD_REVIEW` |
+| `COMPLEX` | + lead review and the rollup | — |
+| `CRITICAL` | + the human approval its stage names | — |
+
+`SELF_VALIDATION`, `ACCEPTANCE_REQUESTED` and `ACCEPTED` are never skippable. The
+first costs one agent and is the cheapest thing in the cycle; the other two are
+where the definition of done is evaluated, and **no level changes what the work
+has to satisfy**. What intensity removes is a second and a third reader.
+
+Eight signals resolve it at plan time, and **each can only raise**. A model
+choosing how much review its own work gets is the failure this would otherwise
+introduce, so there is no lowering helper in the resolver — not as a policy, as an
+absence. `EVAL-ORG-015` fails if one ever appears.
+
+**MICRO was unreachable on the first run.** Signals only raise and the default is
+STANDARD, so nothing could ever reach the level: fifteen of fifteen tasks in a
+feature came out at STANDARD or above, including the intake step this was written
+for. A level nothing can reach is ceremony about ceremony, and it would have
+shipped looking like a feature.
+
+MICRO is reached by passing a test rather than by being declared. The test is a
+conjunction of negatives — LOW risk, routine, no reviewer, no human gate, no
+coupled surface, produces nothing another stage consumes, few enough predicates —
+so it can only apply to a task every raising signal stayed silent on. A positive
+test for triviality would have been a judgement; this is something the graph can
+answer.
+
+Resolved against the shipped `WF-FEATURE`:
+
+```
+MICRO 1   STANDARD 4   COMPLEX 7   CRITICAL 3
+```
+
+Four tasks skip a lead review that bought nothing; one skips both readers. The ten
+COMPLEX and CRITICAL tasks are untouched, which is the point — the top level
+exists so the others can be cheaper without an argument about whether they should
+be.
+
+**It does not weaken independent review**, and that has a specific answer rather
+than a reassurance. Intensity controls the depth applied to **one task**; the
+department cycle's own acceptance conditions still require an independent verdict
+on the **department's output**, and no level touches them. A MICRO task rolls up
+into a cycle that is peer-reviewed as a whole.
+
+One floor needs no enforcement at all: a task whose definition of done contains
+`agent_verdict` cannot be MICRO, because a path where nobody produces a verdict
+cannot satisfy a predicate that demands one. The policy and the checker cannot
+disagree, because the checker decides.
+
+Reversibility and task size are inferred rather than known — a DEPLOY stage is
+treated as irreversible whatever it deploys, and size is read from predicate
+count. Both are stated as proxies in the policy's own `not_enforceable`, and both
+are floors rather than ceilings, so a wrong reading costs ceremony instead of
+review.
+
 ## [0.37.0] — Isolating a team stopped it being a team
 
 How a task runs and where it runs are different questions. For eleven versions

@@ -360,6 +360,63 @@
                 }
               }
             ]
+          },
+          "complexity": {
+            "type": "string",
+            "enum": [
+              "routine",
+              "complex",
+              "novel"
+            ],
+            "description": "Carried from the stage so the intensity resolver can read it without re-opening the workflow. A statement about the work, not about the stage's position."
+          },
+          "intensity": {
+            "description": "How much of the department cycle this task walks. Two values rather than three: `declared` is the level before the facts were applied, `resolved` is the level the signals produced. There is no `actual` -- unlike execution, nothing in the runtime reports how much review a task received, and a field nothing can observe would be a copy of `resolved` wearing a different name. What is observable is at the end: the acceptance condition fails if the verdict the level required was never recorded.",
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MICRO",
+                  "STANDARD",
+                  "COMPLEX",
+                  "CRITICAL"
+                ],
+                "description": "Shorthand for declared, before anything has been resolved."
+              },
+              {
+                "type": "object",
+                "required": [
+                  "declared"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "declared": {
+                    "type": "string",
+                    "enum": [
+                      "MICRO",
+                      "STANDARD",
+                      "COMPLEX",
+                      "CRITICAL"
+                    ]
+                  },
+                  "resolved": {
+                    "type": "string",
+                    "enum": [
+                      "MICRO",
+                      "STANDARD",
+                      "COMPLEX",
+                      "CRITICAL"
+                    ]
+                  },
+                  "resolution_reason": {
+                    "type": "string"
+                  },
+                  "resolved_at": {
+                    "type": "string"
+                  }
+                }
+              }
+            ]
           }
         }
       }

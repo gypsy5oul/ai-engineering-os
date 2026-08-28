@@ -1,0 +1,90 @@
+{
+  "id": "EVAL-ORG-015",
+  "suite": "organization-evaluation",
+  "subject": "workflow intensity without weakening independent review",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "The department cycle is correct and it is not free, so intensity lets a task walk less of it. That is exactly the shape of a control that decays into a bypass: the pressure is always toward less review, the argument is always that this particular change is small, and the level is decided at plan time when nobody has seen the work yet. Two opposite failures are possible. Intensity becomes a discount -- a level lowers the floor, or a declared MICRO survives HIGH risk, or a level rewrites what the definition of done requires. Or MICRO becomes unreachable, every task resolves to STANDARD or above, and the whole model is ceremony about ceremony that cost a policy, a resolver and a schema field to add.",
+  "expected_behaviors": [
+    "Every signal can only raise the level; none lowers it.",
+    "CRITICAL risk resolves to CRITICAL whatever else is true, including a declaration to the contrary.",
+    "No level names its own definition of done or its own acceptance conditions.",
+    "The department cycle's acceptance still requires an independent verdict, so a MICRO task rolls up into a cycle that is reviewed as a whole.",
+    "MICRO is reachable: the policy is not a model nothing can ever use."
+  ],
+  "failure_conditions": [
+    "A signal lowers the level.",
+    "A level declares its own definition_of_done or acceptance conditions, so intensity decides what the work must satisfy rather than who looks at it.",
+    "SELF_VALIDATION, ACCEPTANCE_REQUESTED or ACCEPTED becomes skippable.",
+    "The default becomes MICRO, making every unconsidered task unreviewed.",
+    "MICRO is unreachable, which makes the whole model decoration."
+  ],
+  "checks": [
+    {
+      "type": "file_exists",
+      "file": "policies/workflow-intensity.json"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/workflow-intensity.json",
+      "path": "default",
+      "value": "STANDARD",
+      "description": "MICRO by default makes every unconsidered task unreviewed."
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/department-cycle.json",
+      "path": "intensity.skippable",
+      "value": "PEER_REVIEW"
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/department-cycle.json",
+      "path": "intensity.never_skippable",
+      "value": "SELF_VALIDATION"
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/department-cycle.json",
+      "path": "intensity.never_skippable",
+      "value": "ACCEPTED"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/workflow-intensity.json",
+      "pattern": "No level removes a definition-of-done predicate",
+      "description": "Intensity chooses who looks at the work, never what it has to satisfy."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/workflow-intensity.json",
+      "pattern": "CRITICAL risk always resolves to CRITICAL"
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/resolve_intensity.py",
+      "pattern": "def _raise_to\\(",
+      "description": "One direction only. There is no lowering helper because lowering is not a thing the resolver can do."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "scripts/resolve_intensity.py",
+      "pattern": "def _lower_to\\(",
+      "description": "If this ever appears, the level has become an argument."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/resolve_intensity.py",
+      "pattern": "def qualifies_for_micro\\(",
+      "description": "MICRO is reached by passing a test rather than by declaration, or it would be unreachable and the model would be decoration."
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/cycles/dev.yaml",
+      "pattern": "agent_verdict\\(code-reviewer, pass\\)",
+      "description": "The department's own output is still independently reviewed, whatever depth its individual tasks walked."
+    }
+  ],
+  "notes": "The behavioural half is tests/test_workflow_intensity.py, which resolves every task of the shipped WF-FEATURE and asserts more than one level appears and MICRO is among them. A model where every task lands on the same level has reduced nothing."
+}
