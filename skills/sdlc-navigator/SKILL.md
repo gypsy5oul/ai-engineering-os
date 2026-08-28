@@ -24,6 +24,10 @@ Read the workflow definitions in `${CLAUDE_PLUGIN_ROOT}/sdlc/workflows/`:
 
 If the request matches none of them, say so and treat it as ordinary work outside the lifecycle. Do not force a workflow onto a two-line question.
 
+Two workflows are missing from the table on purpose: `change-request.yaml` (WF-CHANGE), which is reached when an approved requirement changes rather than when new work arrives, and `data-migration.yaml` (WF-MIGRATION), which is usually a stage inside another change rather than a change of its own. Route to either only when the request is genuinely about the change or the migration itself.
+
+Naming the workflow is not the same as opening the work. The `--type` that opens a work item for each workflow is listed once, in `/ai-engineering-os:work-item`; send the reader there rather than repeating the vocabulary, because a second copy of it is the next thing to drift.
+
 ## 2. Check the entry conditions
 
 Every workflow declares `entry_conditions`. If one fails, that is the work, not the thing the user asked for. The most common failure is a missing project configuration: without it, agents would have to guess the stack, the branch model and the security requirements, so the correct next step is `/ai-engineering-os:project-onboarding`.

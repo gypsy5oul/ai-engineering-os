@@ -3,6 +3,67 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.35.0] — The documentation described an intention nobody had implemented
+
+`skills/work-item/SKILL.md` said `--type` was one of nine work-item types.
+`control_loop.py` accepted seven. Three of the listed nine did not exist, and one
+that did was unlisted. Anyone following the skill got an argparse error.
+
+The wording was the symptom. Underneath it, **three of the nine workflows could
+not be started at all**: `WF-DEPENDENCY`, `WF-AGENT-CHANGE` and `WF-ONBOARDING`
+each had stages, a definition of done and a simulation scenario, and no `--type`
+opened a work item for any of them. The control loop could not drive a dependency
+upgrade, a change to this repository's own agents, or a project onboarding. The
+documentation had been describing the intention, and nothing compared it to the
+parser.
+
+So the fix is the parser's, not the prose's. `--type` now covers all ten routes:
+the seven that existed, plus `dependency`, `agent-change` and `onboarding`, with
+identifier segments `DEP`, `AGT` and `ONB`. The work-item schema's enum and its id
+pattern moved with them — a type the CLI accepts whose id its own schema rejects
+is a work item that cannot be saved. All three were verified to open and plan real
+graphs from their own workflows.
+
+`operations` stays mapped to `WF-FEATURE`. Deliberate: operational work is a
+delivery route rather than a separate discipline, and giving it a lifecycle would
+have meant a tenth workflow nobody maintains.
+
+**Why the existing check could not have caught this.**
+`check_documented_commands_parse` has verified documented invocations since 0.28,
+and it missed this twice over. It reads fenced command blocks under `docs/`, and
+this was a *sentence*, in a *skill*. An invocation checker can only ever validate
+commands somebody wrote out in full.
+
+`check_documented_vocabularies` is the mechanism the brief asked for. It reads the
+`choices` off the real argparse parser — not a second copy kept in step by hand,
+which would be the same defect one level up — and compares them against every
+enumerated flag vocabulary in `docs/`, the repository root and `skills/`. Both
+directions are errors: a value the documentation invents is a command that fails,
+and a value it omits is a capability nobody knows exists.
+
+It accepts two sentence shapes, because the skill wrote `--type` as "is one of
+..." and `--outcome` as "is a, b or c", and holding documentation to one sentence
+shape is a rule about prose rather than about correctness. Four vocabularies are
+now under check: `--type`, `--risk`, `--outcome` and `--failure-class`, the last of
+which was undocumented until this release. A test asserts that every flag argparse
+constrains is one a document states and the validator compares, so a fifth
+constrained flag cannot be added and quietly go unchecked.
+
+`check_every_workflow_is_reachable` is the standing version of the gap itself: it
+fails if a workflow exists that no `--type` opens, if a type routes to a workflow
+that does not exist, if the schema and the CLI disagree, or if an identifier
+segment has no place in the id pattern.
+
+`sdlc-navigator` now names the two workflows deliberately absent from its routing
+table, and points at the work-item skill for the `--type` rather than repeating the
+vocabulary. A second copy of a list is the next thing to drift.
+
+21 regression tests, seven of which break a copy of the repository and assert the
+validator fails: an invented value, an omitted one, an unreachable workflow, a type
+routing nowhere, schema drift, an identifier the schema cannot express, and the
+sentence shape that used to slip through. A validator nobody has watched fail is an
+assumption with a test name.
+
 ## [0.34.0] — The binding was made at the last possible moment
 
 A native Claude Code task and an organizational graph task are two different

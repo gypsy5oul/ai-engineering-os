@@ -933,6 +933,172 @@ def check_documented_commands_parse():
                 pass
 
 
+def _parser_choices():
+    """Every {flag: choices} argparse actually enforces, per subcommand and merged.
+
+    Read off the real parser rather than a copy. A second list of the vocabulary,
+    kept by hand for the validator to compare against, would be the same defect
+    one level up.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+    import control_loop
+    parser = control_loop.build_parser()
+
+    per_sub, merged, ambiguous = {}, {}, set()
+    subparsers = [a for a in parser._actions if hasattr(a, "choices")
+                  and isinstance(getattr(a, "choices", None), dict)]
+    for sp in subparsers:
+        for name, sub in sp.choices.items():
+            for action in sub._actions:
+                if not action.choices or not action.option_strings:
+                    continue
+                flag = action.option_strings[-1]
+                choices = set(action.choices)
+                per_sub.setdefault(name, {})[flag] = choices
+                if flag in merged and merged[flag] != choices:
+                    # The same flag meaning different things in two subcommands.
+                    # Prose that names the flag alone cannot be checked against
+                    # either, so say nothing rather than guess which was meant.
+                    ambiguous.add(flag)
+                merged[flag] = choices
+    for flag in ambiguous:
+        merged.pop(flag, None)
+    return per_sub, merged
+
+
+# `--flag` is one of a, b or c.  "one of" is optional, because the skill states
+# one vocabulary as "is one of ..." and the next as "is a, b or c" and holding
+# documentation to a single sentence shape is a rule about prose, not about
+# correctness. The list runs to the end of the sentence: an em dash, a full stop,
+# or a blank line, whichever comes first.
+_VOCAB = re.compile(
+    r"`(--[a-z][a-z0-9-]*)`\s+(?:is|are|must be|can be)\s+(?:one of[:\s]+)?"
+    r"(.+?)(?=\s+[-\u2014]{1,2}\s|\.\s|\.$|\n\n)",
+    re.S)
+
+
+def _documented_values(blob):
+    """The enumerated values in a sentence, or nothing if it is not an enumeration.
+
+    Every item has to be a bare single token and there have to be at least two of
+    them. Without that, `--project` is the directory to work in` reads as a
+    one-item vocabulary and every flag description becomes a finding.
+    """
+    parts = [p for p in re.split(r",|\bor\b", blob) if p.strip()]
+    out = set()
+    for part in parts:
+        v = part.strip().strip("`").strip().rstrip(".")
+        if not v or " " in v:
+            return set()
+        out.add(v)
+    return out if len(out) > 1 else set()
+
+
+def check_documented_vocabularies():
+    """A prose list of a flag's accepted values matches what argparse accepts.
+
+    The existing invocation check reads fenced command blocks in `docs/`, which
+    missed this twice over: the drift was in `skills/work-item/SKILL.md`, which it
+    never scanned, and it was in a sentence rather than a command, which no
+    invocation check can catch. The skill listed nine work-item types; argparse
+    accepted seven; three of the listed nine did not exist and one that did was
+    unlisted. Someone following the documentation got an argparse error, and the
+    real gap underneath -- three of the nine workflows unreachable from any work
+    item -- stayed invisible because nothing compared the two lists.
+
+    Both directions are errors. A value the documentation invents is a command
+    that fails; a value it omits is a capability nobody knows is there.
+    """
+    try:
+        _, merged = _parser_choices()
+    except Exception as exc:
+        err("scripts/control_loop.py has no usable parser: %r" % exc)
+        return
+
+    targets = (sorted(glob.glob(os.path.join(ROOT, "docs", "*.md")))
+               + sorted(glob.glob(os.path.join(ROOT, "*.md")))
+               + sorted(glob.glob(os.path.join(ROOT, "skills", "*", "SKILL.md"))))
+    checked = 0
+    for path in targets:
+        rel = os.path.relpath(path, ROOT)
+        if rel == "CHANGELOG.md":
+            continue  # a record of what was true then, not a claim about now
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        for m in _VOCAB.finditer(text):
+            flag, blob = m.group(1), m.group(2)
+            if flag not in merged:
+                continue
+            documented = _documented_values(blob)
+            if not documented:
+                continue
+            checked += 1
+            actual = merged[flag]
+            invented = sorted(documented - actual)
+            omitted = sorted(actual - documented)
+            if invented:
+                err("%s says `%s` is one of %s; argparse rejects %s"
+                    % (rel, flag, ", ".join(sorted(documented)), ", ".join(invented)))
+            if omitted:
+                err("%s documents `%s` without %s, which argparse accepts"
+                    % (rel, flag, ", ".join(omitted)))
+    if not checked:
+        warn("no documented flag vocabulary was found to check; the pattern in "
+             "check_documented_vocabularies may have stopped matching")
+
+
+def check_every_workflow_is_reachable():
+    """Every workflow can be opened as a work item.
+
+    WF-DEPENDENCY, WF-AGENT-CHANGE and WF-ONBOARDING each had stages, a definition
+    of done and a simulation scenario, and no `--type` routed to any of them. A
+    workflow the control loop cannot start is a lifecycle the organization
+    describes and cannot run.
+    """
+    sys.path.insert(0, os.path.join(ROOT, "scripts"))
+    sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+    try:
+        import control_loop
+        routed = set(control_loop.TYPE_WORKFLOW.values())
+        codes = control_loop.TYPE_CODE
+        types = set(control_loop.TYPE_WORKFLOW)
+    except Exception as exc:
+        err("scripts/control_loop.py does not expose its type vocabulary: %r" % exc)
+        return
+
+    known = set()
+    base = os.path.join(ROOT, "sdlc", "workflows")
+    for name in sorted(os.listdir(base)):
+        if name.endswith((".yaml", ".yml")):
+            try:
+                known.add(parse_file(os.path.join(base, name))["id"])
+            except Exception:
+                continue
+    for wid in sorted(known - routed):
+        err("sdlc/workflows: %s can be planned but no `--type` opens a work item for "
+            "it, so the control loop cannot drive it" % wid)
+    for wid in sorted(routed - known):
+        err("control_loop.py routes a work-item type to %s, which is not a workflow" % wid)
+
+    missing_code = sorted(types - set(codes))
+    if missing_code:
+        err("control_loop.py TYPE_CODE has no identifier segment for: %s"
+            % ", ".join(missing_code))
+
+    schema = load_json("schemas/work-item.schema.json") or {}
+    enum = set(((schema.get("properties") or {}).get("type") or {}).get("enum") or [])
+    if enum and enum != types:
+        err("schemas/work-item.schema.json accepts %s; control_loop.py accepts %s"
+            % (sorted(enum), sorted(types)))
+
+    pattern = ((schema.get("properties") or {}).get("id") or {}).get("pattern") or ""
+    for code in sorted(set(codes.values())):
+        if code and code not in pattern:
+            err("schemas/work-item.schema.json id pattern has no place for %s, so a "
+                "work item of that type cannot satisfy its own schema" % code)
+
+
 def check_docs_are_reachable():
     """Every document is listed in the README, and every listing exists.
 
@@ -1762,6 +1928,8 @@ def main():
     check_hooks()
     check_ci_config()
     check_control_loop_policy_is_live()
+    check_documented_vocabularies()
+    check_every_workflow_is_reachable()
     check_execution_resolution_is_live()
     check_telemetry_policy_is_live()
     check_platform_capabilities()
