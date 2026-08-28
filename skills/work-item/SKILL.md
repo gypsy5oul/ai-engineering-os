@@ -25,10 +25,27 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/control_loop.py open --project . \
     --intent "what the requester actually said, in their words"
 ```
 
-`--type` is one of feature, defect, incident, change, migration, dependency,
-release, agent-change or onboarding — `sdlc-navigator` will tell you which if it
-is not obvious. `--risk` defaults to MEDIUM and drives the model floor, the
-approval gates and which optional stages survive.
+`--type` is one of feature, defect, incident, release, change-request, migration,
+dependency, agent-change, onboarding or operations — `sdlc-navigator` will tell
+you which if it is not obvious. Each one routes to the workflow that governs it,
+and `operations` is the one that does not have its own: operational work follows
+the feature lifecycle.
+
+| `--type` | Workflow | Identifier |
+| --- | --- | --- |
+| `feature` | WF-FEATURE | `<KEY>-FEAT-NNN` |
+| `defect` | WF-DEFECT | `<KEY>-DEF-NNN` |
+| `incident` | WF-INCIDENT | `<KEY>-INC-NNN` |
+| `release` | WF-RELEASE | `<KEY>-REL-NNN` |
+| `change-request` | WF-CHANGE | `<KEY>-CHG-NNN` |
+| `migration` | WF-MIGRATION | `<KEY>-MIG-NNN` |
+| `dependency` | WF-DEPENDENCY | `<KEY>-DEP-NNN` |
+| `agent-change` | WF-AGENT-CHANGE | `<KEY>-AGT-NNN` |
+| `onboarding` | WF-ONBOARDING | `<KEY>-ONB-NNN` |
+| `operations` | WF-FEATURE | `<KEY>-OPS-NNN` |
+
+`--risk` is one of LOW, MEDIUM, HIGH or CRITICAL. It defaults to MEDIUM and drives
+the model floor, the approval gates and which optional stages survive.
 
 **Quote the intent verbatim.** It is stored separately from the objective, which
 is what the organization understood, and the two are compared when a plan turns
@@ -73,6 +90,12 @@ python3 ${CLAUDE_PLUGIN_ROOT}/scripts/control_loop.py observe --project . --item
 definition of done is evaluated and the acceptance is refused if anything fails.
 Everything else is recorded without argument, because a system that pushes back
 on bad news stops being told any.
+
+`--failure-class` is one of test_failure, review_rejected, contract_conflict,
+missing_information, dependency_unavailable, permission_denied, environment,
+timeout or unknown. Pick the one that describes why the work stopped, not what the
+error message said; `unknown` is honest and is better than a class chosen to make
+the record look tidy.
 
 A failure carries a class and, ideally, a `--signature` — a stable token like an
 error code or a test path. Two failures are "the same" when their identity

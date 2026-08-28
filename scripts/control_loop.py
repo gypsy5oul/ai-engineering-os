@@ -36,14 +36,31 @@ from minyaml import parse_file          # noqa: E402
 import workitem as W                    # noqa: E402
 import failure as F                     # noqa: E402
 
+# The work-item vocabulary. One entry per way work enters the organization, and
+# `--type` is exactly these keys, so the CLI cannot offer a word this map does not
+# define. Three workflows used to be unreachable from here: a dependency upgrade,
+# a change to this repository's own agents and a project onboarding are three of
+# the nine workflows, and none of them could be opened as a work item at all, so
+# the control loop could not drive them. The skill documented all three anyway,
+# which is how the gap stayed invisible -- the documentation described the
+# intention and nothing compared it to the parser.
 TYPE_WORKFLOW = {
     "feature": "WF-FEATURE", "defect": "WF-DEFECT", "incident": "WF-INCIDENT",
     "release": "WF-RELEASE", "change-request": "WF-CHANGE", "migration": "WF-MIGRATION",
+    "dependency": "WF-DEPENDENCY", "agent-change": "WF-AGENT-CHANGE",
+    "onboarding": "WF-ONBOARDING",
+    # Operational work follows the feature lifecycle rather than one of its own.
+    # Deliberate: it is a delivery route, not a separate discipline, and giving it
+    # a workflow would have meant a tenth lifecycle nobody maintains.
     "operations": "WF-FEATURE",
 }
+# The identifier segment, per type. Not the artifact codes in
+# policies/artifact-model.json -- a different namespace, and shorter, because it
+# reads in every traceability identifier the project produces.
 TYPE_CODE = {
     "feature": "FEAT", "defect": "DEF", "incident": "INC", "release": "REL",
     "change-request": "CHG", "migration": "MIG", "operations": "OPS",
+    "dependency": "DEP", "agent-change": "AGT", "onboarding": "ONB",
 }
 
 

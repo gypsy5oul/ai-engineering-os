@@ -6,8 +6,8 @@
   "required": ["id", "type", "intent", "objective", "owner", "risk", "workflow", "stage", "status", "created_at", "updated_at"],
   "additionalProperties": false,
   "properties": {
-    "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{1,9}-(FEAT|DEF|INC|REL|CHG|MIG|OPS)-[0-9]{3,}$"},
-    "type": {"type": "string", "enum": ["feature", "defect", "incident", "release", "change-request", "migration", "operations"]},
+    "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{1,9}-(FEAT|DEF|INC|REL|CHG|MIG|OPS|DEP|AGT|ONB)-[0-9]{3,}$"},
+    "type": {"type": "string", "enum": ["feature", "defect", "incident", "release", "change-request", "migration", "operations", "dependency", "agent-change", "onboarding"]},
     "intent": {"type": "string", "minLength": 10, "description": "What the human asked for, in their words. Preserved verbatim: the organization's interpretation is recorded separately in `objective`, so the two can be compared when a plan turns out to have solved the wrong problem."},
     "objective": {"type": "string", "minLength": 10, "description": "What the organization understood, in its words. This is the thing acceptance is judged against."},
     "owner": {"type": "string", "description": "The role accountable for the item reaching a terminal state."},
