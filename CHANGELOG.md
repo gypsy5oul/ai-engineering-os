@@ -3,6 +3,164 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.34.0] — The binding was made at the last possible moment
+
+A native Claude Code task and an organizational graph task are two different
+things, and the association between them is what makes every later event about
+the right work. That association was first derived at `TaskCompleted`, from a
+subject line, at the end. Everything in between ran unbound, and a crash before
+completion lost the link outright.
+
+`TaskCreated` is the earliest point the platform offers. `bind_task.py` now runs
+there, so the lifecycle is the one the architecture always described:
+
+    TaskCreated -> validate -> bind -> SubagentStart -> execution
+    -> SubagentStop -> TaskCompleted -> definition of done
+
+**Re-verified against the installed binary before anything was built.** The
+capability model was pinned to 2.1.241 and 2.1.250 is installed, and the standing
+instruction for that situation is to re-check every load-bearing belief rather
+than trust the old note. Reading 2.1.250 directly:
+
+- The payload is `task_id`, `task_subject`, `task_description?`,
+  `teammate_name?`, `team_name?`. `team_name` is now marked `@deprecated` in the
+  CLI's own schema — "Sessions have a single implicit team".
+- There is still no `hookSpecificOutput` variant, so the event cannot inject or
+  rewrite. The binding has to be written to the graph and read back later.
+- Still no dependency edges. The native engine keeps `blocks`/`blockedBy`
+  internally — its delete path strips a removed id out of every other task's
+  edges — but does not send them. That is why the task graph stays this plugin's
+  own artifact rather than a mirror of Claude's list.
+- `TaskCreated` **is** in the blocking set, alongside `Stop`, `TeammateIdle` and
+  `TaskCompleted`. Its own help text says "show stderr to model and prevent task
+  creation", and the code path deletes the just-created task before throwing.
+
+That last point sets how narrow the refusals had to be. Exit 2 here does not
+warn, it destroys the task, so this blocks only where the organization can say
+the task is **wrong** rather than unproven: an id no task in the graph has,
+several ids at once, dependencies that are not accepted, work already accepted or
+abandoned, a native id already bound to another task, or a role that is not in
+the registry. Everything else — including a task with no marker at all — passes
+in silence, because most native tasks in a session are not organizational tasks
+and a hook that fired on all of them would be turned off.
+
+The fail-open tiering is deliberately narrower than the completion gate's for the
+same reason. That one blocks on a broken check at HIGH and CRITICAL; this one
+blocks at CRITICAL only. Refusing a completion leaves finished work needing a
+second look; refusing a creation deletes it. And when the graph will not load at
+all the hook cannot know the risk, so it does not block — guessing upward would
+stop every session over one bad file.
+
+**One resolution rule, not two.** `hooks/lib/binding.py` is now the single place
+either task event decides which graph task a native task is executing, and the
+completion gate's private copy of the marker regex is gone. Two events deriving
+the association separately is how the durable graph came to disagree with the
+gate the first time. Resolving also stopped swallowing its own edge cases: an
+invented task id used to be indistinguishable from an unrelated task, because
+both exited quietly. It now returns `missing` and `ambiguous` as distinct answers
+from `unknown`, and only `unknown` is silence.
+
+The binding is deliberately **not** claimed to shorten the briefing path.
+`SubagentStart` carries `agent_id` and `agent_type` and no task id, so
+`inject_context.py` still claims a task by agent. What this buys is durability,
+an audit trail of when the binding was made and on what evidence, and a refusal
+that happens before the work instead of after it.
+
+**Drift checking extended.** Two new beliefs read the binary on every run: the
+`TaskCreated` payload shape, and that the event is still in the blocking set. If
+a future version drops it, two gates silently stop being gates while every
+document still says they hold — the exact failure this checker exists for.
+
+**`json_path` could not address a dotted key.** Every key in
+`policies/platform-capabilities.json` is a dotted name like
+`hook.TaskCreated.can_block`, and the evaluation runner split paths on every dot,
+so a capability could be load-bearing and unassertable at the same time.
+`capabilities["hook.TaskCreated.can_block"].available` now resolves, which is why
+`EVAL-ORG-012` can exist at all.
+
+30 regression tests, each refusal covered positive, negative, false-positive and
+failure-of-the-control. `EVAL-ORG-011` holds the registration and the single
+resolution rule; `EVAL-ORG-012` holds the platform claims both task gates rest
+on.
+
+## [0.34.0] — The binding was made at the last possible moment
+
+A native Claude Code task and an organizational graph task are two different
+things. Everything the OS does after a spawn — briefing the agent, attributing
+the result, checking the definition of done before it closes — is about the right
+work only because those two are associated.
+
+That association was first derived at `TaskCompleted`, from a subject line. The
+last possible moment. Everything in between ran unbound: `SubagentStart` briefed
+from a re-derivation of the same prose, and a crash before completion lost the
+link outright.
+
+`TaskCreated` is the earliest point the platform offers, and `bind_task.py` now
+runs there.
+
+**Verified against the binary before anything was built on it.** The capability
+model had been checked against 2.1.241 and 2.1.250 was installed, which the drift
+checker was already warning about. Reading 2.1.250 directly:
+
+    hook_event_name: "TaskCreated"
+    task_id, task_subject, task_description?, teammate_name?, team_name?
+
+`team_name` is marked `@deprecated` in the CLI's own schema. There is no
+`hookSpecificOutput` variant, so the hook cannot inject or rewrite anything — the
+binding has to be written to the graph and read back later. And there are no
+dependency edges: the native engine keeps `blocks`/`blockedBy` internally (its
+delete path strips a removed id out of every other task's edges) but does not
+send them. That is the whole reason the task graph is this plugin's own artifact
+rather than a mirror of Claude's list, and it is still true.
+
+What did change is what the event can do. `TaskCreated` sits in the same blocking
+set as `Stop`, `TeammateIdle` and `TaskCompleted`, and the CLI's own help text is
+unambiguous: *"Exit code 2 — show stderr to model and prevent task creation."*
+Not a warning. `executeTaskCreatedHooks` deletes the created task and cleans its
+edges before throwing.
+
+So the refusals are narrower than the completion gate's, and each is a case where
+the organization can say the task is **wrong** rather than merely unproven: an id
+no task in the graph has, several ids at once, dependencies that are not accepted,
+work already accepted or abandoned, a native id already bound elsewhere, or a role
+that is not in the registry. Everything else passes in silence — a task with no
+marker, no work item or no graph is not an error, and a hook that fired on those
+would be turned off within a day.
+
+The fail-open tier is narrower too, deliberately. The completion gate blocks on a
+broken check at HIGH and CRITICAL; this one blocks at CRITICAL only. Refusing a
+completion leaves finished work needing a second look. Refusing a creation
+destroys the task.
+
+**One resolution rule, not two.** The marker regex and the bound/marker/missing/
+ambiguous logic moved into `hooks/lib/binding.py`, which both task events now use.
+The completion gate's private copy is gone. Two events deriving this separately is
+how the durable graph came to disagree with the gate the first time, and it also
+hid a real case: `missing` and `ambiguous` used to be swallowed as "not ours", so
+a task naming an invented id looked exactly like ordinary unrelated work.
+
+**A capability key with a dot in it was unassertable.** Every key in
+`policies/platform-capabilities.json` is a dotted name like
+`hook.TaskCreated.can_block`, and `json_path` split on every dot — so no
+evaluation case could reach a single capability, and a load-bearing platform
+claim could be recorded and unassertable at the same time.
+`capabilities["hook.TaskCreated.can_block"].available` resolves now.
+
+`check_platform_drift.py` gained two beliefs it reads out of the binary: the
+TaskCreated payload shape, and that TaskCreated is still in the blocking set. If a
+future version drops it, two gates stop being gates silently while every document
+still says they hold. That is the failure this repository exists to catch.
+
+**Still never run live.** Neither task gate has been invoked by a real Claude Code
+session; they need the native task tools, which no session here has used. The
+payload shape and the blocking-set membership are verified from the binary. That
+Claude Code has ever actually called either hook is a different claim, it is still
+untested, and `docs/limitations.md` now says so in those words.
+
+30 regression tests. Every refusal is covered four ways — positive, negative,
+false-positive and failure-of-the-control — because exit 2 here deletes work
+rather than delaying it.
+
 ## [0.33.0] — Simplicity was a value nobody could check
 
 The organization had opinions about proportionality scattered across three

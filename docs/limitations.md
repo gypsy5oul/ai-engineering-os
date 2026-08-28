@@ -81,10 +81,17 @@ recorded as unattributed, a real execution divergence was detected, and
 model and the command never running.
 
 What has still never run: **agent teams**, **worktree isolation** and therefore
-the `briefing_required` path, the **TaskCompleted gate** (it needs the native
-task tools), the **23 LLM-judged evaluations**, and **any complete work item** —
-one task has been briefed and observed; no change has been driven from intake to
-acceptance by real agents. Treat those as designed and unproven.
+the `briefing_required` path, **both task gates** — `TaskCreated` and
+`TaskCompleted` need the native task tools, which no session here has used — the
+**28 LLM-judged evaluations**, and **any complete work item**: one task has been
+briefed and observed; no change has been driven from intake to acceptance by real
+agents. Treat those as designed and unproven.
+
+The task gates deserve the distinction spelled out, because two different claims
+are easy to conflate. Their payload shape and their membership of the blocking
+set are read out of the installed binary by `scripts/check_platform_drift.py`, so
+those are verified. That Claude Code has ever actually invoked either hook in a
+real session is a separate claim, and it is still untested.
 
 **Behavioural rules are not enforcement.** "Never invent an availability target"
 is a contract, not a guarantee. The evaluation suite tests it; the suite does not

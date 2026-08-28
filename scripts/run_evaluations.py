@@ -28,10 +28,47 @@ def load(rel):
         return json.load(fh)
 
 
+# Split on dots that are not inside brackets, so a quoted segment can carry one.
+_SEGMENT = re.compile(r'\[[^\]]*\]|[^.\[\]]+')
+
+
+def _segments(path):
+    """Tokenise a path into segments, keeping bracketed parts whole.
+
+    Keys in policies/platform-capabilities.json are dotted names like
+    `hook.TaskCreated.can_block`. Splitting the path on every dot made every one
+    of them unreachable, so a capability could be load-bearing and unassertable at
+    the same time. `capabilities["hook.TaskCreated.can_block"].available` now
+    resolves.
+    """
+    out, buf, depth = [], "", 0
+    for ch in path:
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+        if ch == "." and depth == 0:
+            if buf:
+                out.append(buf)
+            buf = ""
+            continue
+        buf += ch
+    if buf:
+        out.append(buf)
+    return out
+
+
 def json_path(doc, path):
-    """Resolve 'agents[name=x].field' / 'roles.a.b' style paths."""
+    """Resolve 'agents[name=x].field', 'roles.a.b' and 'roles["dotted.key"].b' paths."""
     cur = doc
-    for part in path.split("."):
+    for part in _segments(path):
+        q = re.fullmatch(r'([A-Za-z0-9_-]*)\["([^"]+)"\]', part)
+        if q:
+            container, key = q.groups()
+            if container:
+                cur = cur[container]
+            cur = cur[key]
+            continue
         m = re.fullmatch(r"([A-Za-z0-9_-]+)\[([A-Za-z0-9_-]+)=([^\]]+)\]", part)
         if m:
             container, key, value = m.groups()

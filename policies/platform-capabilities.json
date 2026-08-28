@@ -6,7 +6,7 @@
     "Both mistakes were cheap to make because each belief lived in prose, in a different file, established at a different time, with no record of how it was checked. A capability the code depends on should say how it was verified and when.",
     "It also recorded PermissionRequest as unavailable on the strength of a probe that only covered the two modes which short-circuit before the hook runs. An absence has to be checked the way a presence is, or it becomes the most confident kind of wrong entry."
   ],
-  "tested_against": "2.1.241",
+  "tested_against": "2.1.250",
   "evidence_levels": {
     "contract": "Declared in the CLI's own schema. The strongest evidence short of running it.",
     "empirical": "Observed on the wire in this environment.",
@@ -38,7 +38,8 @@
     "hook.TaskCreated.carries_dependencies": {
       "available": false,
       "evidence": "absent",
-      "note": "task_id, task_subject, optional task_description, teammate_name and team_name. No blocks, blockedBy or metadata; teammate_name is the only assignee signal and carries no edges. This is why the task graph is the plugin's own artifact rather than a mirror of Claude Code's list."
+      "note": "Payload is task_id, task_subject, task_description?, teammate_name?, team_name?. team_name is marked @deprecated in the CLI's own schema ('Sessions have a single implicit team; this carries the session-derived team name and will be removed in a future release'). No blocks, blockedBy or metadata reaches the hook: the native engine keeps those edges internally -- its task-delete path strips a deleted id out of every other task's blocks/blockedBy -- but does not send them. teammate_name is the only assignee signal and is a display name, not a registry role. This is why the task graph is the plugin's own artifact rather than a mirror of Claude Code's list.",
+      "re_verified": "2026-08-28 against 2.1.250, by reading the binary."
     },
     "hook.PermissionRequest.fires_headless": {
       "available": true,
@@ -125,6 +126,14 @@
       "note": "The subagent frontmatter supports more than this plugin uses: disallowedTools, maxTurns, memory, background, initialPrompt, and an Agent(type) form in `tools` that restricts which subagents an agent may spawn. All are listed as working normally for plugin agents. `disallowedTools`, `maxTurns`, `memory`, `background` and `initialPrompt` are present in the 2.1.241 binary; the frontmatter path for Agent(type) was not confirmed there, only the internal allowedAgentTypes field.",
       "why_unused": "The spawn hierarchy is enforced by hooks/scripts/guard_spawn.py, which works and is tested. Replacing a verified enforcement with an unverified one is a regression even when the unverified one is more mechanical. Adopting Agent(type) as a second layer needs the frontmatter path confirmed first.",
       "load_bearing": false
+    },
+    "hook.TaskCreated.can_block": {
+      "available": true,
+      "evidence": "contract",
+      "note": "Exit 2 does not warn: the CLI's own help text says 'show stderr to model and prevent task creation', and executeTaskCreatedHooks collects blockingError, deletes the just-created task and strips its id from every other task's edges before throwing. TaskCreated is in the same blocking set as Stop, TeammateIdle and TaskCompleted. There is no hookSpecificOutput variant, so it cannot inject or rewrite -- the binding it establishes has to be written to the graph and read back later.",
+      "used_by": "hooks/scripts/bind_task.py",
+      "load_bearing": true,
+      "re_verified": "2026-08-28 against 2.1.250, by reading the binary."
     }
   },
   "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent.",
@@ -192,8 +201,8 @@
     "still_never_run": [
       "Agent teams. Requires an interactive session and the experimental flag.",
       "Worktree isolation, and therefore the briefing_required path where an isolated spawn receives no injected context.",
-      "The TaskCompleted gate: it needs the native task tools, which no session here used.",
-      "The 23 LLM-judged evaluation cases.",
+      "Both task gates. TaskCompleted and TaskCreated need the native task tools, which no session here has used. Their payload shape and their place in the blocking set are read from the binary by scripts/check_platform_drift.py; that neither has ever been called by a real session is a different claim and still untested.",
+      "The 28 LLM-judged evaluation cases.",
       "Any complete work item. One task was briefed and observed; no change has been driven from intake to acceptance by real agents."
     ]
   }
