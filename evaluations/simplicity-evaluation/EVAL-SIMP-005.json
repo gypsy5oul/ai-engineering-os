@@ -1,0 +1,41 @@
+{
+  "id": "EVAL-SIMP-005",
+  "suite": "simplicity-evaluation",
+  "subject": "policies/review-routing.json",
+  "mode": "deterministic",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "A ledger nobody reads is a form nobody fills in honestly. The change that introduces a component has to reach a reviewer whose job includes reading the justification.",
+  "expected_behaviors": [
+    "A route sends a change introducing a new component, boundary or dependency class to architecture-reviewer.",
+    "The route is blocking, so an unjustified introduction produces a finding that has to be resolved or accepted by a human.",
+    "The route's notes state that a justified introduction passes."
+  ],
+  "failure_conditions": [
+    "Introducing a datastore or a queue routes to nobody who reads the ledger.",
+    "The route is advisory, so the ledger has no consequence."
+  ],
+  "checks": [
+    {
+      "type": "json_path_contains",
+      "file": "policies/review-routing.json",
+      "path": "routes[id=RR-11].reviewers",
+      "value": "architecture-reviewer",
+      "description": "Routed to the independent reviewer, never to the author."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/review-routing.json",
+      "path": "routes[id=RR-11].gate",
+      "value": "blocking",
+      "description": "A finding here stops the merge until it is resolved or a human accepts it."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/review-routing.json",
+      "path": "routes[id=RR-11].dimension",
+      "value": "simplicity",
+      "description": "The dimension is named, so the reviewer knows which question this route is asking."
+    }
+  ]
+}

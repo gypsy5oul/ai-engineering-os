@@ -92,6 +92,16 @@
       ],
       "gate": "blocking",
       "notes": "agent-evaluator and ai-governance are deliberately spawnable by no delivery role. A change to this repository's own agents, hooks or policies is AP-10 work: the review is dispatched from the main session, not delegated down a line the change could itself alter."
+    },
+    {
+      "id": "RR-11",
+      "signal": "the change introduces a new runtime component, service boundary, datastore, queue, cache, abstraction layer or dependency class, per the triggers in policies/simplicity-policy.json",
+      "reviewers": [
+        "architecture-reviewer"
+      ],
+      "gate": "blocking",
+      "dimension": "simplicity",
+      "notes": "Reviews the complexity ledger, not the taste. The question is whether the introduction names a requirement, measurement or constraint and beats a concretely named simpler alternative. A justified introduction passes; an unjustified one is a major finding recorded for the human who decides under AP-02 or AP-03. This route never returns 'too complex' as a verdict on its own, and it never blocks complexity that carries its justification."
     }
   ],
   "rules": [

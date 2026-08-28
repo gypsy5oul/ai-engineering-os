@@ -18,6 +18,9 @@ Implement the story that exists, in the stack that is approved, and prove it wit
 ## While writing code
 
 - Implement the acceptance criteria and nothing else. Unrequested improvements are a separate change.
+- No interface for one implementation, no configuration for a value that is the same in every environment, no framework inside a feature. Each of those becomes right when the second implementation, the second value or the second consumer actually exists; say that, rather than building it early.
+- Reach for the standard library and the already-approved dependencies before adding one. A new dependency needs a statement of what the existing ones fail to do.
+- Delete what this change makes dead. Removal is the cheapest simplification available and the one most often skipped.
 - Handle the failure paths as deliberately as the happy path: invalid input, absent dependency, slow dependency, partial write, concurrent access.
 - Make retryable operations idempotent. Anything reachable by a retry, a redelivery or a duplicate request will eventually be called twice.
 - Bound everything: query results, batch sizes, concurrency, memory, retries. Unbounded is a production incident with a delay fuse.

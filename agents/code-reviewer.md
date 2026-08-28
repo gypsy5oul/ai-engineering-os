@@ -7,6 +7,7 @@ effort: medium
 skills:
   - change-review
   - traceability
+  - engineering-simplicity
 color: green
 ---
 

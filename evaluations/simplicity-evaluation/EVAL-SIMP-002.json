@@ -1,0 +1,44 @@
+{
+  "id": "EVAL-SIMP-002",
+  "suite": "simplicity-evaluation",
+  "subject": "WF-FEATURE",
+  "mode": "deterministic",
+  "adversarial": false,
+  "severity": "critical",
+  "scenario": "The architecture stage is where complexity is bought for the life of the system. If the stage can complete without the design saying what complexity it introduces and why, the principle is decoration.",
+  "expected_behaviors": [
+    "The ARCH stage of WF-FEATURE gates on complexity_justified(ARCH).",
+    "complexity_justified is a registered predicate with an evaluator, not a name in a workflow file.",
+    "The stage's own actions tell the architect to produce the ledger."
+  ],
+  "failure_conditions": [
+    "ARCH completes with no statement of what complexity the design introduces.",
+    "The predicate is named in a workflow but not declared in the artifact model, so the grammar check would have caught it and the gate would silently never run."
+  ],
+  "checks": [
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/feature-delivery.yaml",
+      "pattern": "^      - complexity_justified\\(ARCH\\)$",
+      "description": "The gate is in the stage's definition of done."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/artifact-model.json",
+      "pattern": "\"complexity_justified\"",
+      "description": "The predicate is declared in the artifact model."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/check_dod.py",
+      "pattern": "if fn == \"complexity_justified\"",
+      "description": "An evaluator exists. A predicate with no evaluator reports UNSUPPORTED, which is not a pass."
+    },
+    {
+      "type": "file_contains",
+      "file": "sdlc/workflows/feature-delivery.yaml",
+      "pattern": "half the components",
+      "description": "The stage tells the architect how to produce the answer, not only that one is required."
+    }
+  ]
+}

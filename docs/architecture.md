@@ -104,6 +104,32 @@ The resumability test: delete the session and the task list. Can another enginee
 say, from GitLab and the repository alone, what stage the change is in and who
 owes what? If not, the artifact contract is incomplete.
 
+## Simplicity by default
+
+A core architectural principle, inherited by every project this plugin is
+installed on: **build the simplest thing that satisfies the functional,
+non-functional, reliability, security, scalability and operational requirements
+that have actually been stated and approved.**
+
+It is not "choose the smallest solution" — a design that drops a stated
+requirement is incomplete, not simple — and it is not a prohibition. Complexity
+is bought with a requirement, and the purchase is recorded in a complexity ledger
+on the architecture artifact.
+
+It is a capability rather than a slogan because it has the same four parts as
+every other rule here: a skill roles load (`engineering-simplicity`), a
+machine-readable policy (`policies/simplicity-policy.json`), a lifecycle gate
+(`complexity_justified(ARCH)`) and an evaluation suite that includes cases
+designed to catch the rule being abused in both directions.
+
+Deliberately, **no hook enforces it**. A guard cannot tell a justified queue from
+an unjustified one; one that tried would block legitimate engineering, and the
+organization would route around it. Enforcement is a predicate that checks the
+justification exists and a review route (`RR-11`) that sends the change to an
+independent reviewer. Both produce a record a human can overrule.
+
+See [simplicity.md](simplicity.md).
+
 ## Enforcement model
 
 Three layers, deliberately different in strength:
@@ -111,7 +137,7 @@ Three layers, deliberately different in strength:
 | Layer | Strength | Example |
 | --- | --- | --- |
 | **Guards** (hooks) | Mechanical, and tiered on failure. Tier 0 cannot be broken by a bad policy file. | A push to `main` escalates whatever the agent intended; `rm -rf /` is denied even with the policy engine dead. |
-| **Structure** (tool profiles, write scopes) | Mechanical for the tool layer; best-effort for the shell. | A reviewer has no `Write` tool and an empty write scope, so authoring what it reviews is refused on both routes -- but only the tool route is airtight. |
+| **Structure** (tool profiles, write scopes) | Mechanical for the tool layer; best-effort for the shell. | A reviewer's write scope is `docs/reviews/**` and nothing else, so it can record a verdict and cannot author what it reviews -- but only the tool route is airtight. |
 | **Contract** (role definitions, skills) | Behavioural. Strong, but not a guarantee. | "Never invent an availability target." |
 
 Anything that must hold regardless of model behaviour is in the first two layers.

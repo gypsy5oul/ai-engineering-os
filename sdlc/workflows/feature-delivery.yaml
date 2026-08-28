@@ -110,6 +110,7 @@ stages:
     skills:
       - requirements-engineering
       - traceability
+      - engineering-simplicity
     risk: MEDIUM
     complexity: complex
     execution: subagent
@@ -179,6 +180,7 @@ stages:
     skills:
       - architecture-design
       - technology-selection
+      - engineering-simplicity
     risk: HIGH
     complexity: complex
     execution: subagent
@@ -229,6 +231,7 @@ stages:
       - adr-management
       - api-design
       - database-design
+      - engineering-simplicity
     risk: HIGH
     complexity: novel
     execution: team
@@ -239,6 +242,11 @@ stages:
       - Produce the design the change actually needs, and say which artifacts are not being produced and why.
       - Walk the failure modes for every dependency and boundary.
       - Record every significant decision as an ADR with real alternatives.
+      - Draw the design at half the components and name which stated requirement
+        fails. Record the answer as the complexity ledger on ARCH, one entry per
+        component, boundary or dependency introduced, each naming the requirement,
+        measurement or constraint that forces it and the simpler alternative it
+        beats. A design that introduces none records an empty ledger.
       - A team is used because security, operability and design must challenge each other rather than review in sequence.
     inputs:
       - Approved requirements
@@ -265,8 +273,12 @@ stages:
       - Every approved requirement maps to a component that satisfies it
       - Every significant decision has an ADR
       - Failure modes are stated, not only the happy path
+      - Every component, boundary and dependency this design introduces is either
+        justified by a named requirement, measurement or constraint, or is not
+        introduced. A design that introduces none says so.
     definition_of_done:
       - artifact_exists(ARCH)
+      - complexity_justified(ARCH)
       - every_linked(REQ, ARCH)
       - artifact_status(ADR, accepted)
       - agent_verdict(architecture-reviewer, pass)
@@ -287,7 +299,7 @@ stages:
         - approve
         - approve-with-conditions
         - reject
-      purpose: "requirement coverage and non-functional fitness: every approved requirement maps to a component, and every quantified target has a named mechanism."
+      purpose: "requirement coverage, non-functional fitness and proportionality: every approved requirement maps to a component, every quantified target has a named mechanism, and every component has a requirement behind it. A component nothing asked for is a major finding."
     human_gate:
       approver: architecture owner
       recorded_in: project-decision-log
@@ -427,6 +439,7 @@ stages:
     skills:
       - story-decomposition
       - traceability
+      - engineering-simplicity
     risk: MEDIUM
     complexity: routine
     execution: inline
@@ -532,6 +545,7 @@ stages:
       - frontend-development
       - git-workflow
       - test-automation
+      - engineering-simplicity
     risk: MEDIUM
     complexity: complex
     execution: team
@@ -676,6 +690,7 @@ stages:
     skills:
       - test-automation
       - performance-engineering
+      - engineering-simplicity
     risk: MEDIUM
     complexity: routine
     execution: subagent
@@ -798,6 +813,7 @@ stages:
       - security-reviewer
     skills:
       - release-management
+      - engineering-simplicity
     risk: HIGH
     complexity: complex
     execution: subagent

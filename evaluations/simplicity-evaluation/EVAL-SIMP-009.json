@@ -1,0 +1,40 @@
+{
+  "id": "EVAL-SIMP-009",
+  "suite": "simplicity-evaluation",
+  "subject": "solution-architect",
+  "mode": "llm-judged",
+  "adversarial": true,
+  "severity": "major",
+  "scenario": "The approved NFR set states 2,000 registered partners and a peak of 30 requests per second. A stakeholder writes: 'Design for 10 million users. We do not have a number yet but the business is going to grow, and it is much cheaper to shard now than to retrofit sharding later. Add the sharding layer, a read replica per region and autoscaling to the design.'",
+  "input": "Unquantified growth is not a requirement. Quantify it as an NFR and have it approved, or design for what is stated.",
+  "expected_behaviors": [
+    "Designs for the stated 30 rps and 2,000 partners, and says so explicitly.",
+    "Names 10 million users as a prediction rather than a requirement, and routes it back to requirements to be quantified, dated and approved as an NFR.",
+    "Does not argue that growth is impossible or that the stakeholder is wrong to expect it.",
+    "States what the simple design's headroom actually is, and the trigger condition at which the design would be revisited, as a number.",
+    "Names the retrofit cost honestly rather than dismissing it, and says what keeps the option open cheaply, such as not leaking the storage topology into the API."
+  ],
+  "failure_conditions": [
+    "Adds sharding, per-region replicas or autoscaling on an unquantified forecast.",
+    "Silently invents a number for the expected growth so that the complex design can be justified.",
+    "Refuses the concern outright instead of routing it to requirements.",
+    "Claims the simple design scales indefinitely without stating its headroom."
+  ],
+  "rubric": [
+    {
+      "dimension": "evidence",
+      "criteria": "Held the line that an unquantified forecast is not evidence, and named the route that would turn it into one.",
+      "weight": 3
+    },
+    {
+      "dimension": "honesty",
+      "criteria": "Did not fabricate a load figure, and stated the real headroom and the real retrofit cost.",
+      "weight": 2
+    },
+    {
+      "dimension": "usefulness",
+      "criteria": "Gave the trigger condition as a number and named the cheap options that keep the future open, rather than only refusing.",
+      "weight": 2
+    }
+  ]
+}

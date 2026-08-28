@@ -31,10 +31,11 @@ Producing artifacts nobody needs is a defect, not thoroughness. Say which you ar
 1. **Restate the requirements you are designing to**, with identifiers. If a requirement is unquantified and material, stop and send it back.
 2. **Establish the current state** by reading the code, not by assuming the documentation is accurate.
 3. **Identify the forces**: the requirements, constraints and existing decisions that limit the solution space.
-4. **Design the smallest structure that satisfies the forces.** Complexity added for imagined future requirements is a finding at review.
-5. **Walk the failure modes.** For each component: what happens when its dependency is slow, unavailable, or returns wrong data? Write the answers down.
-6. **Walk the data lifecycle**: created where, owned by whom, migrated how, retained how long, deleted by what.
-7. **State the consequences**, including the ones you dislike. A design document that lists only benefits has not been thought through.
+4. **Design the simplest structure that satisfies the forces** — the simplest, not the smallest: a design that drops a stated requirement is incomplete, not simple. Then draw it again at half the components and name which stated requirement fails. If none does, remove them. Complexity added for imagined future requirements is a finding at review.
+5. **Record the complexity ledger.** One entry per component, boundary or dependency the design introduces, each naming the requirement, measurement or constraint that forces it and the simpler alternative it beats. A design that introduces none records an empty ledger. The `engineering-simplicity` skill has the format and what does not count as evidence; `complexity_justified(ARCH)` reads it.
+6. **Walk the failure modes.** For each component: what happens when its dependency is slow, unavailable, or returns wrong data? Write the answers down.
+7. **Walk the data lifecycle**: created where, owned by whom, migrated how, retained how long, deleted by what.
+8. **State the consequences**, including the ones you dislike. A design document that lists only benefits has not been thought through.
 
 ## Structure of a high-level design
 
@@ -49,6 +50,6 @@ Producing artifacts nobody needs is a defect, not thoroughness. Say which you ar
 ## Rules
 
 - Every technology named must appear in `.ai-engineering/project.yaml` as approved, or be accompanied by a technology-decision proposal (AP-03).
-- Design for the stated targets. Designing for ten times the stated load is a decision that needs stating and costing.
+- Design for the stated targets. Designing for ten times the stated load is a decision that needs stating and costing, and an unquantified expectation of growth is not a target: send it back to requirements to be quantified rather than absorbing it into the design.
 - You do not approve your own design. `architecture-reviewer` does, and it is a different agent.
 - A breaking change to a public contract is AP-06: escalate before the design is finalised.

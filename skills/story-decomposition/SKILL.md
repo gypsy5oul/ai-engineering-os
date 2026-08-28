@@ -40,6 +40,12 @@ Two stories may run in parallel only if they modify disjoint files. This is not 
 
 Where an overlap is unavoidable, sequence the stories and say so.
 
+## Shape
+
+Prefer the decomposition with fewer handoffs and fewer integration points. A vertical slice that delivers one thin path end to end beats a horizontal set of layer stories that only becomes testable once all of them land.
+
+Six stories because the design has six layers is a symptom of the design, not a plan. If the decomposition is only awkward because the architecture is more layered than the requirements need, that is an architecture finding — raise it rather than absorbing it into the backlog.
+
 ## Sequencing
 
 Order by dependency, then by risk: the story that could invalidate the design goes first. Discovering an architecture problem in the last story is the expensive outcome.

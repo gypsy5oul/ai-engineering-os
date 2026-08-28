@@ -184,7 +184,7 @@
     "never": {
       "team": "in a non-interactive session, or for a task no other task runs alongside",
       "background": "for CRITICAL risk, or where the next step needs the result",
-      "worktree": "for a role with no write tools"
+      "worktree": "for a role that writes nothing a worktree would protect. A reviewer holds a write tool so it can record its verdict, and its scope is docs/reviews/** alone, which no other role writes to"
     },
     "enforced_by": "scripts/resolve_execution.py, and control_loop.py next --resolve",
     "not_enforceable": "Nothing makes an agent honour the resolved mode. A PreToolUse hook can refuse a spawn but cannot rewrite one, so this resolves and records; it does not compel."

@@ -1,0 +1,263 @@
+{
+  "version": "1",
+  "description": "Simplicity by default: the organization builds the simplest solution that satisfies every stated requirement, and buys complexity with a written justification. This policy is the machine-readable half of skills/engineering-simplicity/SKILL.md. It is an evaluation and review instrument, not a guard: nothing here blocks a tool call.",
+  "principle": "Build the simplest thing that satisfies the functional, non-functional, reliability, security, scalability and operational requirements that have actually been stated and approved.",
+  "not_the_principle": [
+    "Not 'always choose the smallest solution'. A design that drops a stated requirement is incomplete, not simple.",
+    "Not a prohibition on complexity. Complexity is bought with a requirement and the purchase is recorded.",
+    "Not a veto. This produces findings and justifications; humans decide under AP-02 and AP-03."
+  ],
+  "test": {
+    "question_1": "What is the simplest thing that satisfies the requirements? Name it concretely.",
+    "question_2": "Which stated requirement does that simpler thing fail? Name the identifier and the number.",
+    "outcome": "If no stated requirement fails, the simpler option wins and the extra complexity is a finding.",
+    "degenerate_answers": [
+      "No simpler option was named: the comparison never happened.",
+      "The simpler option fails a requirement nobody wrote down: that is a prediction, not a requirement. Route it back to requirements to be quantified and approved, or drop it."
+    ]
+  },
+  "preference_order": [
+    {
+      "rank": 1,
+      "option": "do-nothing",
+      "means": "The requirement is already met, or does not justify a change."
+    },
+    {
+      "rank": 2,
+      "option": "use-approved-project-capability",
+      "means": "An approved database, framework, service or table already in .ai-engineering/project.yaml."
+    },
+    {
+      "rank": 3,
+      "option": "use-platform-capability",
+      "means": "The standard library, the runtime, the database's transactions, the framework's own facilities, the managed equivalent."
+    },
+    {
+      "rank": 4,
+      "option": "extend-approved-component",
+      "means": "One more table, endpoint or column on something already running."
+    },
+    {
+      "rank": 5,
+      "option": "add-boring-component",
+      "means": "A well-understood component, chosen for how well the people who operate it understand it."
+    },
+    {
+      "rank": 6,
+      "option": "build-new",
+      "means": "A new component, abstraction or implementation."
+    }
+  ],
+  "preference_rule": "Do not descend a rank without naming the requirement that forced it.",
+  "complexity_triggers": [
+    {
+      "id": "CX-01",
+      "category": "infrastructure",
+      "trigger": "A new datastore, or a second datastore of a kind the project already has",
+      "simpler_alternative_prompt": "Can the approved primary store hold this, with an index or a table?"
+    },
+    {
+      "id": "CX-02",
+      "category": "infrastructure",
+      "trigger": "A message queue, broker or event bus",
+      "simpler_alternative_prompt": "Can a table with claim-and-skip semantics, or a direct synchronous call, meet the stated throughput and durability?"
+    },
+    {
+      "id": "CX-03",
+      "category": "infrastructure",
+      "trigger": "A cache as a separate component",
+      "simpler_alternative_prompt": "Is the uncached path measured against the stated latency target? In-process memoisation first."
+    },
+    {
+      "id": "CX-04",
+      "category": "infrastructure",
+      "trigger": "A search index separate from the primary store",
+      "simpler_alternative_prompt": "Does the primary store's own full-text or index support meet the stated query requirements?"
+    },
+    {
+      "id": "CX-05",
+      "category": "infrastructure",
+      "trigger": "A workflow, orchestration or scheduling engine",
+      "simpler_alternative_prompt": "Is this a cron entry and a state column?"
+    },
+    {
+      "id": "CX-06",
+      "category": "infrastructure",
+      "trigger": "A service mesh, sidecar, operator or custom controller",
+      "simpler_alternative_prompt": "Which stated reliability, security or operability requirement does the platform's own networking and deployment model miss?"
+    },
+    {
+      "id": "CX-07",
+      "category": "infrastructure",
+      "trigger": "A new long-running process, daemon or worker tier",
+      "simpler_alternative_prompt": "Can existing deployables carry this work?"
+    },
+    {
+      "id": "CX-08",
+      "category": "structure",
+      "trigger": "Splitting one deployable into several services",
+      "simpler_alternative_prompt": "Does a modular monolith with enforced internal boundaries satisfy the stated scaling, isolation and team-ownership requirements?"
+    },
+    {
+      "id": "CX-09",
+      "category": "structure",
+      "trigger": "A distributed transaction, consensus protocol or leader election",
+      "simpler_alternative_prompt": "Can this be one transaction in one store?"
+    },
+    {
+      "id": "CX-10",
+      "category": "structure",
+      "trigger": "Asynchrony introduced where a synchronous call satisfies the requirement",
+      "simpler_alternative_prompt": "What stated latency, throughput or availability number does the synchronous path miss?"
+    },
+    {
+      "id": "CX-11",
+      "category": "structure",
+      "trigger": "Eventual consistency introduced where the requirement is transactional",
+      "simpler_alternative_prompt": "Has the requirement's consistency expectation been read, or assumed?"
+    },
+    {
+      "id": "CX-12",
+      "category": "structure",
+      "trigger": "A new network hop on a path carrying a stated latency budget",
+      "simpler_alternative_prompt": "What is the budget, and what does the hop cost against it?"
+    },
+    {
+      "id": "CX-13",
+      "category": "code",
+      "trigger": "A new abstraction layer, plugin system or framework-within-the-framework",
+      "simpler_alternative_prompt": "How many implementations exist today? One is not a reason for an interface."
+    },
+    {
+      "id": "CX-14",
+      "category": "code",
+      "trigger": "A design pattern introduced for a second implementation that does not exist yet",
+      "simpler_alternative_prompt": "Is the second implementation a stated requirement or an expectation?"
+    },
+    {
+      "id": "CX-15",
+      "category": "code",
+      "trigger": "A custom implementation of something the platform, the language or an approved dependency already does correctly",
+      "simpler_alternative_prompt": "In what specific way does the existing implementation fail this requirement?"
+    },
+    {
+      "id": "CX-16",
+      "category": "code",
+      "trigger": "A configuration surface for something that has one value in every environment",
+      "simpler_alternative_prompt": "Constant now, configuration when a second value exists."
+    },
+    {
+      "id": "CX-17",
+      "category": "dependency",
+      "trigger": "Any new runtime dependency",
+      "simpler_alternative_prompt": "Standard library, approved dependency, or fifty lines here?"
+    },
+    {
+      "id": "CX-18",
+      "category": "dependency",
+      "trigger": "A dependency overlapping an approved one",
+      "simpler_alternative_prompt": "Two libraries doing one job is a maintenance liability, not a choice. This is a dependency-reviewer finding."
+    },
+    {
+      "id": "CX-19",
+      "category": "dependency",
+      "trigger": "A framework adopted to solve one problem inside it",
+      "simpler_alternative_prompt": "What does the rest of the framework cost, and can it be left out?"
+    },
+    {
+      "id": "CX-20",
+      "category": "capacity",
+      "trigger": "Sharding, partitioning, read replicas or autoscaling ahead of a measured or quantified need",
+      "simpler_alternative_prompt": "What is the stated load, what is the measured headroom, and when does the simple design run out?"
+    },
+    {
+      "id": "CX-21",
+      "category": "capacity",
+      "trigger": "An optimization costing readability, with no measurement showing the unoptimized version misses a stated target",
+      "simpler_alternative_prompt": "Where is the baseline?"
+    }
+  ],
+  "justification_fields": {
+    "component": "What is being introduced, named concretely.",
+    "driver": "The requirement identifier, measurement or constraint that forces it.",
+    "simpler_alternative": "The simplest option that was considered, named concretely enough to be built.",
+    "why_rejected": "Which stated requirement the simpler option fails, with the number.",
+    "evidence": "One of: requirement, measurement, constraint.",
+    "evidence_ref": "Where the evidence can be read.",
+    "operational_cost": "What must now be run, monitored, patched and carried on-call, and which new failure modes appear.",
+    "reversible": "What undoing this would take, and at what cost."
+  },
+  "required_justification_fields": [
+    "component",
+    "driver",
+    "simpler_alternative",
+    "why_rejected",
+    "evidence"
+  ],
+  "evidence_kinds": {
+    "requirement": "A quantified, approved functional or non-functional requirement the simpler option demonstrably misses.",
+    "measurement": "A number from this system, a load test, a benchmark or a production metric.",
+    "constraint": "An external, documented obligation: residency, a partner protocol, a licence term, a regulation."
+  },
+  "not_evidence": [
+    "We might need to scale. Unquantified growth is not a requirement; quantify it as an NFR and have it approved, or design for what is stated.",
+    "It is the industry standard. Popularity is a proxy for ecosystem maturity and nothing else.",
+    "It is more flexible. Flexibility no stated requirement uses is cost with no buyer.",
+    "It is cleaner. Say what it makes cheaper, and for whom.",
+    "We will need it later. State the date or the trigger condition, or leave it out."
+  ],
+  "total_complexity_dimensions": [
+    "maintainability: how long it takes someone who did not write it to change it correctly",
+    "operability: how many things must run, be monitored, be patched and be carried on-call",
+    "debuggability: how many hops, queues and asynchronous boundaries stand between a symptom and its cause",
+    "cognitive load: how much a person must hold in their head to be correct",
+    "exit cost: what undoing this takes in two years"
+  ],
+  "applies_at": [
+    {
+      "stage": "requirements",
+      "how": "Challenge unquantified, speculative and gold-plated requirements. The cheapest simple system is the one that was asked for. Scope is the requester's decision: surface the cost, never drop it silently."
+    },
+    {
+      "stage": "architecture",
+      "how": "Apply the two questions to every component and boundary. Draw the design at half the components and name what fails. Produce the complexity ledger."
+    },
+    {
+      "stage": "technology-selection",
+      "how": "'Use what we have' is already a mandatory option; it wins unless a named requirement fails. Total cost of ownership and exit path are part of the comparison."
+    },
+    {
+      "stage": "story-decomposition",
+      "how": "Prefer the decomposition with fewer handoffs and fewer integration points. Vertical slices over horizontal layers."
+    },
+    {
+      "stage": "development",
+      "how": "No interface for one implementation, no configuration for one value, no framework inside a feature. Delete what the change makes dead."
+    },
+    {
+      "stage": "infrastructure",
+      "how": "Count components, not features. Every component runs, is monitored, is patched and is carried on-call."
+    },
+    {
+      "stage": "performance",
+      "how": "Baseline before optimization. Prefer removing work over doing the same work faster, and prefer the fix that stays readable."
+    },
+    {
+      "stage": "release",
+      "how": "Prefer one deployable over a coordinated multi-service release, and a reversible change over one needing a forward fix. An eleven-step rollback is a design finding."
+    }
+  ],
+  "enforcement": {
+    "mechanism": "review dimension and definition-of-done predicate",
+    "predicate": "complexity_justified(artifact_code)",
+    "review_route": "RR-11",
+    "finding_severity": "major for complexity with no requirement behind it; the reviewer records it, the human decides",
+    "not_enforced_by_hook": "No guard blocks a design, a dependency or a component. A hook cannot tell a justified queue from an unjustified one, and one that tried would either block legitimate engineering or pass everything. Enforcement is a reviewer reading the ledger and a predicate checking the ledger exists and is complete.",
+    "deliberate_non_prohibition": "Nothing in this policy forbids any technology, pattern or component. A justified introduction is a legitimate engineering decision and this policy exists to make the justification visible, not to prevent it."
+  },
+  "anti_abuse": [
+    "Simplicity never justifies dropping a stated non-functional, reliability or security requirement. That is a defect with a slogan attached.",
+    "A design that moves complexity elsewhere has not removed it; the ledger says where it went.",
+    "An empty complexity ledger is a valid answer. An absent one means the question was never asked."
+  ]
+}

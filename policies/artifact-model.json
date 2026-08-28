@@ -1867,6 +1867,13 @@
       ],
       "checkable": "project",
       "means": "Every environment below this one in the project's deployment ladder has a promotion record, in order. A release that reached production without a staging record did not skip a test; it skipped the evidence that the test happened."
+    },
+    "complexity_justified": {
+      "args": [
+        "artifact_code"
+      ],
+      "checkable": "project",
+      "means": "The artifact carries a complexity ledger: every item of complexity it introduces names the requirement, measurement or constraint that forces it, the simpler alternative that was considered, and why that alternative fails. An empty ledger is a valid answer and passes; an absent one fails, because it means the question was never asked. The predicate checks that the justification exists and is complete, never whether the judgement was right -- that is architecture-reviewer's finding and the human's decision under AP-02. See policies/simplicity-policy.json."
     }
   },
   "checkability": {

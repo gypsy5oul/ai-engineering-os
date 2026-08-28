@@ -10,6 +10,7 @@ skills:
   - gitlab-workflow
   - change-review
   - traceability
+  - engineering-simplicity
 color: orange
 ---
 

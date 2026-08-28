@@ -8,6 +8,7 @@ skills:
   - performance-engineering
   - change-review
   - database-design
+  - engineering-simplicity
 color: orange
 ---
 

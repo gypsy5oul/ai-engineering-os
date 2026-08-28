@@ -14,6 +14,16 @@ are not repeated here.
 - To place work in the lifecycle: `/ai-engineering-os:sdlc-navigator`.
 - Traceability identifiers use the prefix `<KEY>` (see `project.key`).
 
+**Simplicity by default.** Build the simplest thing that satisfies the stated
+functional, non-functional, reliability, security, scalability and operational
+requirements. Not the smallest: a design that drops a stated requirement is
+incomplete, not simple. Before introducing a component, dependency, abstraction
+or service boundary, name the simplest alternative and the stated requirement it
+fails; if none fails, the simpler option wins. Complexity is allowed and is
+recorded, in the `complexity` ledger on the architecture artifact.
+`/ai-engineering-os:engineering-simplicity` has the rule and what counts as
+evidence.
+
 ## Repository map
 
 <Where things live. Two or three lines. Keep it current or delete it.>

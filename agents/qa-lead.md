@@ -9,6 +9,7 @@ skills:
   - test-automation
   - traceability
   - task-synthesis
+  - engineering-simplicity
 color: orange
 ---
 

@@ -10,6 +10,7 @@ skills:
   - traceability
   - change-review
   - work-item
+  - engineering-simplicity
 color: green
 ---
 

@@ -108,7 +108,7 @@ class TestIsolationIsNotFree(Resolver):
         W.save_graph(self.project, g)
         r = self.resolved()[t["id"]]
         self.assertEqual(r["resolved"], "subagent")
-        self.assertIn("no write tools", r["why"])
+        self.assertIn("writes nothing a worktree", r["why"])
 
     def test_a_writer_alongside_a_running_sibling_is_isolated(self):
         g = self.graph()

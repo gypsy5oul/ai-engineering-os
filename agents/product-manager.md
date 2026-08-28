@@ -7,6 +7,7 @@ effort: medium
 skills:
   - requirements-engineering
   - traceability
+  - engineering-simplicity
 color: blue
 ---
 

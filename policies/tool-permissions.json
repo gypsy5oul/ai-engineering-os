@@ -4,7 +4,7 @@
   "principles": [
     "An agent receives only the tools its role contract requires.",
     "Tool lists cannot express operational risk (a Bash-capable agent can still run a deploy). Operational risk is constrained by hooks/ and by the approval policy, not by tool lists alone.",
-    "Reviewers and governance roles never receive Write or Edit. Independence is structural, not advisory."
+    "A reviewer may write its own review record and never the artifact under review. Independence is structural, but it is the write scope in policies/write-scope.json that makes it so, not the absence of a write tool: a reviewer with no write tool has nowhere to record the verdict the agent_verdict predicates read. Governance roles that produce no record of their own (ai-governance, agent-evaluator) hold no write tool at all."
   ],
   "profiles": {
     "analysis-readonly": {

@@ -38,6 +38,8 @@ Typical: fit for the requirement, operational cost, failure modes, team familiar
 
 **7. Recommend one option, and say what would change your mind.**
 
+When more than one option satisfies the requirements, the `engineering-simplicity` rule decides: the one already approved, already on the platform, or already understood wins, and the recommendation names which stated requirement the simpler option would have to fail for the answer to change. Popularity, career value and unquantified future growth are not that requirement.
+
 ## Output
 
 A technology-decision proposal containing: the need, the constraints, the options including "use what we have", the comparison, the TCO, the exit path, the recommendation, and the explicit statement that a human must decide.

@@ -1,0 +1,58 @@
+{
+  "id": "EVAL-SIMP-004",
+  "suite": "simplicity-evaluation",
+  "subject": "policies/simplicity-policy.json",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "The failure mode of a simplicity rule is that it becomes a ban list. A policy that forbids queues blocks the project that needs one, and the organization routes around it. This case tries to make the control itself the defect: it passes only while the policy encourages and evaluates rather than prohibits.",
+  "expected_behaviors": [
+    "The policy names no forbidden technology, pattern or component.",
+    "The policy states in its own text that a justified introduction is a legitimate engineering decision.",
+    "The policy states that it is not enforced by a hook, and why a hook could not tell a justified queue from an unjustified one.",
+    "The policy states that simplicity never justifies dropping a stated non-functional, reliability or security requirement."
+  ],
+  "failure_conditions": [
+    "The policy prohibits a named technology or pattern outright.",
+    "The principle is stated as 'choose the smallest solution', which licenses dropping requirements.",
+    "A hook is wired to block a design or a dependency on simplicity grounds."
+  ],
+  "checks": [
+    {
+      "type": "file_not_contains",
+      "file": "policies/simplicity-policy.json",
+      "pattern": "(?i)\"(forbidden|prohibited|banned)_",
+      "description": "No ban list of any kind."
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/simplicity-policy.json",
+      "path": "not_the_principle",
+      "value": "Not 'always choose the smallest solution'. A design that drops a stated requirement is incomplete, not simple.",
+      "description": "The abuse the principle is most often used for is ruled out in the policy itself."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/simplicity-policy.json",
+      "pattern": "deliberate_non_prohibition",
+      "description": "The non-prohibition is a stated commitment, not an accident of drafting."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/simplicity-policy.json",
+      "pattern": "not_enforced_by_hook",
+      "description": "The limit of the mechanism is written down where the mechanism is."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "policies/hook-policy.json",
+      "pattern": "simplicity",
+      "description": "No guard blocks a tool call on simplicity grounds. The control is a review dimension and a predicate."
+    },
+    {
+      "type": "registry_invariant",
+      "invariant": "simplicity_is_advisory_not_a_guard",
+      "description": "No hook script decides on the simplicity policy, and the policy claims no enforcement it does not have."
+    }
+  ]
+}

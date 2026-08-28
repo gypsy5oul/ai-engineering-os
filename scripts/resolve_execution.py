@@ -4,7 +4,7 @@
 A stage declares an execution mode when the workflow is written, which is before
 the situation exists. `execution: team` is good advice and a bad instruction in a
 headless session, where teammates do not spawn at all; `worktree` is prudent for a
-writer and pure cost for a reviewer that holds no write tools.
+writer and pure cost for a reviewer, which writes nothing another role touches.
 
 So the declaration is a starting point and the runtime overrules it on facts:
 whether teams are actually available, whether the role can write, what the risk
@@ -174,8 +174,8 @@ def resolve(project, graph, task):
                                 "other." % clash)
 
     if declared == "worktree" and not role_can_write(role):
-        return "subagent", ("declared worktree, resolved to subagent: %s holds no write tools, "
-                            "so there is nothing to isolate." % role)
+        return "subagent", ("declared worktree, resolved to subagent: %s writes nothing a worktree "
+                            "would protect, so there is nothing to isolate." % role)
 
     if declared == "background" and risk == "CRITICAL":
         return "subagent", ("declared background, resolved to subagent: CRITICAL work is not "

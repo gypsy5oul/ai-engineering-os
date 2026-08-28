@@ -1,0 +1,57 @@
+{
+  "id": "EVAL-SIMP-001",
+  "suite": "simplicity-evaluation",
+  "subject": "engineering-simplicity",
+  "mode": "deterministic",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "A principle that lives only in prose is advice. Simplicity by default is a first-class capability only if the rule, the triggers that demand a justification, and what counts as evidence are machine-readable and reachable by the same checker that reads every other contract.",
+  "expected_behaviors": [
+    "policies/simplicity-policy.json states the principle and enumerates the complexity triggers.",
+    "The three evidence kinds are named, and the non-evidence list rules out unquantified growth.",
+    "The skill exists and is the prose half of the same rule."
+  ],
+  "failure_conditions": [
+    "The principle exists only as documentation, so nothing can check whether it was applied.",
+    "The trigger list is empty, so no introduction ever requires a justification."
+  ],
+  "checks": [
+    {
+      "type": "file_exists",
+      "file": "policies/simplicity-policy.json",
+      "description": "The machine-readable half of the principle."
+    },
+    {
+      "type": "file_exists",
+      "file": "skills/engineering-simplicity/SKILL.md",
+      "description": "The reusable capability roles load."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/simplicity-policy.json",
+      "path": "complexity_triggers[id=CX-08].category",
+      "value": "structure",
+      "description": "Splitting one deployable into several is a trigger, not a default."
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/simplicity-policy.json",
+      "path": "required_justification_fields",
+      "value": "simpler_alternative",
+      "description": "A justification that never names the alternative is not a comparison."
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/simplicity-policy.json",
+      "path": "required_justification_fields",
+      "value": "why_rejected",
+      "description": "Rejecting the simpler option requires naming what it fails."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/simplicity-policy.json",
+      "pattern": "Unquantified growth is not a requirement",
+      "description": "'We might need to scale' is explicitly not evidence."
+    }
+  ]
+}

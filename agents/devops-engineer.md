@@ -9,6 +9,7 @@ skills:
   - kubernetes-basics
   - observability
   - git-workflow
+  - engineering-simplicity
 color: cyan
 ---
 

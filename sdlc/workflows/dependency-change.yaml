@@ -104,6 +104,7 @@ stages:
       - dependency-reviewer
     skills:
       - change-review
+      - engineering-simplicity
     risk: MEDIUM
     complexity: complex
     execution: subagent

@@ -1,0 +1,49 @@
+{
+  "id": "EVAL-SIMP-003",
+  "suite": "simplicity-evaluation",
+  "subject": "engineering-simplicity",
+  "mode": "deterministic",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "No agent in this organization holds the Skill tool, so a skill no role preloads cannot be reached by any role. A cross-cutting principle that reaches nobody is worse than none, because the documentation says it is in force.",
+  "expected_behaviors": [
+    "The roles that make and review complexity decisions preload the skill in their frontmatter.",
+    "Both sides of the architecture decision hold it: the author and the independent reviewer."
+  ],
+  "failure_conditions": [
+    "The skill exists and no role loads it.",
+    "Only the author holds it, so the review has no shared standard to review against."
+  ],
+  "checks": [
+    {
+      "type": "file_contains",
+      "file": "agents/solution-architect.md",
+      "pattern": "^  - engineering-simplicity$",
+      "description": "The role that buys the complexity."
+    },
+    {
+      "type": "file_contains",
+      "file": "agents/architecture-reviewer.md",
+      "pattern": "^  - engineering-simplicity$",
+      "description": "The role that independently checks the purchase."
+    },
+    {
+      "type": "file_contains",
+      "file": "agents/development-lead.md",
+      "pattern": "^  - engineering-simplicity$",
+      "description": "Story decomposition is where a layered design becomes six stories."
+    },
+    {
+      "type": "file_contains",
+      "file": "agents/devops-engineer.md",
+      "pattern": "^  - engineering-simplicity$",
+      "description": "Every component introduced is a component someone runs, patches and is paged for."
+    },
+    {
+      "type": "file_contains",
+      "file": "agents/dependency-reviewer.md",
+      "pattern": "^  - engineering-simplicity$",
+      "description": "Minimising dependencies is the same rule applied to the manifest."
+    }
+  ]
+}
