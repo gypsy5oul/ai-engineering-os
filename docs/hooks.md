@@ -18,6 +18,7 @@ model cannot argue with.
 | `Stop` | — | `check_artifacts.py` | Artifacts written this session parse and validate |
 | `SubagentStop` | — | `observe_subagent.py` | Records what the agent produced against its task, from `last_assistant_message`, rather than trusting the agent to report it |
 | `SubagentStop` | — | `check_artifacts.py` | The same check when a delegated task ends |
+| `TaskCreated` | — | `bind_task.py` | Binds the native task to its graph task at the earliest event the platform offers, and exit 2 refuses a task the organization can say is wrong: an invented id, unmet dependencies, work already accepted |
 | `TaskCompleted` | — | `gate_task_completion.py` | Exit 2 blocks a task closing while its definition of done is unmet |
 | `TeammateIdle` | — | `teammate_idle.py` | Refuses idle while the teammate still holds an unaccepted task, when the name matches exactly one lease |
 | `WorktreeCreate` / `WorktreeRemove` | — | `record_worktree.py` | Records that isolation happened during this change; the payload names no task, so it is not bound to one |

@@ -498,15 +498,41 @@ Verified empirically against the installed CLI before either was built:
   produced nothing — because a subagent that stops silently looks identical to one
   that succeeded, unless something outside it is watching.
 
+- **`TaskCreated`** is the earliest point the platform offers, and it is where the
+  native task is bound to its graph task. Before `bind_task.py` existed, the
+  association was first worked out at `TaskCompleted` from a subject line — the
+  *last* possible moment. Everything in between ran with it unrecorded, and a
+  crash before completion lost the link outright. It does not shorten the briefing
+  path: `SubagentStart` carries no task id, so `inject_context.py` still claims a
+  task by agent. What it buys is durability, an audit trail of when the binding
+  was made and on what evidence, and a refusal that happens before the work rather
+  than after it.
+
+  It also refuses. Exit 2 on this event does not warn: verified against 2.1.250,
+  the CLI deletes the task and strips its id out of every other task's edges. So
+  the refusals are narrower than the completion gate's, and each is a case where
+  the organization can say the task is **wrong** rather than unproven — an id no
+  task in the graph has, several ids at once, dependencies that are not accepted,
+  work already accepted or abandoned, a native id already bound elsewhere, or a
+  role that is not in the registry. Anything else, including a task with no marker
+  at all, passes in silence; most native tasks in a session are not organizational
+  tasks.
+
+  Both task events resolve the association through one module, `hooks/lib/binding.py`.
+  Two events deriving it separately is how the durable graph came to disagree with
+  the gate the first time.
+
 - **`TaskCompleted`** refuses the completion when a bound task's definition of
   done has a failing predicate. This is the one place the definition of done stops
   being something the organization evaluates when asked and becomes something that
   must be true before a task can close.
 
-  It is not the orchestrator. `TaskCreated` and `TaskCompleted` carry no dependency
-  information and offer no `hookSpecificOutput`, so they cannot steer a loop — an
-  earlier version of this document read that as a reason to ignore them entirely,
-  which was too broad. An exit-2 veto is a poor engine and an excellent gate.
+  It is not the orchestrator, and neither is `TaskCreated`. Both carry no
+  dependency edges — the native engine keeps `blocks`/`blockedBy` internally and
+  does not send them — and neither offers a `hookSpecificOutput`, so neither can
+  steer a loop. An earlier version of this document read that as a reason to
+  ignore them entirely, which was too broad. An exit-2 veto is a poor engine and
+  an excellent gate.
 
   Narrow on purpose: it blocks on a predicate that **fails**, never on evidence
   that is merely unavailable. "Not yet provable" is not "wrong", and a gate that

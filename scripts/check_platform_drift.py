@@ -62,6 +62,27 @@ BELIEFS = [
                "these. The documentation names task_title and task_result, which do not exist.",
     },
     {
+        "id": "task-created-payload",
+        "what": "the fields TaskCreated sends",
+        "find": rb'hook_event_name:\w+\("TaskCreated"\),([a-zA-Z_:,()."\s]{0,140})',
+        "must_contain": ["task_id", "task_subject"],
+        "must_not_contain": ["blocked_by", "depends_on"],
+        "load_bearing": True,
+        "why": "hooks/scripts/bind_task.py binds the native task to a graph task from these at "
+               "creation. If dependency edges ever appear here, the graph could stop inferring "
+               "what the platform is willing to state.",
+    },
+    {
+        "id": "task-created-blocks",
+        "what": "TaskCreated is in the set of events exit 2 can block",
+        "find": rb'aen=\[([^\]]{0,120})\]',
+        "must_contain": ["TaskCreated", "TaskCompleted"],
+        "load_bearing": True,
+        "why": "bind_task.py refuses a task whose dependencies are unmet or whose id was invented. "
+               "If TaskCreated leaves the blocking set those refusals become stderr nobody acts "
+               "on, and the earliest gate in the lifecycle silently stops being a gate.",
+    },
+    {
         "id": "teammate-idle-payload",
         "what": "the fields TeammateIdle sends",
         "find": rb'hook_event_name:\w+\("TeammateIdle"\),([a-zA-Z_:,()."\s]{0,120})',

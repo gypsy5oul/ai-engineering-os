@@ -1,0 +1,79 @@
+{
+  "id": "EVAL-ORG-011",
+  "suite": "organization-evaluation",
+  "subject": "the native task is bound to the organizational one at creation",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "major",
+  "scenario": "A native Claude Code task and an organizational graph task are two different things, and the association between them is what makes every later event about the right work. For as long as it was first derived at TaskCompleted -- from a subject line, at the last possible moment -- everything in between ran unbound: SubagentStart re-derived it from the same prose, and a crash before completion lost it outright. The structure is bypassed by deleting the registration, or by letting the two task events resolve the association through separate copies of the rule, which then drift and quietly bind the same native task to two different graph tasks. Failure looks like: TaskCreated is unregistered so the binding is again first made at completion. A second copy of the marker regex appears. The marker is matched as a substring, so T-001 binds inside T-0010 and a completion later closes work it was never about.",
+  "expected_behaviors": [
+    "TaskCreated is registered and runs bind_task.py, so the binding is established at the earliest event the platform offers.",
+    "Both task events resolve the association through hooks/lib/binding.py, so they cannot answer differently.",
+    "The completion gate no longer carries its own copy of the marker rule.",
+    "The binding is written to the graph, because TaskCreated has no hookSpecificOutput and cannot pass it forward any other way."
+  ],
+  "failure_conditions": [
+    "TaskCreated is not registered, so the association is again first made at completion.",
+    "A second copy of the marker regex appears, so the two events can bind differently.",
+    "The hook depends on a payload field the platform does not send."
+  ],
+  "checks": [
+    {
+      "type": "file_exists",
+      "file": "hooks/scripts/bind_task.py",
+      "description": "The hook exists."
+    },
+    {
+      "type": "file_contains",
+      "file": "hooks/hooks.json",
+      "pattern": "\"TaskCreated\"",
+      "description": "Registered on the event."
+    },
+    {
+      "type": "file_contains",
+      "file": "hooks/hooks.json",
+      "pattern": "bind_task\\.py",
+      "description": "Registered to the right script."
+    },
+    {
+      "type": "file_contains",
+      "file": "hooks/scripts/gate_task_completion.py",
+      "pattern": "B\\.resolve\\(graph, data\\)",
+      "description": "The completion gate uses the shared resolution."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "hooks/scripts/gate_task_completion.py",
+      "pattern": "TASK_MARKER = re\\.compile",
+      "description": "and does not carry a second copy of the rule."
+    },
+    {
+      "type": "file_contains",
+      "file": "hooks/lib/binding.py",
+      "pattern": "TASK_MARKER = re\\.compile",
+      "description": "One marker rule, matched as whole tokens: T-001 is a substring of T-0010."
+    },
+    {
+      "type": "hook_decision",
+      "hook": "bind_task",
+      "input": {
+        "hook_event_name": "TaskCreated",
+        "task_id": "n-1",
+        "task_subject": "read the changelog"
+      },
+      "expect": "none",
+      "description": "A task naming no graph task is left alone. Most native tasks in a session are not organizational tasks, and a hook that fired on all of them would be turned off."
+    },
+    {
+      "type": "hook_decision",
+      "hook": "bind_task",
+      "input": {
+        "hook_event_name": "TaskCreated",
+        "task_subject": "T-001 go"
+      },
+      "expect": "none",
+      "description": "A payload with no task_id is left alone rather than treated as a defect."
+    }
+  ],
+  "notes": "The refusals themselves are exercised in tests/test_task_binding.py, which can build a work item and a graph. A deterministic evaluation case runs the hook against this repository, where there is no work item, so what it can prove here is registration, the single resolution rule, and that the gate stays silent on everything it should."
+}

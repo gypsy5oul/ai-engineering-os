@@ -2,10 +2,10 @@
 """TaskCompleted: refuse to let a task be marked done when its work is not.
 
 The earlier reading of this hook was that it cannot steer, so it was left unused.
-That was too broad. It is true that TaskCreated and TaskCompleted carry no
-dependency information and offer no `hookSpecificOutput`, so they cannot drive a
-control loop. But they can do the one thing the loop most needs and cannot do for
-itself: **exit 2 blocks the completion**.
+That was too broad. It is true that the task events carry no dependency edges and
+offer no `hookSpecificOutput`, so they cannot drive a control loop. But they can
+do the one thing the loop most needs and cannot do for itself: **exit 2 blocks
+the completion**.
 
 That turns the definition of done from something the organization evaluates when
 asked into something that has to be true before a task can close. Everywhere else
@@ -21,12 +21,12 @@ a gate that cannot be satisfied offline would just teach people to turn it off.
 import json
 import os
 import subprocess
-import re
 import sys
 
 LIB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "lib")
 sys.path.insert(0, LIB)
 import hooklib as H  # noqa: E402
+import binding as B  # noqa: E402
 
 sys.path.insert(0, os.path.join(H.PLUGIN_ROOT, "scripts", "lib"))
 
@@ -48,8 +48,6 @@ def contract(project, task, change=None):
     return check_dod.acceptance(project, task, change=change)
 
 
-TASK_MARKER = re.compile(r"\bT-[0-9]{3,}\b")
-
 
 def main():
     data = H.read_input()
@@ -68,21 +66,17 @@ def main():
         if not graph:
             sys.exit(0)
 
-        # The native task is bound to a graph task by the marker the spawner
-        # writes into its subject or description. Matched as whole tokens, not as
-        # a substring: `T-001 in "T-0010 done"` is true, and the schema permits
-        # both ids, so substring matching could close the wrong task.
-        blob = "%s %s" % (data.get("task_subject") or "", data.get("task_description") or "")
-        mentioned = set(TASK_MARKER.findall(blob))
-        held = next((t for t in graph.get("tasks", []) if t.get("native_task") == task_id), None)
-        if held is None:
-            held = next((t for t in graph.get("tasks", []) if t["id"] in mentioned), None)
+        # One resolution rule, shared with the TaskCreated hook that binds this
+        # association in the first place. Two events deriving the association
+        # separately is how the durable graph came to disagree with the gate.
+        held, _how = B.resolve(graph, data)
         if held is None:
             sys.exit(0)
         risk = held.get("risk") or (W.load_item(project, wid) or {}).get("risk") or "MEDIUM"
 
-        # Bind the two ids now that they are known, so the next event does not
-        # have to re-derive the association from prose.
+        # Fallback binding. `bind_task.py` establishes this at TaskCreated, which
+        # is where it belongs; this covers a task that predates the hook, or one
+        # whose creation the hook did not see.
         if task_id and held.get("native_task") != task_id:
             try:
                 W.bind_native_task(project, wid, held["id"], task_id)
