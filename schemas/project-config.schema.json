@@ -691,6 +691,78 @@
           "$ref": "#/definitions/humanRole"
         }
       }
+    },
+    "ai_system": {
+      "type": "object",
+      "description": "What this project's own software uses a model for. Distinct from `ai`, which is about how the AI Engineering OS runs this project's roles -- two different subjects that share a word. Without this section a project had no way to say that the thing it builds is an AI system, so the AI engineering skills had nothing to trigger on and a model provider was a technology decision with nowhere to be recorded. Absent means the project builds no AI features; it is never inferred.",
+      "additionalProperties": false,
+      "required": [
+        "builds_ai_features"
+      ],
+      "properties": {
+        "builds_ai_features": {
+          "type": "boolean",
+          "description": "A human decision, like every other entry in this file. Observing a model call in the repository is not a declaration."
+        },
+        "capabilities": {
+          "type": "array",
+          "description": "Which model-backed capabilities the product actually uses. Each one brings its own failure modes and its own evaluation.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "generation",
+              "extraction",
+              "classification",
+              "summarisation",
+              "retrieval",
+              "embedding",
+              "agentic-tools",
+              "code-generation"
+            ]
+          }
+        },
+        "model_providers": {
+          "type": "array",
+          "description": "Approved model providers and versions. A technology decision under AP-03 like any other, and pinned: an unpinned version changes the system's behaviour without a deployment and invalidates every evaluation that passed.",
+          "items": {
+            "$ref": "#/definitions/techComponent"
+          }
+        },
+        "autonomy": {
+          "type": "string",
+          "enum": [
+            "suggests-to-a-human",
+            "writes-a-record",
+            "reversible-action",
+            "irreversible-action"
+          ],
+          "description": "The blast radius of a wrong answer, and the axis that decides how much of the rest matters. irreversible-action needs a named human in the loop and the approval its stage carries."
+        },
+        "evaluation": {
+          "type": "object",
+          "additionalProperties": true,
+          "description": "Where the evaluation dataset lives and what the current baseline is. An AI component with no dataset has no definition of done anybody can check.",
+          "properties": {
+            "dataset": {
+              "type": "string",
+              "description": "Path or identifier of the evaluation dataset."
+            },
+            "baseline": {
+              "type": "string",
+              "description": "The production configuration a candidate is compared against: prompt, model, index and dataset versions."
+            },
+            "thresholds": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "Gates on the comparison rather than on an absolute, so they survive a dataset getting harder."
+            }
+          }
+        },
+        "data_in_prompts": {
+          "type": "string",
+          "description": "What project data may be sent to a provider, and what the provider retains. A data-classification decision, recorded before it is implemented rather than discovered afterwards."
+        }
+      }
     }
   },
   "definitions": {

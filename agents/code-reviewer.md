@@ -8,6 +8,7 @@ skills:
   - change-review
   - traceability
   - engineering-simplicity
+  - llm-integration
 color: green
 ---
 

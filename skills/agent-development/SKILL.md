@@ -26,7 +26,7 @@ Frontmatter carries only fields Claude Code supports: `name`, `description`, `to
 
 The body follows the canonical section order (Role contract, Purpose, Responsibilities, Not your responsibility, Authority, Allowed actions, Forbidden actions, Required inputs, Expected outputs, Skills, Model policy, Escalation, Review requirements, Handoff, Definition of done). `scripts/scaffold_agent.py` generates the skeleton; the validator enforces it.
 
-Tools must match a named profile in `policies/tool-permissions.json` exactly. Reviewers never get `Write` or `Edit`: independence has to be structural.
+Tools must match a named profile in `${CLAUDE_PLUGIN_ROOT}/policies/tool-permissions.json` exactly. A reviewer may write its own review record and never the artifact under review: independence has to be structural, and it is the write scope in `${CLAUDE_PLUGIN_ROOT}/policies/write-scope.json` that makes it so, not the absence of a write tool.
 
 ## Authoring a skill
 

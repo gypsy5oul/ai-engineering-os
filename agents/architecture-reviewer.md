@@ -8,6 +8,7 @@ skills:
   - architecture-review
   - adr-management
   - engineering-simplicity
+  - ai-system-design
 color: cyan
 ---
 

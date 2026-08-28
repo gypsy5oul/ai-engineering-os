@@ -12,6 +12,9 @@ skills:
   - technology-selection
   - task-synthesis
   - engineering-simplicity
+  - ai-system-design
+  - agent-tool-design
+  - prompt-engineering
 color: cyan
 ---
 

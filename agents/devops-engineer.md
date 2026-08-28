@@ -10,6 +10,7 @@ skills:
   - observability
   - git-workflow
   - engineering-simplicity
+  - ai-observability
 color: cyan
 ---
 

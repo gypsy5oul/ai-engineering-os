@@ -1,0 +1,90 @@
+{
+  "id": "EVAL-ORG-016",
+  "suite": "organization-evaluation",
+  "subject": "AI product engineering as capabilities rather than roles",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "major",
+  "scenario": "Seven AI engineering concerns arrived at once, and each of them reads like it wants an owner: a prompt engineer, an ML engineer, an evaluation lead. That is exactly how a 30-agent freeze ends -- not by a decision to grow the organization, but by a capability that felt important enough to deserve a role. The second pressure is toward technology: these are the first skills whose subject matter has obvious vendors, and a skill that names one turns a technology-neutral plugin into one with an exception. Failure looks like: an agent appears whose name describes an AI technique rather than an organizational responsibility. A skill names a provider, an SDK or a framework. A capability duplicates one that already exists under a similar name, so both load and disagree.",
+  "expected_behaviors": [
+    "The agent set is still 30, and no agent is named for an AI technique.",
+    "Every AI capability is preloaded by roles that already existed.",
+    "No AI skill names a provider, a model or a framework: the provider is a project decision under AP-03.",
+    "The two skills that sit next to an existing one say what they are not.",
+    "A project can declare that the software it builds is an AI system, and it is never inferred."
+  ],
+  "failure_conditions": [
+    "An AI-specific agent is added.",
+    "A skill names a vendor, making the plugin technology-neutral except here.",
+    "ai-evaluation and agent-evaluation stop distinguishing their subjects, producing a suite that measures neither.",
+    "ai_system.builds_ai_features becomes optional or inferred, so a project is treated as an AI project because somebody imported a client library."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "agent_set_is_frozen_at_thirty",
+      "description": "The freeze, checked rather than remembered."
+    },
+    {
+      "type": "file_exists",
+      "file": "skills/ai-system-design/SKILL.md"
+    },
+    {
+      "type": "file_exists",
+      "file": "skills/llm-integration/SKILL.md"
+    },
+    {
+      "type": "file_exists",
+      "file": "skills/ai-evaluation/SKILL.md"
+    },
+    {
+      "type": "file_contains",
+      "file": "skills/ai-evaluation/SKILL.md",
+      "pattern": "Not to be confused with `agent-evaluation`",
+      "description": "Different subject, not a different technique."
+    },
+    {
+      "type": "file_contains",
+      "file": "skills/ai-observability/SKILL.md",
+      "pattern": "Use with `observability`",
+      "description": "It adds to the general skill rather than replacing it."
+    },
+    {
+      "type": "file_contains",
+      "file": "skills/ai-system-design/SKILL.md",
+      "pattern": "Deterministic first",
+      "description": "The most reliable AI system design is the one that uses less of it."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "skills/llm-integration/SKILL.md",
+      "pattern": "(?i)(openai|anthropic|gemini|langchain)",
+      "description": "The skill that calls the model names no provider."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "skills/rag-engineering/SKILL.md",
+      "pattern": "(?i)(pinecone|weaviate|llamaindex|langchain)"
+    },
+    {
+      "type": "file_contains",
+      "file": "schemas/project-config.schema.json",
+      "pattern": "\"ai_system\"",
+      "description": "A project can say the software it builds is an AI system. Before this it could not, so these skills had nothing to trigger on."
+    },
+    {
+      "type": "json_path_contains",
+      "file": "schemas/project-config.schema.json",
+      "path": "properties.ai_system.required",
+      "value": "builds_ai_features",
+      "description": "Declared, never inferred: observing a model call is not a declaration."
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/skills.md",
+      "pattern": "decision rather than an oversight",
+      "description": "model-routing, ai-performance and ai-data-engineering were evaluated and not built; the omission is recorded."
+    }
+  ],
+  "notes": "The behavioural half is tests/test_ai_capabilities.py, which reads every AI skill for thirteen provider and framework names and asserts each capability reaches a role that already existed."
+}

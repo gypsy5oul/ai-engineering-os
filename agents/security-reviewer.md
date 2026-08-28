@@ -8,6 +8,7 @@ skills:
   - security-assessment
   - threat-modeling
   - change-review
+  - agent-tool-design
 color: red
 ---
 

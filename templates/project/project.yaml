@@ -203,6 +203,31 @@ approval:
     role: qa-owner
     identity: gitlab:rnakamura
 
+# What YOUR software uses a model for. Distinct from `ai:` below, which is about
+# how the AI Engineering OS runs this project's roles -- two different subjects
+# that happen to share a word.
+#
+# Delete this whole section if the project builds no AI features. It is never
+# inferred: observing a model call in the repository is not a declaration, the
+# same way observing a database is not approval of one.
+#
+# ai_system:
+#   builds_ai_features: true
+#   capabilities: [generation, retrieval]     # what the product actually uses
+#   model_providers:
+#     - name: <provider>
+#       version: "<pinned version>"           # never 'latest': an unpinned version
+#       status: approved                      # changes behaviour with no deployment
+#       adr: <KEY>-ADR-00N                    # and invalidates every evaluation
+#   autonomy: suggests-to-a-human             # .. writes-a-record, reversible-action,
+#                                             # irreversible-action (needs a human in the loop)
+#   evaluation:
+#     dataset: docs/ai/evaluation/
+#     baseline: <the production prompt, model, index and dataset versions>
+#   data_in_prompts: >-
+#     What project data may reach the provider, and what the provider retains.
+#     A data-classification decision, recorded before it is implemented.
+
 ai:
   agent_teams_available: false     # experimental and off by default; stages declaring 'team' fall back to 'subagent'
 
