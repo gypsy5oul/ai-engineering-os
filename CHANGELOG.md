@@ -3,6 +3,84 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.39.0] — A project had no way to say it was building an AI system
+
+Seven capabilities for building software whose behaviour comes from a model:
+`ai-system-design`, `llm-integration`, `prompt-engineering`, `rag-engineering`,
+`agent-tool-design`, `ai-evaluation` and `ai-observability`.
+
+**No agents.** The set is still 30, and that is the constraint most at risk here:
+seven concerns arriving together and every one of them reads like it wants an
+owner. A prompt engineer, an ML engineer, an evaluation lead. That is how a freeze
+ends — not by a decision to grow the organization, but by a capability that felt
+important enough to deserve a role. A backend developer implementing an LLM
+feature is still `backend-developer`; it loads `llm-integration` while doing it.
+
+`inv_agent_set_is_frozen_at_thirty` now checks the count *and* refuses an agent
+named for a technique rather than a responsibility, because that is the shape the
+first exception would take.
+
+**The gap underneath.** The project configuration had an `ai:` section, and it was
+entirely about how this OS runs the project's roles — which model runs which
+agent. There was **nowhere for a project to say that the software it builds is an
+AI system.** A model provider is a technology decision with exactly the same
+approve-and-record semantics as a database, and it had no home; the seven skills
+would have had nothing to trigger on, the way `kubernetes-basics` triggers on a
+declared deployment platform.
+
+`ai_system` is that section, and it is deliberately not `ai` — two different
+subjects that share a word:
+
+```yaml
+ai_system:
+  builds_ai_features: true          # declared, never inferred
+  capabilities: [generation, retrieval]
+  model_providers:
+    - name: <provider>
+      version: "<pinned>"           # never 'latest'
+      status: approved
+      adr: <KEY>-ADR-00N
+  autonomy: suggests-to-a-human     # .. irreversible-action
+  evaluation: {dataset: ..., baseline: ...}
+  data_in_prompts: <what may reach the provider, and what it retains>
+```
+
+Observing a model call in the repository is not a declaration, the same way
+observing a database is not approval of one.
+
+**Technology-neutral, and checked.** A test reads all seven skills for thirteen
+provider and framework names. The plugin mandates no technology anywhere else and
+these are the first skills whose subject matter has obvious vendors — a single
+named one would make the neutrality claim an "except here".
+
+**Two of them sit next to a skill with a similar name**, and the difference is the
+subject rather than the technique. `ai-evaluation` evaluates the product the
+organization is building; `agent-evaluation` evaluates this organization's own
+roles. `ai-observability` adds to `observability` rather than replacing it —
+latency and error rate can both be green while the answers are confidently wrong.
+Both say so in their own text, and a test holds it.
+
+**Three were evaluated and not built**: `model-routing`, `ai-performance` and
+`ai-data-engineering`. Nothing in the current requirement set needs them, and
+adding a capability against an expected need rather than a stated one is the
+finding `policies/simplicity-policy.json` exists to raise. Recorded in
+`docs/skills.md` and asserted, so adding one silently is a test failure rather
+than a surprise. The simplicity policy applied to the work that adds capability
+is the only version of it that means anything.
+
+**A stale claim from 0.33.0, found by accident.** `skills/agent-development/SKILL.md`
+still said "Reviewers never get `Write` or `Edit`". The v0.33.0 sweep fixed
+fourteen sites by grepping for "no write tools" and "never receive Write"; this
+phrasing was not among them. It now says what is true: a reviewer may write its
+own review record and never the artifact under review, and it is the write scope
+that makes that structural.
+
+And the skills themselves each say when *not* to reach for the thing they
+describe. `ai-system-design` opens its design method with **Deterministic first**;
+`rag-engineering` opens with **Do you need it**. The most reliable AI system
+design is the one that uses less of it, and a capability that only says when it
+applies gets applied to everything adjacent.
+
 ## [0.38.0] — A two-predicate intake step paid for a peer review and a lead review
 
 The department cycle is correct and it is not free. Worker, self-check, peer

@@ -8,6 +8,7 @@ skills:
   - test-design
   - test-automation
   - change-review
+  - ai-evaluation
 color: orange
 ---
 

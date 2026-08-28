@@ -8,6 +8,7 @@ skills:
   - test-automation
   - test-design
   - git-workflow
+  - ai-evaluation
 color: orange
 ---
 

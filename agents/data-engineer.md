@@ -11,6 +11,7 @@ skills:
   - change-review
   - traceability
   - engineering-simplicity
+  - rag-engineering
 color: orange
 ---
 

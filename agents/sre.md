@@ -9,6 +9,7 @@ skills:
   - incident-management
   - kubernetes-basics
   - engineering-simplicity
+  - ai-observability
 color: orange
 ---
 

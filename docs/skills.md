@@ -1,6 +1,6 @@
 # Skill catalogue
 
-35 skills. A skill is a capability many roles share; it is not an organizational
+42 skills. A skill is a capability many roles share; it is not an organizational
 role and does not have authority of its own. The rule for choosing between them
 is in `docs/agent-model.md`.
 
@@ -17,6 +17,13 @@ guides work that can damage production, data or the security boundary.
 | [`agent-development`](../skills/agent-development/SKILL.md) | Author and maintain the components of the AI Engineering OS itself - agents, skills, hooks, policies and schemas. | `agent-architect`, `agent-developer` | HIGH |
 | [`agent-evaluation`](../skills/agent-evaluation/SKILL.md) | Design, run and interpret evaluation suites for agents, skills and hooks, including adversarial cases. | `ai-governance`, `agent-developer`, `agent-evaluator` | MEDIUM |
 | [`ai-governance`](../skills/ai-governance/SKILL.md) | Review a change to the AI Engineering OS against the governance rules - ownership, least privilege, evaluation coverage, risk classification, lifecycle state and approval paths. | `ai-governance`, `agent-architect`, `agent-evaluator` | HIGH |
+| [`agent-tool-design`](../skills/agent-tool-design/SKILL.md) | Design the tools an AI agent is given - the interface, the description, the error messages and the authority - understanding that the description is a prompt and the caller cannot be trusted to call correctly. | `security-reviewer`, `solution-architect` | HIGH |
+| [`ai-evaluation`](../skills/ai-evaluation/SKILL.md) | Measure whether the AI system this project is building actually works - datasets, baselines, candidates, metrics and regression. | `qa-engineer`, `qa-lead`, `test-reviewer` | MEDIUM |
+| [`ai-observability`](../skills/ai-observability/SKILL.md) | See what an AI system did in production - tracing model and tool calls, cost and token metrics, quality signals, drift, and what may be logged given the data classification. | `devops-engineer`, `reliability-reviewer`, `sre` | MEDIUM |
+| [`ai-system-design`](../skills/ai-system-design/SKILL.md) | Design a system whose behaviour comes from a model rather than from code you wrote. | `architecture-reviewer`, `solution-architect` | HIGH |
+| [`llm-integration`](../skills/llm-integration/SKILL.md) | Implement the code that calls a model - structured output, retries, timeouts, token budgets, streaming, idempotency and cost control. | `backend-developer`, `code-reviewer` | MEDIUM |
+| [`prompt-engineering`](../skills/prompt-engineering/SKILL.md) | Write, version, review and change the prompts that define an AI system's behaviour, treating a prompt as a reviewed artifact rather than a string in a file. | `backend-developer`, `solution-architect` | MEDIUM |
+| [`rag-engineering`](../skills/rag-engineering/SKILL.md) | Design and evaluate retrieval-augmented generation - what gets indexed, how it is chunked, how it is retrieved, and how retrieval quality is measured separately from answer quality. | `backend-developer`, `data-engineer` | HIGH |
 | [`api-design`](../skills/api-design/SKILL.md) | Design and review interface contracts - REST, GraphQL, gRPC, events or file-based protocols - including versioning, compatibility, errors and pagination. | `solution-architect` | MEDIUM |
 | [`architecture-design`](../skills/architecture-design/SKILL.md) | Produce feasibility assessments, high- and low-level design, deployment, availability and capacity models for an approved requirement set. | `solution-architect`, `security-architect`, `agent-architect` | MEDIUM |
 | [`architecture-review`](../skills/architecture-review/SKILL.md) | Independently review an architecture, design or ADR for requirement coverage, non-functional fitness, consistency, failure handling and proportionality. | `architecture-reviewer` | MEDIUM |
@@ -48,6 +55,49 @@ guides work that can damage production, data or the security boundary.
 | [`threat-modeling`](../skills/threat-modeling/SKILL.md) | Build or update a threat model for a system or change - assets, trust boundaries, entry points, threats and controls. | `security-architect`, `security-reviewer` | HIGH |
 | [`work-item`](../skills/work-item/SKILL.md) | Open, plan and drive a unit of work through the control loop: what to do next, how to record what happened, and what the loop does with it. | `engineering-director`, `development-lead` | LOW |
 | [`traceability`](../skills/traceability/SKILL.md) | Assign artifact identifiers and maintain the links between requirements, stories, architecture, ADRs, tests, defects, merge requests, releases, incidents and RCAs. | `engineering-director`, `product-manager`, `requirements-analyst`, `development-lead`, `backend-developer`, `frontend-developer`, `data-engineer`, `docs-writer`, `qa-lead`, `release-manager`, `rca-analyst`, `code-reviewer` | LOW |
+
+## AI product engineering
+
+Seven of the skills above are for building software whose behaviour comes from a
+model. They are **capabilities, not roles** — the agent set is still frozen at 30,
+and the brief that asked for them said so explicitly. A backend developer
+implementing an LLM feature is still `backend-developer`; it just loads
+`llm-integration` while doing it.
+
+| Role | + capability | Produces |
+| --- | --- | --- |
+| `solution-architect` | `ai-system-design` | A design that says what happens when the model is wrong |
+| `backend-developer` | `llm-integration` | Client code that validates what came back |
+| `solution-architect`, `backend-developer` | `prompt-engineering` | A prompt that is versioned, reviewed and evaluated |
+| `backend-developer`, `data-engineer` | `rag-engineering` | Retrieval measured separately from generation |
+| `solution-architect`, `security-reviewer` | `agent-tool-design` | Tools whose descriptions are prompts and whose authority is bounded |
+| `qa-lead`, `qa-engineer`, `test-reviewer` | `ai-evaluation` | A dataset, a baseline and a candidate |
+| `sre`, `devops-engineer`, `reliability-reviewer` | `ai-observability` | Traces that name the prompt, model and index versions |
+
+They are **technology-neutral in the same sense as the rest of the plugin**: none
+of them names a provider, an SDK or a model. The provider is a project decision
+recorded under AP-03 in `.ai-engineering/project.yaml`, in the new `ai_system`
+section — which is separate from `ai`, and the distinction matters: `ai` is how
+this OS runs the project's roles, `ai_system` is what the project's own software
+uses a model for. Before that section existed a project had no way to say it was
+building an AI system at all.
+
+Two of them sit next to a skill with a similar name, and the difference is the
+subject rather than the technique:
+
+- **`ai-evaluation` is not `agent-evaluation`.** The first evaluates the product
+  the organization is building; the second evaluates this organization's own
+  roles. Mixing them produces a suite that measures neither.
+- **`ai-observability` is not `observability`.** SLIs, SLOs, alerts and runbooks
+  all still apply; what is additionally true is that latency and error rate can
+  both be green while the answers are confidently wrong.
+
+Three capabilities the brief listed as possible were **not** built:
+`model-routing`, `ai-performance` and `ai-data-engineering`. Nothing in the
+current requirement set needs them, and adding a capability against an expected
+need rather than a stated one is the finding
+`${CLAUDE_PLUGIN_ROOT}/policies/simplicity-policy.json` exists to raise. They are
+recorded here so the omission is a decision rather than an oversight.
 
 ## Invoking a skill
 

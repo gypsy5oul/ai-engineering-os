@@ -10,6 +10,7 @@ skills:
   - traceability
   - task-synthesis
   - engineering-simplicity
+  - ai-evaluation
 color: orange
 ---
 

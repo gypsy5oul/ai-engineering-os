@@ -8,6 +8,7 @@ skills:
   - observability
   - incident-management
   - change-review
+  - ai-observability
 color: orange
 ---
 

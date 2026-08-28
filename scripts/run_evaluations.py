@@ -668,6 +668,28 @@ def inv_release_manager_cannot_execute(ctx):
     return ("Bash" not in tools, "release-manager tools: %s" % tools)
 
 
+def inv_agent_set_is_frozen_at_thirty(ctx):
+    """The organization does not grow because a capability felt important.
+
+    Every wave of new capability is pressure on this: seven AI engineering
+    concerns arrived at once and each one reads like it wants an owner. A role is
+    an organizational responsibility; a skill is a reusable technical capability.
+    The freeze is how that distinction stays a rule rather than a preference, and
+    checking it is cheaper than arguing about it later.
+    """
+    agents = ctx["registry"]["agents"]
+    problems = []
+    if len(agents) != 30:
+        problems.append("the registry holds %d agents, not 30" % len(agents))
+    # A name that describes a technique rather than a responsibility is how the
+    # first exception arrives.
+    for a in agents:
+        for token in ("prompt", "llm", "rag", "ml-", "model-engineer"):
+            if token in a["name"]:
+                problems.append("%s is named for a technique, not a responsibility" % a["name"])
+    return (not problems, "; ".join(problems))
+
+
 def inv_simplicity_is_advisory_not_a_guard(ctx):
     """The simplicity principle must never become a guard, and must not claim to be one.
 
