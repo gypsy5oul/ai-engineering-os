@@ -435,22 +435,30 @@ python3 scripts/resolve_execution.py --project . --item ACME-FEAT-001 --all --re
 ```
 
 ```
-TASK    DECLARED       RESOLVED       WHY
-T-004   team        -> subagent       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is not set
-T-009   subagent    -> worktree       a sibling holds the database-schema surface
-T-010   worktree    -> subagent       code-reviewer writes nothing a worktree protects
+TASK    EXECUTION              ISOLATION                  WHY
+T-004   team -> subagent       shared-checkout            CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is not set
+T-006   team                   shared-checkout -> worktree  T-007 also edits src/api/handler.py
+T-009   subagent               shared-checkout -> worktree  a sibling holds the database-schema surface
+T-010   subagent               worktree -> shared-checkout  code-reviewer writes nothing a worktree protects
 ```
 
-The rules, in the order they apply:
+**Two columns, because there are two questions.** They shared one until v0.37,
+and `T-006` is the case that could not be printed at all: a team that needs its
+own checkout is still a team. When `worktree` was an execution mode, isolating
+that task meant resolving it to `worktree`, and the team was gone.
 
-| Fact | Resolves to | Because |
-| --- | --- | --- |
-| Teams unavailable | `subagent` | Nothing in the lifecycle may depend on a feature that is still experimental and off by default |
-| Role writes nothing a worktree would protect | `subagent` | A reviewer holds a write tool so it can record its verdict, and its scope is `docs/reviews/**` alone, which no other role writes to |
-| CRITICAL risk, declared background | `subagent` | The point of the tier is that somebody is watching; background is where nobody is |
-| A sibling holds the same coupled surface | `worktree` | The parallelism survives and integration becomes an explicit step |
-| Writes files, siblings running | `worktree` | Parallel writers in one checkout produce a build output nobody owns |
-| Nothing overruled it | the declared mode | |
+The rules. Execution first, then isolation; neither overrules the other:
+
+| Dimension | Fact | Resolves to | Because |
+| --- | --- | --- | --- |
+| execution | Teams unavailable | `subagent` | Nothing in the lifecycle may depend on a feature that is still experimental and off by default |
+| execution | CRITICAL risk, declared background | `subagent` | The point of the tier is that somebody is watching; background is where nobody is |
+| execution | Nothing overruled it | the declared mode | |
+| isolation | Role writes nothing a worktree would protect | `shared-checkout` | A reviewer holds a write tool so it can record its verdict, and its scope is `docs/reviews/**` alone, which no other role writes to |
+| isolation | A team whose paths overlap a sibling's | `worktree` | Teammates share one checkout, so two of them editing one file overwrite each other. The task stays a team |
+| isolation | A sibling holds the same coupled surface | `worktree` | The parallelism survives and integration becomes an explicit step |
+| isolation | Writes files, siblings running | `worktree` | Parallel writers in one checkout produce a build output nobody owns |
+| isolation | Nothing would collide | `shared-checkout` | Isolation is not free and is not a default virtue |
 
 Three values are kept, because they answer three different questions:
 

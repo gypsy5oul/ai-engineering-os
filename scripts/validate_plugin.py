@@ -648,7 +648,17 @@ def check_execution_resolution_is_live():
         "sibling_holds_surface": "surface_clash",
         "writes_files_and_siblings_running": "running and role_can_write",
         "declared_mode_is_available": "no fact overruled",
+        "team_with_overlapping_paths": "overlapping_paths(",
+        "nothing_would_collide": "return declared_iso",
     }
+    # Which resolver each rule has to live in. A rule filed under the wrong
+    # dimension is how the two got mixed in the first place: every isolation rule
+    # was implemented inside the execution resolver and returned a mode.
+    DIMENSION_FN = {"execution": "def resolve_execution(", "isolation": "def resolve_isolation("}
+    for fn in DIMENSION_FN.values():
+        if fn not in code:
+            err("scripts/resolve_execution.py has no %s; execution and isolation are separate "
+                "dimensions and resolving them in one function is what conflated them" % fn)
     for rule in (pol["resolution"].get("rules") or []):
         name = rule.get("when")
         marker = MARKERS.get(name)
@@ -658,6 +668,21 @@ def check_execution_resolution_is_live():
         elif marker not in code:
             err("policies/execution-policy.json: resolution rule %r has no implementation in "
                 "resolve_execution.py" % name)
+        dimension = rule.get("dimension")
+        if dimension not in DIMENSION_FN:
+            err("policies/execution-policy.json: resolution rule %r declares no dimension. "
+                "Execution and isolation are separate and a rule that does not say which one "
+                "it answers can be implemented on the wrong axis unnoticed." % name)
+        elif marker:
+            # The rule's marker has to appear after its own resolver starts and
+            # before the next one does, so a rule cannot be declared as isolation
+            # and implemented in the execution resolver.
+            start = code.index(DIMENSION_FN[dimension])
+            others = [code.index(f) for f in DIMENSION_FN.values() if code.index(f) > start]
+            end = min(others) if others else len(code)
+            if marker not in code[start:end] and name != "declared_mode_is_available":
+                err("policies/execution-policy.json: rule %r is declared as a %s rule but its "
+                    "implementation is not in %s" % (name, dimension, DIMENSION_FN[dimension]))
 
     # A correct resolver nobody calls is the defect this repository keeps
     # producing. The policy named an enforcement path for two versions while the

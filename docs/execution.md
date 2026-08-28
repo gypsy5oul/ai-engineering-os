@@ -1,8 +1,35 @@
-# Execution: inline, subagent or team
+# Execution and isolation
 
-Every workflow stage declares how it runs. Left to model discretion this becomes
-expensive and inconsistent, so `policies/execution-policy.json` defines the modes
-and each stage picks one.
+Two questions, and they are not the same one.
+
+**Execution** is *how* the work runs: inline, as a subagent, in the background, or
+as a team. **Isolation** is *where* it runs: the shared checkout, its own git
+worktree, or a remote environment.
+
+They used to share one field. `worktree` sat in the execution enum next to
+`inline` and `subagent`, which meant the only way to isolate a task was to stop
+calling it what it was — a team that needed its own checkout resolved to
+`worktree`, and nothing downstream could still tell it had been a team. The two
+dimensions are separate now, and the resolver answers them independently.
+
+| | Values |
+| --- | --- |
+| **Execution** | `inline`, `subagent`, `background`, `team`, `dynamic-workflow` |
+| **Isolation** | `shared-checkout`, `worktree`, `remote` |
+
+Every combination is real:
+
+| Execution | Isolation | What it means |
+| --- | --- | --- |
+| `inline` | `shared-checkout` | The session does the work where it stands. The default. |
+| `subagent` | `shared-checkout` | A focused worker in the same checkout. Correct for anything read-only. |
+| `subagent` | `worktree` | A writer alongside other writers. The isolation is about the files, not about how the worker runs. |
+| `background` | `worktree` | Background sessions are worktree-isolated by default. |
+| `team` | `shared-checkout` | Teammates who own disjoint paths. The usual team case. |
+| `team` | `worktree` | Teammates who must touch the same file. **Still a team**; only its checkout changed. |
+
+The rule underneath: isolating a task never changes how it runs, and changing how
+it runs never decides where.
 
 ## The three modes
 
@@ -49,12 +76,16 @@ amending it.
 ## Working copies: shared checkout or worktree
 
 Execution mode says *who* does the work. Isolation says *which copy of the
-repository they do it in*. `policies/execution-policy.json` defines both.
+repository they do it in*. `policies/execution-policy.json` defines both, and
+`scripts/resolve_execution.py` resolves them separately: it returns
+`(execution, isolation, why)` and writes a declared/resolved/actual triple for
+each. Both can be overruled by runtime facts, and neither overrules the other.
 
 | Mode | What the worker edits | When |
 | --- | --- | --- |
 | `shared-checkout` (default) | The session's working directory | Disjoint paths, or read-only work |
 | `worktree` | Its own git worktree under `.claude/worktrees/`, on its own branch | The paths cannot be disjoint, or the worker builds, tests, formats, generates code or installs dependencies |
+| `remote` | A remote environment rather than this machine | A long or heavy job. Always a background task, and availability is gated per account, so nothing in the lifecycle may depend on it. **Never run here** — it is in the enum because the platform has it, and a resolver that cannot name a mode has to call it something else. |
 
 Three ways to get one, all verified against the installed Claude Code:
 

@@ -135,27 +135,14 @@ def overlapping_paths(task, siblings):
     return None
 
 
-def resolve(project, graph, task):
-    """(mode, why). The first fact that overrules the declaration wins."""
-    # Through the accessor, not the raw field. Since v0.23 `execution` is an
-    # object on any task that came from a decomposition, and reading it directly
-    # made `declared` a dict: no rule matched, the dict was returned as the mode,
-    # and writing it back failed schema validation inside a try/except -- so
-    # execution resolution silently did not apply to decomposed tasks at all.
-    declared = W.declared_execution(task)
-    pinned = project_override(project, task.get("stage"))
-    if pinned and pinned != declared:
-        # The project knows things the workflow author did not: how big the team
-        # is, what the change actually costs. A pin is a decision, so it is taken
-        # before the runtime facts and then still subject to them.
-        declared = pinned
-    risk = task.get("risk", "MEDIUM")
-    role = task.get("role", "")
-    surface = task.get("coupled_surface")
+def resolve_execution(project, graph, task, declared, running):
+    """(mode, why) for how the task runs. Nothing here decides *where*.
 
-    siblings = [t for t in graph.get("tasks", []) if t["id"] != task["id"]]
-    running = [t for t in siblings if t["state"] in ("assigned", "working", "review")]
-    surface_clash = [t for t in running if surface and t.get("coupled_surface") == surface]
+    Two facts overrule the declaration, and both are about whether the mode is
+    achievable at all rather than about collisions with other work: teams that
+    the platform will not spawn, and CRITICAL work sent where nobody is watching.
+    """
+    risk = task.get("risk", "MEDIUM")
 
     if declared == "team":
         ok, why = teams_available(project)
@@ -163,23 +150,45 @@ def resolve(project, graph, task):
             return "subagent", ("declared team, resolved to subagent: %s. Nothing in the "
                                 "lifecycle may depend on an experimental, interactive-only "
                                 "feature." % why)
+
+    if declared == "background" and risk == "CRITICAL":
+        return "subagent", ("declared background, resolved to subagent: CRITICAL work is not "
+                            "sent where nobody is watching.")
+
+    return declared, None
+
+
+def resolve_isolation(project, graph, task, execution, declared_iso, running):
+    """(isolation, why) for where the task runs. Nothing here changes the mode.
+
+    Every rule that used to return "worktree" lived in the execution resolver and
+    threw the mode away on the way past: a team that needed its own checkout came
+    back as "worktree", and nothing downstream could still tell it was a team.
+    They are the same rules, on the axis they were always about.
+    """
+    role = task.get("role", "")
+    surface = task.get("coupled_surface")
+    siblings = [t for t in graph.get("tasks", []) if t["id"] != task["id"]]
+    surface_clash = [t for t in running if surface and t.get("coupled_surface") == surface]
+
+    # A worktree protects files from another writer. A role that writes nothing
+    # another role touches is protected from nobody, and the isolation is pure
+    # cost -- including the briefing that an isolated spawn does not receive.
+    if declared_iso == "worktree" and not role_can_write(role):
+        return "shared-checkout", ("declared worktree, resolved to shared-checkout: %s writes "
+                                   "nothing a worktree would protect, so there is nothing to "
+                                   "isolate." % role)
+
+    if execution == "team":
         # Teammates are not worktree-isolated -- the documentation is explicit
         # that two of them editing one file overwrite each other, and that the
         # only remedy is partitioning the work by file. Where the pieces have
         # said which files they own, that can be checked rather than trusted.
         clash = overlapping_paths(task, siblings)
         if clash:
-            return "worktree", ("declared team, resolved to worktree: %s. Teammates share one "
-                                "checkout, so two of them editing one file overwrite each "
-                                "other." % clash)
-
-    if declared == "worktree" and not role_can_write(role):
-        return "subagent", ("declared worktree, resolved to subagent: %s writes nothing a worktree "
-                            "would protect, so there is nothing to isolate." % role)
-
-    if declared == "background" and risk == "CRITICAL":
-        return "subagent", ("declared background, resolved to subagent: CRITICAL work is not "
-                            "sent where nobody is watching.")
+            return "worktree", ("%s. Teammates share one checkout, so two of them editing one "
+                                "file overwrite each other. The task stays a team; only its "
+                                "checkout changes." % clash)
 
     if surface_clash:
         return "worktree", ("a sibling holds the %s surface (%s), so this is isolated rather "
@@ -187,22 +196,60 @@ def resolve(project, graph, task):
                             "becomes an explicit step."
                             % (surface, ", ".join(t["id"] for t in surface_clash)))
 
-    if declared in ("inline", "subagent") and running and role_can_write(role):
+    if execution in ("inline", "subagent") and running and role_can_write(role):
         return "worktree", ("%d task(s) already running and %s writes files. Parallel writers in "
                             "one checkout produce a build output nobody owns."
                             % (len(running), role))
 
-    if pinned and pinned == declared:
-        return declared, ("the project pinned %s for stage %s in ai.execution_overrides"
-                          % (declared, task.get("stage")))
-    return declared, "no fact overruled the stage's recommendation"
+    return declared_iso, None
+
+
+def resolve(project, graph, task):
+    """(execution, isolation, why). Two dimensions, resolved separately.
+
+    The signature used to be (mode, why) with `worktree` among the modes, which
+    is why three rules could isolate a task and silently demote it to a subagent
+    at the same time.
+    """
+    # Through the accessor, not the raw field. Since v0.23 `execution` is an
+    # object on any task that came from a decomposition, and reading it directly
+    # made `declared` a dict: no rule matched, the dict was returned as the mode,
+    # and writing it back failed schema validation inside a try/except -- so
+    # execution resolution silently did not apply to decomposed tasks at all.
+    declared = W.declared_execution(task)
+    declared_iso = W.declared_isolation(task)
+    pinned = project_override(project, task.get("stage"))
+    if pinned and pinned != declared:
+        # The project knows things the workflow author did not: how big the team
+        # is, what the change actually costs. A pin is a decision, so it is taken
+        # before the runtime facts and then still subject to them.
+        declared = pinned
+
+    running = [t for t in graph.get("tasks", [])
+               if t["id"] != task["id"] and t["state"] in ("assigned", "working", "review")]
+
+    execution, exec_why = resolve_execution(project, graph, task, declared, running)
+    isolation, iso_why = resolve_isolation(project, graph, task, execution, declared_iso, running)
+
+    reasons = [r for r in (exec_why, iso_why) if r]
+    if not reasons:
+        if pinned and pinned == declared:
+            reasons = ["the project pinned %s for stage %s in ai.execution_overrides"
+                       % (declared, task.get("stage"))]
+        else:
+            reasons = ["no fact overruled the stage's recommendation"]
+    return execution, isolation, "; ".join(reasons)
 
 
 # An isolated spawn does not receive SubagentStart's additionalContext -- verified
 # against 2.1.241 and recorded in platform-capabilities.json. The briefing this
 # plugin exists to deliver silently does not arrive, so the resolver has to say
 # that the briefing must travel in the spawn prompt instead.
-ISOLATING = ("worktree",)
+#
+# These are isolation values now, not execution modes. `remote` is listed because
+# a remote environment is at least as isolated as a worktree; nothing here has
+# ever run one, and the capability model says so.
+ISOLATING = ("worktree", "remote")
 
 
 def record_resolution(project, wid, task, graph=None):
@@ -217,10 +264,11 @@ def record_resolution(project, wid, task, graph=None):
     graph = graph if graph is not None else W.load_graph(project, wid)
     if graph is None:
         return None
-    mode, why = resolve(project, graph, task)
+    mode, isolation, why = resolve(project, graph, task)
     W.set_execution(task, resolved=mode, resolution_reason=why, resolved_at=W.now(),
-                    briefing_required=mode in ISOLATING)
-    return mode, why
+                    briefing_required=isolation in ISOLATING)
+    W.set_isolation(task, resolved=isolation, resolution_reason=why, resolved_at=W.now())
+    return mode, isolation, why
 
 
 def main():
@@ -247,12 +295,15 @@ def main():
 
     out = []
     for t in tasks:
+        declared, declared_iso = W.declared_execution(t), W.declared_isolation(t)
         if args.record:
-            mode, why = record_resolution(project, args.item, t, graph)
+            mode, isolation, why = record_resolution(project, args.item, t, graph)
         else:
-            mode, why = resolve(project, graph, t)
-        out.append({"task": t["id"], "declared": t.get("execution", "subagent"),
-                    "resolved": mode, "changed": mode != t.get("execution", "subagent"),
+            mode, isolation, why = resolve(project, graph, t)
+        out.append({"task": t["id"],
+                    "execution": {"declared": declared, "resolved": mode},
+                    "isolation": {"declared": declared_iso, "resolved": isolation},
+                    "changed": mode != declared or isolation != declared_iso,
                     "why": why})
 
     if args.record:
@@ -261,11 +312,16 @@ def main():
     if args.json:
         print(json.dumps(out, indent=2))
     else:
-        print("%-7s %-14s %-14s %s" % ("TASK", "DECLARED", "RESOLVED", "WHY"))
+        # Two columns, because one column is how `worktree` came to be an
+        # execution mode: there was nowhere to print the other answer.
+        print("%-7s %-22s %-26s %s" % ("TASK", "EXECUTION", "ISOLATION", "WHY"))
         for r in out:
-            mark = "->" if r["changed"] else "  "
-            print("%-7s %-14s %s %-12s %s"
-                  % (r["task"], r["declared"], mark, r["resolved"], r["why"][:70]))
+            ex, iso = r["execution"], r["isolation"]
+            exs = ("%s -> %s" % (ex["declared"], ex["resolved"])
+                   if ex["declared"] != ex["resolved"] else ex["declared"])
+            isos = ("%s -> %s" % (iso["declared"], iso["resolved"])
+                    if iso["declared"] != iso["resolved"] else iso["declared"])
+            print("%-7s %-22s %-26s %s" % (r["task"], exs, isos, r["why"][:60]))
     return 0
 
 

@@ -181,11 +181,19 @@ def resolve_and_record(project, wid, task, agent_id=None):
         observe_actual(project, wid, live, agent_id)
         W.save_graph(project, graph)
         task["execution"] = live["execution"]
+        if live.get("isolation") is not None:
+            task["isolation"] = live["isolation"]
 
-        mode, why = result
-        if mode != W.declared_execution(live):
+        mode, isolation, why = result
+        # Two dimensions, so two things can have been overruled. Recording only
+        # the mode was how a task isolated into its own checkout left no trace of
+        # having been isolated -- the reason went into the execution record and
+        # the decision itself went nowhere.
+        if mode != W.declared_execution(live) or isolation != W.declared_isolation(live):
             W.record(project, wid, "execution_resolved", task=task["id"],
-                     declared=W.declared_execution(live), resolved=mode, why=why)
+                     declared=W.declared_execution(live), resolved=mode,
+                     declared_isolation=W.declared_isolation(live),
+                     resolved_isolation=isolation, why=why)
         return result
     except Exception as exc:
         # A resolver that breaks a spawn is worse than a spawn that runs as

@@ -1,0 +1,80 @@
+{
+  "id": "EVAL-ORG-014",
+  "suite": "organization-evaluation",
+  "subject": "execution and isolation as separate dimensions",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "major",
+  "scenario": "How a task runs and where it runs are different questions, and for eleven versions they shared one field. `worktree` sat in the execution enum next to `inline` and `subagent`, so all three resolver rules that isolate a task returned it as a mode -- and each threw the real mode away. A team that needed its own checkout resolved to `worktree`, and every consumer downstream read a subagent where a team was running. The structure is bypassed by merging them again: putting a place back in the execution enum, or writing an isolation rule inside the execution resolver so it returns a mode. Failure looks like: `worktree` reappears as an execution value. A resolution rule declares no dimension, so nothing checks which axis it is implemented on. team+worktree stops being expressible.",
+  "expected_behaviors": [
+    "The execution enum contains no isolation value, and the isolation enum contains no execution value.",
+    "Every resolution rule declares which dimension it answers, and is implemented in that dimension's resolver.",
+    "The resolver returns both answers, and neither overrules the other.",
+    "team+worktree is written down as a real combination: isolating a team does not stop it being a team.",
+    "A task written before the split still reads correctly, because `worktree` is translated rather than rejected."
+  ],
+  "failure_conditions": [
+    "`worktree` is added back to the execution enum.",
+    "An isolation rule is implemented inside the execution resolver, so isolating a task changes how it runs.",
+    "A resolution rule carries no dimension, so it can be implemented on the wrong axis unnoticed.",
+    "The isolation default stops being shared-checkout, making every worker pay for a checkout."
+  ],
+  "checks": [
+    {
+      "type": "file_not_contains",
+      "file": "policies/execution-policy.json",
+      "pattern": "\"execution\": \\[[^\\]]*\"worktree\"",
+      "description": "No place in the execution dimension."
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/execution-policy.json",
+      "path": "dimensions.isolation",
+      "value": "worktree"
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/execution-policy.json",
+      "path": "dimensions.isolation",
+      "value": "remote"
+    },
+    {
+      "type": "json_path_contains",
+      "file": "policies/execution-policy.json",
+      "path": "dimensions.execution",
+      "value": "team"
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/execution-policy.json",
+      "path": "isolation.default",
+      "value": "shared-checkout",
+      "description": "Making every worker pay for a checkout by default is a cost, not a safety property."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/resolve_execution.py",
+      "pattern": "def resolve_isolation\\(",
+      "description": "Isolation has its own resolver; the rules that isolate a task no longer live in the one that decides how it runs."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/resolve_execution.py",
+      "pattern": "The task stays a team",
+      "description": "The case the split exists for."
+    },
+    {
+      "type": "file_contains",
+      "file": "schemas/task-graph.schema.json",
+      "pattern": "\"shared-checkout\"",
+      "description": "The graph can record where a task ran, not only how."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/lib/workitem.py",
+      "pattern": "LEGACY_EXECUTION = \\{\"worktree\"",
+      "description": "A graph written before the split still reads: worktree becomes subagent in its own checkout rather than a value the enum no longer has."
+    }
+  ],
+  "notes": "The behavioural half is in tests/test_execution_resolver.py, which drives the resolver with teams genuinely available and asserts that an overlapping team resolves to team+worktree. Its old name was test_an_overlapping_team_becomes_a_worktree -- the conflation written down as a requirement."
+}

@@ -43,7 +43,17 @@ class Resolver(unittest.TestCase):
              "--project", self.project, "--item", "SFTP-FEAT-001", "--all", "--json"],
             capture_output=True, text=True, env=env, timeout=120)
         self.assertEqual(proc.returncode, 0, proc.stderr[-300:])
-        return {r["task"]: r for r in json.loads(proc.stdout)}
+        out = {}
+        for r in json.loads(proc.stdout):
+            # Flattened for the assertions, which mostly care about one axis at a
+            # time. Both are kept, because a test that can only see one of them is
+            # how the two were conflated for eleven versions.
+            out[r["task"]] = dict(r,
+                                  resolved=r["execution"]["resolved"],
+                                  declared=r["execution"]["declared"],
+                                  isolation=r["isolation"]["resolved"],
+                                  declared_isolation=r["isolation"]["declared"])
+        return out
 
     def graph(self):
         return W.load_graph(self.project, "SFTP-FEAT-001")
@@ -101,28 +111,38 @@ class TestDegradation(Resolver):
 
 class TestIsolationIsNotFree(Resolver):
     def test_a_reviewer_with_no_write_tools_is_not_isolated(self):
-        """A worktree protects files the role could not have touched."""
+        """A worktree protects files the role could not have touched.
+
+        The mode is untouched by this. Before the split the same rule returned
+        `subagent` as an *execution* answer, so declining to isolate a reviewer
+        and demoting a reviewer's spawn were the same event."""
         g = self.graph()
         t = next(x for x in g["tasks"] if x["role"] == "code-reviewer")
-        t["execution"] = "worktree"
+        t["isolation"] = "worktree"
+        t["execution"] = "subagent"
         W.save_graph(self.project, g)
         r = self.resolved()[t["id"]]
-        self.assertEqual(r["resolved"], "subagent")
+        self.assertEqual(r["isolation"], "shared-checkout")
+        self.assertEqual(r["resolved"], "subagent", "the mode was not the question")
         self.assertIn("writes nothing a worktree", r["why"])
 
     def test_a_writer_alongside_a_running_sibling_is_isolated(self):
         g = self.graph()
         writer = next(x for x in g["tasks"] if x["role"] == "development-lead")
+        declared = W.declared_execution(writer)
         other = next(x for x in g["tasks"] if x["id"] != writer["id"])
         other["state"] = "working"
         W.save_graph(self.project, g)
-        self.assertEqual(self.resolved()[writer["id"]]["resolved"], "worktree")
+        r = self.resolved()[writer["id"]]
+        self.assertEqual(r["isolation"], "worktree")
+        self.assertEqual(r["resolved"], declared,
+                         "isolating a task must not silently change how it runs")
 
     def test_a_writer_alone_is_not_isolated(self):
         g = self.graph()
         writer = next(x for x in g["tasks"] if x["role"] == "development-lead")
         W.save_graph(self.project, g)
-        self.assertNotEqual(self.resolved()[writer["id"]]["resolved"], "worktree")
+        self.assertEqual(self.resolved()[writer["id"]]["isolation"], "shared-checkout")
 
     def test_two_tasks_on_one_surface_are_isolated_rather_than_sequenced(self):
         """The parallelism survives and the integration becomes an explicit step."""
@@ -136,7 +156,7 @@ class TestIsolationIsNotFree(Resolver):
         b["state"] = "working"
         W.save_graph(self.project, g)
         r = self.resolved()[a["id"]]
-        self.assertEqual(r["resolved"], "worktree")
+        self.assertEqual(r["isolation"], "worktree")
         self.assertIn("database-schema", r["why"])
 
 
@@ -219,9 +239,19 @@ class TestResolutionIsOnTheLivePath(unittest.TestCase):
 
     def test_declared_and_effective_are_different_questions(self):
         t = self.held(self.start("engineering-director"))
-        W.set_execution(t, resolved="worktree")
+        W.set_execution(t, resolved="subagent")
         self.assertEqual(W.declared_execution(t), t["execution"]["declared"])
-        self.assertEqual(W.effective_execution(t), "worktree")
+        self.assertEqual(W.effective_execution(t), "subagent")
+
+    def test_a_legacy_worktree_is_read_as_a_subagent_in_its_own_checkout(self):
+        """`worktree` was an execution mode until 0.37 and is written into graphs
+        that already exist. Reading it as a mode now would make every one of those
+        tasks resolve to a value the enum no longer has."""
+        t = self.held(self.start("engineering-director"))
+        W.set_execution(t, resolved="worktree")
+        self.assertEqual(W.effective_execution(t), "subagent")
+        self.assertEqual(W.effective_isolation(t), "worktree")
+        self.assertNotIn("worktree", t["execution"].values())
 
     def test_an_isolated_resolution_flags_that_the_briefing_will_not_arrive(self):
         """An isolated spawn receives no additionalContext, so the task briefing
@@ -229,10 +259,13 @@ class TestResolutionIsOnTheLivePath(unittest.TestCase):
         graph = W.load_graph(self.project, "SFTP-FEAT-001")
         t = graph["tasks"][0]
         import resolve_execution
-        W.set_execution(t, declared="worktree")
+        W.set_isolation(t, declared="worktree")
         t["role"] = "backend-developer"
         resolve_execution.record_resolution(self.project, "SFTP-FEAT-001", t, graph)
-        if t["execution"]["resolved"] == "worktree":
+        # The flag belongs to the isolation, not to the mode: it is the checkout
+        # that costs the briefing. Keying it off the execution mode was only
+        # possible while `worktree` pretended to be one.
+        if W.effective_isolation(t) == "worktree":
             self.assertTrue(t["execution"]["briefing_required"])
         else:
             self.assertFalse(t["execution"]["briefing_required"])
@@ -283,7 +316,7 @@ class TestResolutionAppliesToDecomposedTasks(unittest.TestCase):
         import resolve_execution
         graph, child = self.child()
         self.assertIsInstance(child["execution"], dict, "the fixture is not exercising the case")
-        mode, why = resolve_execution.resolve(self.project, graph, child)
+        mode, _isolation, why = resolve_execution.resolve(self.project, graph, child)
         self.assertIsInstance(mode, str)
         self.assertIn(mode, ("inline", "subagent", "background", "team", "worktree",
                              "dynamic-workflow"))
@@ -375,13 +408,40 @@ class TestTheTeamBranchActuallyUsesTheOverlapCheck(unittest.TestCase):
              "execution": "team", "risk": "HIGH", "owns_paths": list(mine)},
         ]}
 
-    def test_an_overlapping_team_becomes_a_worktree(self):
+    def test_an_overlapping_team_stays_a_team_and_gets_its_own_checkout(self):
+        """The case the split exists for.
+
+        The old name for this test was `test_an_overlapping_team_becomes_a_worktree`,
+        which is the conflation written down as a requirement. `worktree` was an
+        execution mode, so the only way to isolate a team was to stop calling it
+        one — and everything downstream then read a subagent where a team was
+        running.
+        """
         graph = self.graph_with(["src/api/handler.py"], ["src/api/handler.py"])
-        mode, why = self.R.resolve(self.project, graph, graph["tasks"][1])
-        self.assertEqual(mode, "worktree")
+        mode, isolation, why = self.R.resolve(self.project, graph, graph["tasks"][1])
+        self.assertEqual(mode, "team", "isolating a team must not stop it being a team")
+        self.assertEqual(isolation, "worktree")
         self.assertIn("overwrite", why)
 
-    def test_a_disjoint_team_stays_a_team(self):
+    def test_a_disjoint_team_stays_a_team_in_the_shared_checkout(self):
         graph = self.graph_with(["src/a.py"], ["src/b.py"], sibling_state="queued")
-        mode, _ = self.R.resolve(self.project, graph, graph["tasks"][1])
+        mode, isolation, _ = self.R.resolve(self.project, graph, graph["tasks"][1])
         self.assertEqual(mode, "team")
+        self.assertEqual(isolation, "shared-checkout")
+
+    def test_the_two_dimensions_resolve_independently(self):
+        """Every combination the brief names has to be reachable. A dimension that
+        can only take one value when the other changes is not a dimension."""
+        seen = set()
+        for mine, theirs, state in ((["src/a.py"], ["src/b.py"], "queued"),
+                                    (["src/a.py"], ["src/a.py"], "working")):
+            graph = self.graph_with(mine, theirs, sibling_state=state)
+            for declared in ("inline", "subagent", "team"):
+                graph["tasks"][1]["execution"] = declared
+                mode, isolation, _ = self.R.resolve(self.project, graph, graph["tasks"][1])
+                seen.add((mode, isolation))
+        self.assertIn(("team", "worktree"), seen)
+        self.assertIn(("team", "shared-checkout"), seen)
+        self.assertIn(("subagent", "shared-checkout"), seen)
+        self.assertTrue(any(iso == "worktree" and mode != "team" for mode, iso in seen),
+                        "no non-team mode reached worktree: %s" % sorted(seen))

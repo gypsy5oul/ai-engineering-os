@@ -45,7 +45,8 @@ DOC = "docs/execution.md"
 
 class TestIsolationPolicy(unittest.TestCase):
     def setUp(self):
-        self.isolation = load_json(POLICY).get("isolation")
+        self.policy = load_json(POLICY)
+        self.isolation = self.policy.get("isolation")
 
     def test_the_policy_declares_isolation_at_all(self):
         self.assertIsNotNone(self.isolation,
@@ -55,13 +56,43 @@ class TestIsolationPolicy(unittest.TestCase):
                          "isolation must default to the shared checkout: making every worker pay "
                          "for a checkout by default is a cost, not a safety property")
 
-    def test_both_modes_exist_and_say_when_to_use_them(self):
+    def test_every_mode_exists_and_says_when_to_use_it(self):
         modes = self.isolation.get("modes", {})
-        self.assertEqual(set(modes), {"shared-checkout", "worktree"})
+        self.assertEqual(set(modes), {"shared-checkout", "worktree", "remote"})
         for name, mode in modes.items():
             with self.subTest(mode=name):
                 self.assertTrue(mode.get("meaning"), "%s has no meaning" % name)
                 self.assertTrue(mode.get("use_when"), "%s says nothing about when to use it" % name)
+
+    def test_remote_says_it_has_never_run_here(self):
+        """It is in the enum because the platform has it, and a resolver that cannot
+        name a mode has to call it something else -- which is the mistake the
+        execution/isolation split exists to correct. A mode nothing has ever run
+        that does not say so is a claim."""
+        remote = self.isolation["modes"]["remote"]
+        self.assertIn("Never run here", remote.get("status", ""))
+
+    def test_the_two_dimensions_are_declared_as_separate(self):
+        """The schema, the policy and the resolver all have to agree that these are
+        different questions, or one of them quietly merges them again."""
+        dims = self.policy.get("dimensions")
+        self.assertTrue(dims, "the policy does not declare its dimensions")
+        self.assertNotIn("worktree", dims["execution"],
+                         "worktree is a place, not a way of running")
+        self.assertNotIn("subagent", dims["isolation"])
+        self.assertEqual(set(dims["isolation"]), set(self.isolation["modes"]))
+
+    def test_every_combination_the_split_makes_possible_is_written_down(self):
+        """Including team+worktree, which could not be expressed at all before: the
+        only way to isolate a team was to stop calling it one."""
+        combos = {(c["execution"], c["isolation"])
+                  for c in self.policy["dimensions"]["combinations"]}
+        for pair in (("team", "worktree"), ("team", "shared-checkout"),
+                     ("subagent", "worktree"), ("inline", "shared-checkout"),
+                     ("background", "worktree")):
+            self.assertIn(pair, combos)
+        for c in self.policy["dimensions"]["combinations"]:
+            self.assertTrue(c.get("means"), "%s has no explanation" % (c,))
 
     def test_worktree_names_all_three_ways_the_platform_offers(self):
         how = self.isolation["modes"]["worktree"]["how"]
