@@ -166,6 +166,79 @@ cycle has no independent check at all. `check_cycle.py` fails otherwise.
 because there is no third security reader. Mutual review requires at least two
 workers, and the reviewer of an item is never that item's own worker.
 
+## Intensity: how much of the cycle a task walks
+
+The cycle above is correct and it is not free. Worker, self-check, peer review,
+lead review, rollup, acceptance is the right shape for a novel change to a
+coupled surface. It is what a two-predicate intake step with no reviewer, no gate
+and no artifact used to get as well, because the cycle had one path and every
+task walked all of it.
+
+**Intensity selects a path through the cycle that already exists.** It does not
+define four cycles — four machines would be four things to keep in step.
+
+| Level | Path | Skips |
+| --- | --- | --- |
+| `MICRO` | worker → self-check → done | `PEER_REVIEW`, `LEAD_REVIEW` |
+| `STANDARD` | worker → self-check → peer review → done | `LEAD_REVIEW` |
+| `COMPLEX` | worker → self-check → peer → lead → rollup → done | — |
+| `CRITICAL` | everything COMPLEX has, plus the human approval its stage names | — |
+
+`SELF_VALIDATION`, `ACCEPTANCE_REQUESTED` and `ACCEPTED` are never skippable.
+The first costs one agent and is the cheapest thing in the cycle; the other two
+are where the definition of done is evaluated, and **no level changes what the
+work has to satisfy**. What intensity removes is a second and a third reader.
+
+### It resolves from facts, and only upward
+
+Eight signals, in `policies/workflow-intensity.json`. Each can only **raise** the
+level. A model choosing how much review its own work gets is the failure this
+would otherwise introduce; signals that can only raise make the level an
+observation rather than an argument.
+
+| Signal | Effect |
+| --- | --- |
+| CRITICAL risk | forces `CRITICAL`, and nothing may lower it |
+| HIGH risk | at least `COMPLEX` |
+| novel complexity | at least `COMPLEX` |
+| deploys, authorizes, migrates, releases | forces `CRITICAL` — ceremony after the fact is not review |
+| incident, release or migration work item | at least `COMPLEX` |
+| holds a coupled surface | at least `COMPLEX` — the review that matters sees the consumers |
+| names a reviewer, or the DoD contains `agent_verdict` | at least `STANDARD` |
+| the DoD contains `human_approval_recorded` | at least `COMPLEX` |
+
+`MICRO` is reached by passing a test, not by being declared — otherwise it would
+be unreachable, since nothing lowers. The test is a conjunction of negatives: LOW
+risk, routine, no reviewer, no human gate, no coupled surface, produces nothing
+another stage consumes, and few enough predicates. It can only apply to a task
+every raising signal stayed silent on.
+
+### What it does not do
+
+**It does not weaken independent review.** That is the obvious objection and it
+has a specific answer: intensity controls the depth applied to **one task**, and
+the department cycle's own acceptance conditions still require an independent
+verdict on the **department's output**. A `MICRO` task rolls up into a cycle that
+gets peer-reviewed as a whole.
+
+One floor needs no enforcement at all. A task whose definition of done contains
+`agent_verdict` cannot be `MICRO`, because a path where nobody produces a verdict
+cannot satisfy a predicate that demands one. The policy and the checker cannot
+disagree, because the checker decides.
+
+### On a real feature
+
+Resolved against the shipped `WF-FEATURE`, fifteen tasks:
+
+```
+MICRO 1   STANDARD 4   COMPLEX 7   CRITICAL 3
+```
+
+Four tasks skip a lead review that bought nothing; one skips both readers. The
+seven COMPLEX and three CRITICAL tasks are untouched, which is the point — the
+level exists so the others can be cheaper without an argument about whether
+they should be.
+
 ## Why the peer reviewer sits between worker and lead
 
 Without it, every finding reaches the lead and the lead becomes the bottleneck —

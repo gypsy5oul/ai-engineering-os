@@ -173,7 +173,9 @@
     "A macro stage with a department_cycle cannot reach its definition of done without cycle_accepted().",
     "ACCEPTED requires every item in the set to have reached READY_FOR_INTEGRATION.",
     "An escalation records what was tried at each level below it.",
-    "Withdrawal is not acceptance. ESCALATED --withdrawn--> WITHDRAWN is terminal and records that the work item was dropped; it asserts nothing about the acceptance conditions. The edge previously led to ACCEPTED, which let a cancelled item satisfy a stage's definition of done without a single predicate being evaluated."
+    "Withdrawal is not acceptance. ESCALATED --withdrawn--> WITHDRAWN is terminal and records that the work item was dropped; it asserts nothing about the acceptance conditions. The edge previously led to ACCEPTED, which let a cancelled item satisfy a stage's definition of done without a single predicate being evaluated.",
+    "Intensity never removes a state whose absence would make the cycle's acceptance conditions unsatisfiable. PEER_REVIEW and LEAD_REVIEW are the only skippable states, and a task whose own definition of done demands an independent verdict cannot skip the review that produces one.",
+    "An agent never chooses its own intensity. It is resolved from facts at plan time and recorded on the task with the signal that set it."
   ],
   "autonomy_principle": {
     "statement": "The operational manager of a department is an agent. The human is the governance owner, not the departmental manager.",
@@ -213,5 +215,29 @@
     },
     "rule": "Exactly one stage per workflow per cycle carries role 'completes'.",
     "found_by": "scripts/simulate_sdlc.py, which ran WF-INCIDENT end to end and could not satisfy cycle_accepted(CYCLE-SRE) at the EVIDENCE stage - correctly, because SRE's work concludes at RCA."
+  },
+  "intensity": {
+    "description": "How much of this cycle a given work item walks. The states below are the full path; intensity chooses which of them a task is required to pass through. It selects a path through the machine that already exists rather than defining a second machine, because four cycles would be four things to keep in step.",
+    "levels_defined_in": "policies/workflow-intensity.json",
+    "resolved_by": "scripts/resolve_intensity.py, at plan time and again on replan",
+    "skippable": [
+      "PEER_REVIEW",
+      "LEAD_REVIEW"
+    ],
+    "never_skippable": [
+      "ASSIGNED",
+      "IN_PROGRESS",
+      "SELF_VALIDATION",
+      "READY_FOR_INTEGRATION",
+      "ACCEPTANCE_REQUESTED",
+      "ACCEPTED"
+    ],
+    "why_those": "SELF_VALIDATION is the worker checking its own work, which costs one agent and is the cheapest thing in the cycle. ACCEPTANCE_REQUESTED and ACCEPTED are where the definition of done is evaluated, and no level changes what the work has to satisfy. What intensity can remove is a second and a third reader.",
+    "what_it_does_not_change": [
+      "The cycle's acceptance conditions. A MICRO task still belongs to a cycle whose output is independently reviewed before the cycle is accepted -- intensity reduces per-task ceremony, not the department's independent check.",
+      "Any definition-of-done predicate on the task itself.",
+      "The rework limit, the escalation order or the rollup."
+    ],
+    "the_mechanical_floor": "A task whose definition of done contains agent_verdict cannot be MICRO, and this needs no enforcement: a path where nobody produces a verdict cannot satisfy a predicate that demands one. The policy and the checker cannot disagree because the checker decides."
   }
 }

@@ -1,0 +1,124 @@
+{
+  "version": "1",
+  "description": "How much organization a piece of work gets. The department cycle is correct and it is not free: worker, self-check, peer review, lead review, rollup, acceptance is the right shape for a novel change to a coupled surface and pure overhead for a one-line correction to a document nobody depends on. Intensity selects a path through the cycle that already exists. It does not create four cycles.",
+  "what_this_is_not": [
+    "Not a way to skip independent review. Intensity controls the depth applied to one task; the department cycle's own acceptance conditions still require an independent verdict on the department's output, and no level changes them. A MICRO task rolls up into a cycle that gets peer-reviewed as a whole.",
+    "Not a discount for risky work. Every floor below raises intensity and none lowers it, so the signals can only ever add ceremony to work that turns out to need it.",
+    "Not a judgement about the worker. A MICRO task is a small task, not a trusted one."
+  ],
+  "levels": {
+    "MICRO": {
+      "path": ["ASSIGNED", "IN_PROGRESS", "SELF_VALIDATION", "READY_FOR_INTEGRATION",
+               "ACCEPTANCE_REQUESTED", "ACCEPTED"],
+      "skips": ["PEER_REVIEW", "LEAD_REVIEW"],
+      "means": "The worker does it and validates it. Nobody else looks at this task on its own; the department's output is still reviewed before the cycle is accepted.",
+      "use_when": "A change whose failure mode is visible in the work itself: a document correction, a recorded skip, a discovery step that produces no artifact anyone depends on.",
+      "cost": "One agent, one pass."
+    },
+    "STANDARD": {
+      "path": ["ASSIGNED", "IN_PROGRESS", "SELF_VALIDATION", "PEER_REVIEW",
+               "READY_FOR_INTEGRATION", "ACCEPTANCE_REQUESTED", "ACCEPTED"],
+      "skips": ["LEAD_REVIEW"],
+      "means": "An independent peer reads it. The lead does not re-review what the peer already read.",
+      "use_when": "The ordinary case. Anything producing an artifact another stage consumes.",
+      "cost": "Two agents."
+    },
+    "COMPLEX": {
+      "path": ["ASSIGNED", "IN_PROGRESS", "SELF_VALIDATION", "PEER_REVIEW", "LEAD_REVIEW",
+               "READY_FOR_INTEGRATION", "ACCEPTANCE_REQUESTED", "ACCEPTED"],
+      "skips": [],
+      "means": "Peer review for detail, lead review for adherence and integration, and the rollup the head reads.",
+      "use_when": "Work the lead has to integrate with other work, or that changes a shape the department owns.",
+      "cost": "Three agents, plus the rollup."
+    },
+    "CRITICAL": {
+      "path": ["ASSIGNED", "IN_PROGRESS", "SELF_VALIDATION", "PEER_REVIEW", "LEAD_REVIEW",
+               "READY_FOR_INTEGRATION", "ACCEPTANCE_REQUESTED", "ACCEPTED"],
+      "skips": [],
+      "adds": ["specialist review routed by policies/review-routing.json",
+               "the human approval its stage names, which no agent verdict satisfies"],
+      "means": "Everything COMPLEX has, and the governance the approval policy requires. The depth is not the point here; the named human is.",
+      "use_when": "CRITICAL risk, production mutation, a security or authorization boundary, an irreversible act.",
+      "cost": "Highest, and correct. This level exists so the others can be cheaper without argument."
+    }
+  },
+  "order": ["MICRO", "STANDARD", "COMPLEX", "CRITICAL"],
+  "default": "STANDARD",
+  "why_the_default_is_standard": "A default of MICRO makes every unconsidered task unreviewed, and a default of COMPLEX makes the model pay for a lead on work nobody needs to integrate. STANDARD is the level whose absence is a real gap and whose presence is rarely waste.",
+  "signals": [
+    {
+      "id": "IN-01",
+      "signal": "risk",
+      "reads": "the task's risk, or its stage's",
+      "effect": "CRITICAL risk forces CRITICAL. HIGH raises the floor to COMPLEX.",
+      "why": "Risk is the organization's own statement about what failure costs, made before the work started. Letting a later signal lower it would make the tier decorative."
+    },
+    {
+      "id": "IN-02",
+      "signal": "complexity",
+      "reads": "the stage's declared complexity: routine, complex or novel",
+      "effect": "novel raises the floor to COMPLEX. routine permits MICRO where nothing else objects.",
+      "why": "Novel work is where a lead's integration view is worth most, because nobody has done it before and the shape is still being decided."
+    },
+    {
+      "id": "IN-03",
+      "signal": "reversibility",
+      "reads": "whether the stage deploys, promotes, migrates or authorizes",
+      "effect": "an irreversible act forces CRITICAL.",
+      "why": "Ceremony after the fact is not review. The only place depth is worth its cost unconditionally is where the change cannot be taken back."
+    },
+    {
+      "id": "IN-04",
+      "signal": "change_type",
+      "reads": "the work item's type",
+      "effect": "incident, release and migration raise the floor to COMPLEX.",
+      "why": "These are the three types where the cost of being wrong is paid by somebody other than the author, and where the lead's integration view is the whole point."
+    },
+    {
+      "id": "IN-05",
+      "signal": "blast_radius",
+      "reads": "whether the task holds a coupled surface, per policies/coupling-policy.json",
+      "effect": "raises the floor to COMPLEX.",
+      "why": "A coupled surface has one owner and several consumers. The review that matters is the one that sees the consumers, which is the lead's."
+    },
+    {
+      "id": "IN-06",
+      "signal": "task_size",
+      "reads": "the number of predicates in the task's definition of done",
+      "effect": "a task with more than six predicates cannot be MICRO.",
+      "why": "A proxy, and named as one. Predicate count is not size; it is the only size-shaped number available before the work is done, and it is a floor rather than a ceiling so a wrong reading costs ceremony rather than review."
+    },
+    {
+      "id": "IN-07",
+      "signal": "agent_gate",
+      "reads": "whether the task names a reviewer, or its definition of done contains agent_verdict",
+      "effect": "raises the floor to STANDARD.",
+      "why": "The mechanical one. A definition of done that demands an independent verdict cannot be satisfied by a path that has nobody produce one, so MICRO is not merely discouraged here -- it is unreachable, and the predicate would refuse it anyway."
+    },
+    {
+      "id": "IN-08",
+      "signal": "human_gate",
+      "reads": "whether the stage names a human approval, or its definition of done contains human_approval_recorded",
+      "effect": "raises the floor to COMPLEX.",
+      "why": "Work a named human has to approve is not work the organization was treating as trivial."
+    }
+  ],
+  "resolution": {
+    "rule": "Start at the stage's declared intensity or the default. Apply every signal. Each one can only raise. The result is the highest floor any signal set.",
+    "why_only_raise": "A model choosing how much review its own work gets is the failure this policy would otherwise introduce. Signals that could lower would make the level an argument; signals that only raise make it an observation.",
+    "resolved_by": "scripts/resolve_intensity.py, at plan time, and again on any replan.",
+    "recorded_on": "the task's `intensity` field, as declared and resolved, with the signal that set it."
+  },
+  "invariants": [
+    "No level removes a definition-of-done predicate. Intensity chooses who looks at the work, never what the work has to satisfy.",
+    "No level changes the department cycle's acceptance conditions. A MICRO task still belongs to a cycle whose output is independently reviewed before it is accepted.",
+    "MICRO is unreachable for any task whose definition of done contains agent_verdict or human_approval_recorded. The predicate refuses it, so the policy and the checker cannot disagree.",
+    "CRITICAL risk always resolves to CRITICAL, whatever else is true.",
+    "An agent never chooses its own intensity. It is resolved from facts at plan time and recorded."
+  ],
+  "not_enforceable": [
+    "Nothing makes an agent actually perform the review the level requires. The cycle states are a contract the model follows; what is mechanical is the acceptance condition at the end, which fails if the verdict it wants was never recorded.",
+    "Task size is read from predicate count, which is a proxy. A large task with a short definition of done reads as small.",
+    "Reversibility is inferred from what the stage does, not from what the change actually touches. A migration stage that only adds a nullable column is treated as irreversible."
+  ]
+}
