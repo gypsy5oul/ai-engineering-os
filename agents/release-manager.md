@@ -7,6 +7,7 @@ effort: high
 skills:
   - release-management
   - traceability
+  - engineering-simplicity
 color: yellow
 ---
 

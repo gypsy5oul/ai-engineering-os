@@ -11,6 +11,7 @@ skills:
   - database-design
   - technology-selection
   - task-synthesis
+  - engineering-simplicity
 color: cyan
 ---
 

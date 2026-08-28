@@ -438,7 +438,7 @@ python3 scripts/resolve_execution.py --project . --item ACME-FEAT-001 --all --re
 TASK    DECLARED       RESOLVED       WHY
 T-004   team        -> subagent       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS is not set
 T-009   subagent    -> worktree       a sibling holds the database-schema surface
-T-010   worktree    -> subagent       code-reviewer holds no write tools
+T-010   worktree    -> subagent       code-reviewer writes nothing a worktree protects
 ```
 
 The rules, in the order they apply:
@@ -446,7 +446,7 @@ The rules, in the order they apply:
 | Fact | Resolves to | Because |
 | --- | --- | --- |
 | Teams unavailable | `subagent` | Nothing in the lifecycle may depend on a feature that is still experimental and off by default |
-| Role holds no write tools | `subagent` | A worktree protects files the role could not have touched |
+| Role writes nothing a worktree would protect | `subagent` | A reviewer holds a write tool so it can record its verdict, and its scope is `docs/reviews/**` alone, which no other role writes to |
 | CRITICAL risk, declared background | `subagent` | The point of the tier is that somebody is watching; background is where nobody is |
 | A sibling holds the same coupled surface | `worktree` | The parallelism survives and integration becomes an explicit step |
 | Writes files, siblings running | `worktree` | Parallel writers in one checkout produce a build output nobody owns |

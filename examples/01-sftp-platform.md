@@ -95,7 +95,7 @@ boundary analysis adds two security requirements that become acceptance criteria
 partner credentials never reach application logs, and the audit log is
 append-only at the database level rather than by convention.
 
-`architecture-reviewer` — a different agent, with no write tools — reviews and
+`architecture-reviewer` — a different agent, which may write only its own review record — reviews and
 returns:
 
 > **Requirement coverage:** SFTP-REQ-001…004 covered. SFTP-NFR-001, 002, 003
@@ -208,7 +208,7 @@ proceeds through staging validation, human approval (AP-01), deployment by
 | Refusal on missing configuration | The stack is never inferred |
 | Refusal on an unquantified NFR | 99.9% is never invented |
 | Deliberate skip, recorded | UX, with a written reason |
-| Independent architecture review | Different agent, no write tools |
+| Independent architecture review | Different agent; its write scope is its own review record |
 | QA before code | Scenarios from requirements and threats |
 | Risk-based review routing | Four different reviewer sets |
 | Structural least privilege | Write scopes, not instructions |

@@ -43,6 +43,18 @@ Ownership, consistency model, migration and compatibility strategy, retention, d
 
 Ask what the design would look like at half the complexity, and whether a stated requirement would actually fail. If nothing would fail, the extra complexity is a finding.
 
+Then read the design's **complexity ledger** — the `complexity` field on the architecture artifact, one entry per component, boundary or dependency introduced. For each entry:
+
+- Is the simpler alternative named concretely enough to have been built? An unnamed alternative was never considered.
+- Does the rejection name a requirement identifier and a number, or only a feeling about scale?
+- Does the evidence reference exist, and does it say what the entry claims?
+- Does the arithmetic work? "40 jobs/s measured against 500 required" decides it; "would not scale" does not.
+- Is anything in the design missing from the ledger entirely?
+
+An entry that stands is not a finding. **Justified complexity passes** — this section is not a preference for the smaller design. An entry that does not stand, or an introduction with no entry at all, is a **major** finding: unrequested complexity that somebody will operate forever. The `engineering-simplicity` skill has the full rule and what does not count as evidence.
+
+An empty ledger on a design that genuinely introduces nothing is the right answer, not a gap.
+
 ## 7. Decisions
 
 Every significant choice has an ADR with real alternatives. An ADR whose alternatives are obviously straw arguments is a finding: the decision was made elsewhere and justified afterwards.

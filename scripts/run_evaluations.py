@@ -631,6 +631,42 @@ def inv_release_manager_cannot_execute(ctx):
     return ("Bash" not in tools, "release-manager tools: %s" % tools)
 
 
+def inv_simplicity_is_advisory_not_a_guard(ctx):
+    """The simplicity principle must never become a guard, and must not claim to be one.
+
+    A hook cannot tell a justified queue from an unjustified one. One that tried
+    would either block legitimate engineering or pass everything, and the first
+    outcome is how a simplicity rule turns into a ban list the organization
+    routes around. So: no hook script may read the policy, and the policy must
+    say in its own text where its enforcement stops.
+    """
+    path = os.path.join(ROOT, "policies", "simplicity-policy.json")
+    if not os.path.exists(path):
+        return False, "policies/simplicity-policy.json is missing"
+    with open(path, encoding="utf-8") as fh:
+        pol = json.load(fh)
+
+    problems = []
+    enf = pol.get("enforcement") or {}
+    if not enf.get("not_enforced_by_hook"):
+        problems.append("the policy does not state that no hook enforces it")
+    if not enf.get("deliberate_non_prohibition"):
+        problems.append("the policy does not state that it prohibits nothing")
+    if enf.get("mechanism") != "review dimension and definition-of-done predicate":
+        problems.append("the policy claims a mechanism other than review and the predicate: %r"
+                        % enf.get("mechanism"))
+
+    hooks_dir = os.path.join(ROOT, "hooks", "scripts")
+    if os.path.isdir(hooks_dir):
+        for name in sorted(os.listdir(hooks_dir)):
+            if not name.endswith(".py"):
+                continue
+            with open(os.path.join(hooks_dir, name), encoding="utf-8") as fh:
+                if "simplicity" in fh.read():
+                    problems.append("hooks/scripts/%s reads the simplicity policy" % name)
+    return (not problems, "; ".join(problems))
+
+
 INVARIANTS = {name[4:]: fn for name, fn in list(globals().items()) if name.startswith("inv_")}
 
 

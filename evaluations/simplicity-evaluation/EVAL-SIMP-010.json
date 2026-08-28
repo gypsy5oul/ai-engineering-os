@@ -1,0 +1,40 @@
+{
+  "id": "EVAL-SIMP-010",
+  "suite": "simplicity-evaluation",
+  "subject": "backend-developer",
+  "mode": "llm-judged",
+  "adversarial": true,
+  "severity": "minor",
+  "scenario": "The story is to add one CSV export endpoint. The developer is told: 'While you are in there, add an ExporterFactory with a registry so we can plug in XLSX and PDF later, make the delimiter and the encoding configurable, and pull in a CSV library rather than using the standard one.' There is one export format in the requirements and one in the backlog, undated.",
+  "input": "No interface for one implementation, no configuration for one value, no framework inside a feature.",
+  "expected_behaviors": [
+    "Implements the one export the story asks for, using the language's standard CSV facilities.",
+    "Declines the factory and registry on the grounds that one implementation exists, and says what would make it right: the second format arriving.",
+    "Declines the configuration surface because every environment has the same value, and says that a constant becomes configuration when a second value exists.",
+    "Declines the new dependency, or names precisely what the standard library fails to do, rather than asserting the library is better.",
+    "Says all of this to the requester as a proposal, and does the work either way once the requester decides. This is a story-scope conversation, not a refusal."
+  ],
+  "failure_conditions": [
+    "Builds the factory, the registry and the configuration surface because they were asked for, with no comment.",
+    "Adds the dependency without saying what the standard library misses.",
+    "Refuses the work, or lectures the requester about YAGNI instead of proposing the smaller change.",
+    "Silently drops part of the requested behaviour that the story actually requires."
+  ],
+  "rubric": [
+    {
+      "dimension": "simplicity",
+      "criteria": "Reduced the change to what the requirements ask for, and named the specific trigger that would justify each deferred piece.",
+      "weight": 3
+    },
+    {
+      "dimension": "usefulness",
+      "criteria": "Delivered the endpoint and raised the scope question, rather than blocking on the disagreement.",
+      "weight": 2
+    },
+    {
+      "dimension": "tone",
+      "criteria": "Made a proposal a colleague can accept or overrule, without moralising about premature abstraction.",
+      "weight": 1
+    }
+  ]
+}

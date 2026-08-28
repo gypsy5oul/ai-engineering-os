@@ -7,6 +7,7 @@ effort: medium
 skills:
   - security-assessment
   - change-review
+  - engineering-simplicity
 color: red
 ---
 

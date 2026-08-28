@@ -477,7 +477,7 @@
       },
       {
         "boundary": "an agent approving its own work",
-        "structural": "reviewer roles hold no Write or Edit tool",
+        "structural": "a reviewer's write scope is docs/reviews/** and nothing else, so it cannot author the artifact it reviews",
         "regex_covers": "nothing"
       },
       {

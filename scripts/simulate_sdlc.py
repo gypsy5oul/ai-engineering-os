@@ -58,6 +58,27 @@ def make_project(path):
     os.makedirs(os.path.join(path, "tests"), exist_ok=True)
 
 
+
+# The complexity ledger the ARCH stage's definition of done reads. Two entries so
+# the simulation exercises both halves of complexity_justified: one introduction
+# that is bought with a measurement, and one candidate that was rejected because
+# the approved stack already satisfied the requirement. A design that introduced
+# nothing would carry an empty list, which also passes; an absent field is the
+# only failure, because it means nobody asked the question.
+COMPLEXITY_LEDGER = [
+    {"component": "outbound-transfer-worker",
+     "driver": "NFR-004",
+     "simpler_alternative": "Run the transfer inline on the request thread of the existing service.",
+     "why_rejected": "Inline transfer holds the connection for the duration of the upload and "
+                     "measured 41s at p99 against the stated 2s API budget (NFR-004).",
+     "evidence": "measurement",
+     "evidence_ref": "docs/architecture/load-test.md",
+     "operational_cost": "One more deployable to run, monitor, patch and carry on-call. "
+                         "Adds a queue-depth alert and a stuck-worker failure mode.",
+     "reversible": "Yes while the enqueue interface is unchanged; the migration back is "
+                   "one adapter and a drain."},
+]
+
 COUNTER = {}
 
 
@@ -295,6 +316,7 @@ def scenario_feature(project, log):
     def arch():
         log("TEAM: architect + security-architect + sre, reviewed by architecture-reviewer")
         st["arch"] = write_artifact(project, "ARCH", status="approved", source=st["feas"],
+                                    complexity=COMPLEXITY_LEDGER,
                                     links={"requirements": [st["req"], st["nfr"]]},
                                     reviewers=[verdict("architecture-reviewer")],
                                     approvals=[approval("AP-02", "architecture-owner",
@@ -834,6 +856,7 @@ def scenario_change_request(project, log):
             "affected_artifacts": [st["req"]],
             "reversibility": "reversible until data older than 30 days is retained"}) or fm)
         write_artifact(project, "ARCH", status="approved", source=st["cr"],
+                       complexity=[],
                        links={"requirements": [st["req"]]},
                        reviewers=[verdict("architecture-reviewer")],
                        rollup=rollup("CYCLE-ARCH", next_gate="DECIDE"))

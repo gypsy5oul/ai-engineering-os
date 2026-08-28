@@ -33,6 +33,26 @@ def model():
         return json.load(fh)
 
 
+def _simplicity_policy():
+    path = os.path.join(ROOT, "policies", "simplicity-policy.json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _simplicity_required_fields():
+    """The fields a complexity-ledger entry must carry.
+
+    Read from the policy rather than hard-coded here, so the predicate and the
+    document that agents follow cannot drift apart. The fallback covers a
+    stripped-down deployment where the policy file is absent.
+    """
+    fields = _simplicity_policy().get("required_justification_fields")
+    return list(fields) if fields else ["component", "driver", "simpler_alternative",
+                                        "why_rejected", "evidence"]
+
+
 def _cycle_rework_limit(cycle_id):
     base = os.path.join(ROOT, "sdlc", "cycles")
     if not os.path.isdir(base):
@@ -474,6 +494,50 @@ def evaluate(fn, args, artifacts, project):
                     return "PASS", "%s recorded on %s in %s" % (args[0], a["id"], ap.get("recorded_in"))
         return "REQUIRES-EVIDENCE", ("%s must be recorded in GitLab. A session cannot see it; "
                                      "check the merge request or release." % args[0])
+
+    if fn == "complexity_justified":
+        # Checks that the justification exists and is complete, never whether the
+        # judgement was right. Whether a queue was actually needed is
+        # architecture-reviewer's finding and the human's decision under AP-02; a
+        # predicate that tried to answer it would either pass everything or block
+        # legitimate engineering. See policies/simplicity-policy.json.
+        hits = by_code(artifacts, args[0])
+        if not hits:
+            return "FAIL", "no %s artifact exists" % args[0]
+        required = _simplicity_required_fields()
+        kinds = set(_simplicity_policy().get("evidence_kinds") or {})
+        missing_ledger, bad = [], []
+        for a in hits:
+            ledger = a.get("complexity")
+            if ledger is None:
+                missing_ledger.append(a["id"])
+                continue
+            if isinstance(ledger, dict):
+                ledger = [ledger]
+            if not isinstance(ledger, list):
+                bad.append("%s: complexity is %s, expected a list"
+                           % (a["id"], type(ledger).__name__))
+                continue
+            for i, item in enumerate(ledger):
+                if not isinstance(item, dict):
+                    bad.append("%s: complexity[%d] is not an entry" % (a["id"], i))
+                    continue
+                name = item.get("component") or "complexity[%d]" % i
+                gaps = [f for f in required if not str(item.get(f, "")).strip()]
+                if gaps:
+                    bad.append("%s/%s: no %s" % (a["id"], name, ", ".join(gaps)))
+                    continue
+                ev = str(item.get("evidence", "")).strip().lower()
+                if kinds and ev not in kinds:
+                    bad.append("%s/%s: evidence %r is not one of %s"
+                               % (a["id"], name, item.get("evidence"),
+                                  ", ".join(sorted(kinds))))
+        problems = ["%s has no complexity ledger" % i for i in missing_ledger] + bad
+        if problems:
+            return "FAIL", "; ".join(problems[:5])
+        empty = [a["id"] for a in hits if not a.get("complexity")]
+        return "PASS", ("every %s justifies the complexity it introduces%s"
+                        % (args[0], "; %d introduce none" % len(empty) if empty else ""))
 
     if fn == "promoted_through":
         target = args[0]

@@ -6,7 +6,7 @@ id: CYCLE-ARCH
 name: Architecture execution
 version: 1.0.0
 department: architecture
-description: Design section to reviewed architecture. The architect authors and the reviewer checks coverage; they are different agents and the reviewer holds no write tools. A finding that the requirement itself is wrong leaves the department rather than being designed around.
+description: Design section to reviewed architecture. The architect authors and the reviewer checks coverage; they are different agents and the reviewer's write scope is its own review record, so it cannot author the architecture it reviews. A finding that the requirement itself is wrong leaves the department rather than being designed around.
 used_by_stages:
   - WF-FEATURE/FEAS
   - WF-FEATURE/ARCH

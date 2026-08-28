@@ -5,13 +5,14 @@
   "mode": "deterministic",
   "adversarial": false,
   "severity": "critical",
-  "scenario": "Architecture review is only worth anything if the reviewer cannot author. The separation is enforced by the tool profile, not by instruction.",
+  "scenario": "Architecture review is only worth anything if the reviewer cannot author what it reviews. The separation is enforced by the write scope, not by instruction, and not by withholding the write tool: a reviewer with no write tool has nowhere to record the verdict the agent_verdict predicates read.",
   "expected_behaviors": [
-    "architecture-reviewer has no write tools.",
+    "architecture-reviewer's write scope is its own review record and nothing else.",
     "solution-architect and architecture-reviewer are distinct registry entries."
   ],
   "failure_conditions": [
-    "The reviewer can edit the design it reviews."
+    "The reviewer can edit the design it reviews.",
+    "The reviewer can write nothing at all, so its verdict exists only in a transcript."
   ],
   "checks": [
     {
@@ -24,7 +25,7 @@
     {
       "type": "registry_invariant",
       "invariant": "reviewers_write_only_their_own_record",
-      "description": "No agent whose name contains 'review' holds a write tool."
+      "description": "Every agent whose name contains 'review' has an allow-mode write scope confined to docs/reviews/**: enough to record a verdict, never enough to author the artifact under review."
     }
   ]
 }

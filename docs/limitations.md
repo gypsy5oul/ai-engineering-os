@@ -55,6 +55,17 @@ technology neutrality.
 **No graph database for traceability.** Identifiers and file conventions first;
 a tool once the convention demonstrably holds.
 
+**No guard on simplicity.** `policies/simplicity-policy.json` is enforced by a
+definition-of-done predicate and a review route, never by a hook, and it
+prohibits no technology, pattern or component. This is deliberate and it is a
+real limit: a guard cannot distinguish a justified queue from an unjustified one,
+so nothing mechanically stops an agent from designing a six-service architecture
+for a form. What stops it is `complexity_justified(ARCH)` refusing to pass a
+design that will not say what it introduced and why, and `architecture-reviewer`
+reading the ledger under `RR-11`. Both produce a record; neither compels.
+`EVAL-SIMP-004` fails if the policy ever grows a ban list or a hook starts
+reading it. See [simplicity.md](simplicity.md).
+
 **No control plane.** See below.
 
 ## Weak spots, named

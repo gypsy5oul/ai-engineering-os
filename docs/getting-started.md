@@ -15,9 +15,9 @@ An engineering organization, not a tool.
 | | |
 | --- | --- |
 | **30 agents** | Roles with contracts: authority, forbidden actions, inputs, outputs, escalation. Frozen — see [organization freeze](organization-freeze.md). |
-| **34 skills** | Shared capabilities. Technology-neutral. |
+| **35 skills** | Shared capabilities. Technology-neutral. |
 | **4 guards** | Hooks that deny, escalate or audit every command, write and spawn. Tiered so a broken policy file cannot open them. |
-| **28 policies** | Model routing, risk, approvals, artifacts, execution mode, coupling, system of record. |
+| **29 policies** | Model routing, risk, approvals, artifacts, execution mode, coupling, simplicity, system of record. |
 | **9 workflows** | Level 1: stage to stage. |
 | **7 department cycles** | Level 2: the delegation loop inside a stage. |
 | **28 artifact types** | The state model. Each with an owner, a lifecycle and a review path. |
@@ -239,7 +239,9 @@ pressure to invent a number is real.
 because security, operability and design need to **challenge each other** rather
 than review in sequence.
 
-`architecture-reviewer` is a different agent with **no write tools**. It builds
+`architecture-reviewer` is a different agent whose write scope is **its own review
+record and nothing else**, so it can record a verdict and cannot author the design
+it reviews. It builds
 the requirement-coverage table before forming an opinion:
 
 > Requirement coverage: SFTP-REQ-001…004 covered. NFR-001, 002, 003 covered.
@@ -385,7 +387,7 @@ python3 scripts/check_dod.py --workflow WF-FEATURE --stage REQ --project .
 
 - **Behavioural rules are contracts, not guarantees.** "Never invent an
   availability target" is tested by evaluation, not enforced by a hook.
-- **23 of 68 evaluation cases need a model run** and are reported pending, never
+- **28 of 78 evaluation cases need a model run** and are reported pending, never
   auto-passed.
 - **Secret detection is heuristic.** Use a dedicated scanner in CI as well.
 - **Agent teams are experimental.** Every workflow works without them; team

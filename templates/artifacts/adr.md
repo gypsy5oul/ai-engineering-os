@@ -29,7 +29,23 @@ What it is. Advantages **in this context**. Disadvantages **in this context**.
 ### Option 2 — <name>
 
 ### Option 3 — Do nothing / use what is already approved
-Always present. Often correct.
+Always present. Often correct. It loses only to a named requirement, with its
+identifier and its number — not to popularity, flexibility or expected growth.
+
+## Simplicity
+
+The simplest option that satisfies every stated requirement, and the stated
+requirement the chosen option needed that the simpler one misses. Delete this
+section only if the decision introduces no component, dependency, abstraction or
+boundary at all.
+
+| | |
+| --- | --- |
+| Simplest viable alternative | <named concretely enough to have been built> |
+| Requirement it fails | <identifier and number, or "none — this decision is the simpler option"> |
+| Evidence | requirement / measurement / constraint, and where it can be read |
+| Operational cost accepted | <what must now be run, monitored, patched and carried on-call> |
+| Reversible | <what undoing this takes, and at what cost> |
 
 ## Decision
 

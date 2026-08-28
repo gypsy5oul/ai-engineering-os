@@ -62,24 +62,35 @@ Three separations do the real work:
 - **The workflow says what must be true. The task graph says how this change gets
   there. Claude Code says how execution happens.** Change any one without
   touching the others.
-- **An agent verdict is not a human approval.** Reviewers are structurally
-  incapable of approving: they hold no write tools.
+- **An agent verdict is not a human approval.** Independence is the write
+  scope, not the absence of a write tool: a reviewer may write its own review
+  record and nothing else, so it can never author what it reviews.
 - **Guards are mechanical; contracts are not.** What must hold regardless of what
   a model decides is enforced by a hook. Everything else is written down and
   followed, and `docs/limitations.md` says which is which.
+
+And one principle runs through all of them:
+
+- **Simplicity by default.** Build the simplest thing that satisfies the stated
+  functional, non-functional, reliability, security, scalability and operational
+  requirements. Not the smallest — a design that drops a requirement is
+  incomplete, not simple. Complexity is bought with a requirement and the
+  purchase is recorded, checked by `complexity_justified(ARCH)` and reviewed
+  independently under `RR-11`. Nothing is prohibited.
+  See [simplicity.md](docs/simplicity.md).
 
 ## What it gives you
 
 | | |
 | --- | --- |
 | **30 agents** | An optimized organization: product, architecture, UX, engineering, data, QA, security, platform, release, SRE, incident, documentation, AI governance, and five independent specialist reviewers. |
-| **34 skills** | Reusable capabilities from requirements engineering to root cause analysis. Technology-neutral. |
+| **35 skills** | Reusable capabilities from requirements engineering to root cause analysis, including **engineering simplicity** as a first-class, cross-cutting capability. Technology-neutral. |
 | **10 hook events** | Command, write and spawn guards, context injection, result observation, a completion gate, a teammate-idle gate, worktree lifecycle recording and a session self-test. 45 command rules, **risk-tiered failure** so a broken policy file cannot open the guard, and a self-test at session start. |
 | **7 department cycles** | Level 2: human owner → agent head → lead → worker → peer review → rework → accept → rollup. A macro stage cannot advance until its department's internal loop reaches ACCEPTED. |
 | **9 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
-| **28 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution mode, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
-| **68 evaluation cases** | 45 deterministic checks that run in CI, plus 23 behavioural cases with rubrics that are never auto-passed. |
-| **28 artifact types** | Full contracts: who creates, modifies, reviews and approves each, where it is stored, what it depends on. Plus 26 definition-of-done predicates. |
+| **29 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution mode, **simplicity**, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
+| **78 evaluation cases** | 50 deterministic checks that run in CI, plus 28 behavioural cases with rubrics that are never auto-passed. |
+| **28 artifact types** | Full contracts: who creates, modifies, reviews and approves each, where it is stored, what it depends on. Plus 27 definition-of-done predicates. |
 | **Zero runtime dependencies** | Everything runs on Python 3.8+ with no `pip install`. |
 
 ## Technology neutrality
@@ -171,7 +182,7 @@ python3 scripts/resolve_model.py --all   # model routing for every stage
 .claude-plugin/plugin.json       Plugin manifest
 .claude-plugin/marketplace.json  Private marketplace catalogue
 agents/                          30 role definitions
-skills/                          34 skills
+skills/                          35 skills
 hooks/hooks.json                 Hook registration
 hooks/scripts/                   Guard implementations
 hooks/lib/                       Shared hook library
@@ -213,7 +224,7 @@ Read in this order and each one builds on the last.
 | --- | --- |
 | [organization.md](docs/organization.md) | The 30 agents, and what each one owns |
 | [agent-model.md](docs/agent-model.md) | Role contracts: authority, tools, risk, lifecycle |
-| [skills.md](docs/skills.md) | The 34 skills and who loads them |
+| [skills.md](docs/skills.md) | The 35 skills and who loads them |
 | [organization-freeze.md](docs/organization-freeze.md) | Why the agent set does not grow |
 
 **The rules, and what actually enforces them**
@@ -222,6 +233,7 @@ Read in this order and each one builds on the last.
 | --- | --- |
 | [governance.md](docs/governance.md) | Who decides what, and how that changes |
 | [approvals.md](docs/approvals.md) | An agent verdict is never a human approval |
+| [simplicity.md](docs/simplicity.md) | Simplicity by default: the two questions, the complexity ledger, and why no hook enforces it |
 | [hooks.md](docs/hooks.md) | The guards, the 45 command rules, risk-tiered failure |
 | [model-policy.md](docs/model-policy.md) | Risk floors, and why a model cannot be downgraded past one |
 | [security.md](docs/security.md) | Threat model and the boundaries that hold |
@@ -267,7 +279,7 @@ Read in this order and each one builds on the last.
 
 ## Status
 
-Version 0.32.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
+Version 0.33.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
 evaluated on its deterministic cases, and not yet promoted to `production`.
 Promotion requires a human governance decision per `GOVERNANCE.md`.
 

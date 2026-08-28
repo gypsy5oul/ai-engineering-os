@@ -110,7 +110,7 @@ ones that catch real proposals:
 | | |
 | --- | --- |
 | **The children must produce exactly what the stage owed** | Drop one and the stage still passes its definition of done, because that is evaluated on the parent. The artifact simply stops existing and nobody notices. |
-| **A role must be able to write what you assign it** | A reviewer holds no write tools; a developer cannot write `docs/architecture/`. A task nobody is permitted to do is not a task. |
+| **A role must be able to write what you assign it** | A reviewer may write only `docs/reviews/**`; a developer cannot write `docs/architecture/`. A task nobody is permitted to do is not a task. |
 | **Risk may be raised, never lowered** | Decomposing HIGH work into LOW pieces routes around the model floor, the approval gates and the concurrency limits, one level down where nobody is looking. |
 | **Children depend only on siblings** | The parent already carries the change's outside dependencies. Reaching past it rewires the graph from inside a stage. |
 | **Predicates must be real** | An unknown predicate is skipped by the evaluator, so an invented one is a definition of done that always passes. |

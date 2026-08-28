@@ -3,6 +3,89 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.33.0] — Simplicity was a value nobody could check
+
+The organization had opinions about proportionality scattered across three
+skills — "unrequested complexity is a major finding" in `architecture-review`,
+"design the smallest structure" in `architecture-design`, "always include the
+option of using what we have" in `technology-selection` — and no way to tell
+whether any of them had been applied. A value that cannot be checked loses to
+schedule pressure and to the first idea that arrived.
+
+**Simplicity by default is now a first-class capability**, with the same four
+parts every other rule in this repository has: a skill roles load, a
+machine-readable policy, a lifecycle gate and an evaluation suite.
+
+The rule is stated once and precisely: build the simplest thing that satisfies
+the functional, non-functional, reliability, security, scalability and
+operational requirements that have **actually been stated and approved**. Not the
+smallest. A design that drops a stated requirement is incomplete, not simple, and
+that misreading is the way this principle is most often abused — so
+`EVAL-SIMP-007` is the case where a delivery manager cites the organization's own
+simplicity rule as grounds for dropping an RPO-0 requirement, and the architect
+has to name what is being asked.
+
+**The complexity ledger.** The architecture artifact now carries a `complexity`
+field: one entry per component, boundary or dependency introduced, each naming
+the requirement, measurement or constraint that forces it, the simpler
+alternative considered — concretely enough to have been built — and which stated
+requirement that alternative fails. `complexity_justified(ARCH)` gates the ARCH
+stage on it.
+
+The asymmetry in that predicate is the whole design. **An empty ledger passes; an
+absent one fails.** A change that introduces no complexity is the common case and
+the one the principle wants, so the honest answer has to be the cheap one.
+Failing it would teach every architect to invent an entry. And the predicate
+checks only that the justification exists and is complete — never whether the
+judgement was right. A predicate that tried to answer "was the queue really
+necessary" would either pass everything or block legitimate engineering; that
+question belongs to `architecture-reviewer` and, under AP-02, to a human.
+
+**Nothing is prohibited, and no hook enforces it.** A guard cannot distinguish a
+justified queue from an unjustified one. One that tried would block real
+engineering, and the organization would route around the rule, at which point it
+protects nothing. So enforcement is exactly two mechanisms that produce a record
+a human can overrule: the predicate, and review route `RR-11`, which sends any
+change introducing a component, boundary or dependency class to
+`architecture-reviewer` with `simplicity` as the named dimension and explicitly
+never returns "too complex" as a verdict on its own. `EVAL-SIMP-004` is the case
+that fails if the policy ever grows a ban list, claims enforcement it does not
+have, or if any hook script starts reading it.
+
+The other direction is tested too. `EVAL-SIMP-008` gives the reviewer a broker
+whose ledger names a 500 jobs/s requirement and a measurement of 40 jobs/s for
+the simpler alternative: rejecting it because something smaller exists is a
+failure of the case. `EVAL-SIMP-009` is the unquantified forecast — "design for
+10 million users, we do not have a number yet" — which routes back to
+requirements rather than into the design.
+
+`policies/simplicity-policy.json` carries 21 complexity triggers across
+infrastructure, structure, code, dependency and capacity; a six-rank preference
+order that starts at "do nothing"; the three evidence kinds that count
+(requirement, measurement, constraint) and the five that do not, with "we might
+need to scale" named first. `scripts/check_dod.py` reads the required
+justification fields from that policy rather than hard-coding them, so the
+instruction agents follow and the check that reads their answer cannot drift
+apart — the failure mode this release also went looking for elsewhere.
+
+Fifteen roles preload the skill: the six that buy complexity, the four that
+review it, and the five whose stages decide it. It is available at every stage
+the principle applies to — requirements, feasibility, architecture, story
+decomposition, development, QA, release, change assessment, migration design and
+dependency impact — and a test asserts that no stage offers the skill to an owner
+that cannot load it.
+
+**Stale documentation about reviewer write access, corrected.** v0.29.0 gave
+reviewers a write scope confined to `docs/reviews/**` so that a reviewer with
+findings had somewhere to record the verdict `agent_verdict` reads. Ten
+documents, one policy, one evaluation and one resolver message still said
+reviewers hold no write tools. They now say what is true and stronger: a reviewer
+may write its own review record and never the artifact under review, and it is
+the write scope that makes that structural, not the absence of a tool. The
+execution resolver's own reason string said "holds no write tools" about
+`code-reviewer`, which holds one — it now says it writes nothing a worktree would
+protect, which is what the code has always actually computed.
+
 ## [0.32.0] — The entry point pointed at a command that did not exist
 
 Asked how someone starts after installing this, the honest answer took a live

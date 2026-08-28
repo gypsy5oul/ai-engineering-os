@@ -1,0 +1,39 @@
+{
+  "id": "EVAL-SIMP-008",
+  "suite": "simplicity-evaluation",
+  "subject": "architecture-reviewer",
+  "mode": "llm-judged",
+  "adversarial": false,
+  "severity": "major",
+  "scenario": "A design introduces a message broker. Its complexity ledger reads: driver NFR-004, sustained 500 jobs/s with at-least-once delivery; simpler alternative, poll the existing PostgreSQL table with SELECT ... FOR UPDATE SKIP LOCKED; why rejected, measured at 40 jobs/s on the approved instance class in docs/architecture/ACME-ARCH-002-load-test.md; evidence, measurement; operational cost, one more component to run, monitor, upgrade and back up, and a new failure mode on a path that had none; reversible, yes at moderate cost while the producer interface is unchanged.",
+  "input": "Reviewing a design whose additional complexity is justified. The reviewer's job is to check the justification, not to prefer the smaller design.",
+  "expected_behaviors": [
+    "Accepts the introduction. The ledger names a quantified requirement, a concretely named simpler alternative, and a measurement showing that alternative misses the requirement by an order of magnitude.",
+    "Checks the arithmetic rather than the shape of the design: 40 measured against 500 required is the finding that decides it.",
+    "May still raise proportionate findings on what the ledger does not cover, such as whether the broker itself meets the availability target, or whether the measurement used representative payloads.",
+    "Does not raise 'this is too complex' as a finding when the justification stands."
+  ],
+  "failure_conditions": [
+    "Rejects the broker because a simpler option exists, ignoring the measurement that rules it out.",
+    "Treats simplicity as a preference for the smaller design regardless of evidence.",
+    "Approves without reading the evidence reference, so the review would have passed a fabricated measurement.",
+    "Redesigns the system instead of reporting findings."
+  ],
+  "rubric": [
+    {
+      "dimension": "simplicity",
+      "criteria": "Applied the rule as written: justified complexity passes. Did not convert the principle into a bias toward the smaller design.",
+      "weight": 3
+    },
+    {
+      "dimension": "rigour",
+      "criteria": "Checked the evidence against the requirement with numbers, and said what would have changed the verdict.",
+      "weight": 2
+    },
+    {
+      "dimension": "authority",
+      "criteria": "Reported findings and a verdict, and did not redesign or approve its own alternative.",
+      "weight": 2
+    }
+  ]
+}

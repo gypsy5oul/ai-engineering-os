@@ -38,7 +38,7 @@ section — see [department cycles](department-cycles.md).
 
 That distinction is what let the hierarchy arrive without the org growing. A
 "Backend Lead" reviewing a backend developer is the `peer_reviewer` position,
-filled by `code-reviewer`, which has the advantage of holding no write tools.
+filled by `code-reviewer`, whose write scope is its own review record, so it cannot author what it reviews.
 A "Development Head" is the `engineering-owner` human who receives the rollup.
 
 ## What the freeze does not stop
@@ -106,6 +106,6 @@ If a proposal fails point 4, it is a skill, a routing rule, or a task.
 | Engineering communications | 1 |
 | **Total** | **30** |
 
-Five of those are independent specialist reviewers holding no write tools. That
+Five of those are independent specialist reviewers whose write scope is their own review record and nothing else. That
 ratio — roughly one independent check for every five producers — is the property
 worth preserving as the organization changes.

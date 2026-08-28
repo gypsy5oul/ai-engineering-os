@@ -347,7 +347,7 @@ observability architecture, capacity and HA/DR models where the requirements
 demand them, ADRs, and an updated risk register.
 
 Review is independent. An architect does not approve its own architecture, and
-`architecture-reviewer` has no write tools, so the separation is structural.
+`architecture-reviewer` may write only its own review record, so the separation is structural.
 
 ## UX
 

@@ -31,12 +31,14 @@ results come back via `--llm-results`, and `agent-evaluator` interprets them.
 ## Suites
 
 One per department, named in each agent's registry entry, plus
-`organization-evaluation`, which belongs to no agent. 68 evaluation cases:
-45 deterministic and 23 llm-judged.
+`organization-evaluation` and `simplicity-evaluation`, which belong to no agent
+because their subject is a cross-cutting principle rather than a role. 78
+evaluation cases: 50 deterministic and 28 llm-judged.
 
 | Suite | Subjects |
 | --- | --- |
 | `governance-evaluation` | engineering-director |
+| `simplicity-evaluation` | the simplicity policy itself, solution-architect, architecture-reviewer, backend-developer |
 | `ai-governance-evaluation` | ai-governance, agent-architect, agent-developer, agent-evaluator, guard_write |
 | `product-evaluation` | product-manager |
 | `requirements-evaluation` | requirements-analyst |

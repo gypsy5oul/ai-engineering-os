@@ -106,6 +106,7 @@ stages:
       - architecture-design
       - threat-modeling
       - technology-selection
+      - engineering-simplicity
     risk: HIGH
     complexity: complex
     execution: subagent

@@ -7,6 +7,7 @@ effort: high
 skills:
   - architecture-review
   - adr-management
+  - engineering-simplicity
 color: cyan
 ---
 
