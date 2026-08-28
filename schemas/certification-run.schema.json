@@ -1,0 +1,144 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Certification run",
+  "description": "One run of the Golden Project certification path. The deterministic suite proves the organization is coherent; this records what happened when it was run against a real project, and by what evidence. The two are never merged: `evidence` is per unit, and `verdict.real_agent` cannot be satisfied by synthetic units however many of them pass.",
+  "type": "object",
+  "required": ["run_id", "started_at", "claude_code_version", "plugin_version",
+               "golden_project", "mode", "units", "probes", "verdict"],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {"type": "string", "minLength": 1},
+    "started_at": {"type": "string"},
+    "finished_at": {"type": ["string", "null"]},
+    "claude_code_version": {
+      "type": ["string", "null"],
+      "description": "The CLI actually on PATH when the run happened. Null when no CLI was present, which is itself a fact about the run."
+    },
+    "plugin_version": {"type": "string"},
+    "golden_project": {"type": "string"},
+    "mode": {
+      "type": "string",
+      "enum": ["synthetic", "live"],
+      "description": "What was asked for. What was achieved is in `verdict`; a live run whose sessions did not start is still a live-mode run that produced no real-agent evidence."
+    },
+    "units": {
+      "type": "array",
+      "description": "One entry per unit of work the run drove.",
+      "items": {
+        "type": "object",
+        "required": ["stage", "work_item", "task", "role", "evidence", "outcome"],
+        "additionalProperties": false,
+        "properties": {
+          "stage": {"type": "string"},
+          "workflow": {"type": ["string", "null"]},
+          "work_item": {"type": "string"},
+          "task": {"type": "string"},
+          "role": {"type": "string"},
+          "model": {
+            "type": ["string", "null"],
+            "description": "The model that actually ran the work. Null for a synthetic unit: nothing ran, and naming a model there would be the exact conflation this record exists to prevent."
+          },
+          "execution": {
+            "type": "object",
+            "description": "The three values kept apart everywhere else in this repository: what the workflow asked for, what the resolver decided, and what the runtime reported.",
+            "additionalProperties": false,
+            "properties": {
+              "declared": {"type": ["string", "null"]},
+              "resolved": {"type": ["string", "null"]},
+              "actual": {"type": ["string", "null"]}
+            }
+          },
+          "isolation": {
+            "type": ["string", "null"],
+            "enum": ["shared-checkout", "worktree", "remote", null],
+            "description": "Separate from execution mode. A subagent may run in a shared checkout or a worktree; those are different questions."
+          },
+          "artifacts": {"type": "array", "items": {"type": "string"}},
+          "dod": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "pass": {"type": "integer", "minimum": 0},
+              "fail": {"type": "integer", "minimum": 0},
+              "unsupported": {"type": "integer", "minimum": 0},
+              "requires_evidence": {"type": "integer", "minimum": 0},
+              "result": {"type": "string", "enum": ["pass", "fail", "incomplete"]},
+              "failing": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "review": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+              "reviewer": {"type": "string"},
+              "verdict": {"type": "string"},
+              "findings": {"type": "integer", "minimum": 0}
+            }
+          },
+          "rework": {"type": "integer", "minimum": 0},
+          "replan": {"type": "integer", "minimum": 0},
+          "escalation": {"type": "integer", "minimum": 0},
+          "attempts": {"type": "integer", "minimum": 0},
+          "outcome": {
+            "type": "string",
+            "enum": ["accepted", "failed", "rejected", "blocked", "escalated", "not-run"]
+          },
+          "evidence": {
+            "type": "string",
+            "enum": ["synthetic", "real-agent"],
+            "description": "synthetic: the organization drove itself with no model in the loop. real-agent: a Claude Code session did the work and the result was read back from durable state, never from what the session said about itself."
+          },
+          "evidence_note": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "probes": {
+      "type": "array",
+      "description": "Named integration points checked against a real session. A probe passes on durable evidence -- the audit log, the work item's history, a file on disk -- never on a model's account of its own behaviour, which is the thing under test.",
+      "items": {
+        "type": "object",
+        "required": ["id", "asks", "result", "evidence_source"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"},
+          "asks": {"type": "string", "minLength": 10},
+          "result": {"type": "string", "enum": ["pass", "fail", "not-run"]},
+          "evidence_source": {
+            "type": "string",
+            "description": "Where the answer was read from. `self-report` is not permitted."
+          },
+          "observed": {"type": ["string", "null"]},
+          "why_not_run": {"type": ["string", "null"]}
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "required": ["synthetic", "real_agent", "certified", "why"],
+      "additionalProperties": false,
+      "properties": {
+        "synthetic": {"type": "string", "enum": ["pass", "fail", "not-run"]},
+        "real_agent": {
+          "type": "string",
+          "enum": ["pass", "fail", "partial", "not-run"],
+          "description": "Never derived from synthetic units. `partial` means some probes passed and the lifecycle was not driven end to end by real agents."
+        },
+        "certified": {
+          "type": "boolean",
+          "description": "True only when real_agent is pass and every stage in `coverage.required` carries a real-agent unit. A run with a perfect synthetic result and no session is not certified, and saying so is the point of this file."
+        },
+        "why": {"type": "string", "minLength": 10},
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "required": {"type": "array", "items": {"type": "string"}},
+            "real_agent": {"type": "array", "items": {"type": "string"}},
+            "synthetic_only": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
+    "notes": {"type": ["string", "null"]}
+  }
+}

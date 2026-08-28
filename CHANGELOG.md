@@ -3,6 +3,91 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.36.0] — Everything that proved this worked was the plugin proving it to itself
+
+640 tests. Ten simulated scenarios. 52 deterministic evaluations. Every one of
+them proves the organization is coherent **with itself**, and not one of them
+proves that Claude Code ever calls any of it. Those are different claims, and
+until 0.29 only the first had ever been checked; most of the second still had
+not been.
+
+Certification is the path that checks it, and the whole design is about never
+letting the two be confused.
+
+**The Golden Project.** `golden/` is a real project: a retention window service
+with working code, thirteen passing tests, a threat model, and a configuration
+that validates with no warnings. Deliberately boring — one deployable, no
+database, no queue, standard library only. A project that would fail its own
+`complexity_justified(ARCH)` if it introduced anything else. Certifying against a
+sprawling project proves less, not more: every extra component is somewhere the
+certification can pass for reasons that have nothing to do with the organization.
+
+`scripts/certify.py` drives it two ways and keeps them apart. The **synthetic**
+path runs offline, in CI, with no model: it checks the project opens, plans from
+a real workflow, and has an evaluator for every predicate on every stage. The
+**live** path runs real `claude -p` sessions with this plugin's hooks *and agents*
+registered project-scope by absolute path, then reads the result back out of
+durable state.
+
+**Synthetic stages report `incomplete`, not `pass` and not `fail`.** A stage
+nobody executed has not failed its definition of done — it has not been
+attempted, and reporting the two the same way trains a reader to discount both.
+The first version of this file got that wrong and showed thirteen red stages for
+work nobody had asked anyone to do.
+
+**Probes answer from durable evidence** — the audit log, the work item's history,
+the task record in the graph — never from a session's account of its own
+behaviour, which is the thing under test. There is one exception, and it is safe
+for a specific reason: `the-agent-knew-what-was-not-in-its-prompt` reads what the
+agent said, because the test is whether a value the prompt never contained came
+back. A model cannot report a string it was never given.
+
+Probes are **tri-state**. `not-run` is a real answer and not a failure. An
+earlier version could only say pass or fail, and reported a defect in
+`bind_task.py` when what had happened was that the session never created a native
+task.
+
+**What the live run found.** Seven integration points, against Claude Code
+2.1.250, kept in `golden/certification-run.json` so the claims can be checked
+rather than believed:
+
+- SessionStart fires and the startup self-test writes its Tier-0 denies.
+- Injected context reaches the model.
+- `guard_write` refused a live session's write to `/etc/`, and the refusal is in
+  the audit log.
+- `T-001` was claimed by `engineering-director`, evidenced by `SubagentStart fired
+  for a1d9c437…`, and the result was attributed to that task.
+- **`T-001` declared `inline`, resolved `inline`, and actually ran as a
+  `subagent`.** This is the load-bearing one. `actual` is only worth recording if
+  it can disagree with `resolved`; a run where they always match is consistent
+  with `actual` being copied and never observed at all. Until this run, they never
+  had disagreed.
+- The agent reported the work item id and its intent verbatim, neither of which
+  was in its prompt.
+
+The most interesting result is not a probe. The agent holding `T-001` **refused
+to close it** — reported that neither gate closed cleanly, did not mark the task
+done, did not dispatch the next one, and the state stayed `queued`. The
+organization's refusal to self-accept, observed rather than asserted.
+
+**And it is still not certified.** Real agents drove one stage; certification
+requires six. `verdict.certified` is false, `real_agent` is `partial`, and the
+record names the missing stages rather than rounding up. Seven tests exist purely
+to hold that line, including one that throws fifty passing synthetic stages at
+the verdict and asserts it still says `not-run`.
+
+Two things were found while building it, both by watching a probe be wrong rather
+than by reasoning about it. The briefing probe first **passed on
+`subagent_stopped_unattributed`** — the hook saying it could find no task for the
+agent, which is the exact failure the probe exists to detect. Then it looked for a
+`task_claimed` history entry that does not exist, because the claim is recorded on
+the task and not in the history. Guessing at a record's shape rather than reading
+one is how a probe ends up measuring nothing.
+
+`docs/limitations.md` and `first_live_run` now carry both halves: what real agents
+have now done, and the fact that no change has been driven from intake to
+acceptance by them.
+
 ## [0.35.0] — The documentation described an intention nobody had implemented
 
 `skills/work-item/SKILL.md` said `--type` was one of nine work-item types.

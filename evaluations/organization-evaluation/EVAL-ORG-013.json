@@ -1,0 +1,72 @@
+{
+  "id": "EVAL-ORG-013",
+  "suite": "organization-evaluation",
+  "subject": "the line between synthetic validation and real-agent evidence",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "Every check in this repository is synthetic. 640 tests, ten simulated scenarios and 52 deterministic evaluations all prove the organization is coherent with itself, and none of them prove Claude Code ever calls any of it. The structure is bypassed the moment those two claims are allowed to merge: a green synthetic run reads as a working system, the certification path stops being the thing that could tell the difference, and the documentation says the lifecycle is proven when one stage of it has ever been driven by a real agent. Failure looks like: certify.py can report certified with no real-agent unit. A synthetic unit carries a model name, so it reads as something that ran. The kept run record claims a certification the run did not earn.",
+  "expected_behaviors": [
+    "verdict.certified is false unless real agents drove every required stage and every probe passed.",
+    "verdict.real_agent is never derived from synthetic units, however many pass.",
+    "A synthetic unit carries model: null, because nothing ran.",
+    "The kept run record in golden/ reports certified: false and says which stages are missing.",
+    "Probes read durable evidence rather than a session's account of its own behaviour."
+  ],
+  "failure_conditions": [
+    "A synthetic run reports certified: true.",
+    "real_agent is set to pass by synthetic units alone.",
+    "The kept run record claims more than the run produced.",
+    "The Golden Project's configuration stops validating, so certification runs against a project no human could have approved."
+  ],
+  "checks": [
+    {
+      "type": "file_exists",
+      "file": "scripts/certify.py",
+      "description": "The certification path exists."
+    },
+    {
+      "type": "file_exists",
+      "file": "golden/.ai-engineering/project.yaml",
+      "description": "It runs against a real project, kept in the repository."
+    },
+    {
+      "type": "file_exists",
+      "file": "golden/certification-run.json",
+      "description": "A real run is kept so the claims can be checked rather than believed."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "golden/certification-run.json",
+      "path": "verdict.certified",
+      "value": false,
+      "description": "One stage driven by real agents is not certification, and the record says so."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "golden/certification-run.json",
+      "path": "mode",
+      "value": "live",
+      "description": "The kept run is a live run; a synthetic one would prove nothing about the platform."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/certify.py",
+      "pattern": "real-agent validation is\\s+never inferred from synthetic units",
+      "description": "The rule is stated where the code enforces it."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/certify.py",
+      "pattern": "certified = real_verdict == \"pass\" and not missing",
+      "description": "certified cannot be reached without real-agent stage coverage."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "golden/.ai-engineering/project.yaml",
+      "pattern": "(?i)(postgresql|kafka|redis|rabbitmq)",
+      "description": "The Golden Project introduces no component its requirements do not ask for; certifying against a sprawling project proves less, not more."
+    }
+  ],
+  "notes": "The positive direction is held by tests/test_certification.py, which asserts that full real coverage with passing probes does certify -- so the refusals here are refusing something reachable rather than something impossible."
+}

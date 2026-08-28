@@ -187,7 +187,7 @@
     ]
   },
   "first_live_run": {
-    "when": "2026-08-24, against 2.1.241",
+    "when": "2026-08-24 against 2.1.241; re-run and extended 2026-08-28 against 2.1.250",
     "why_it_matters": "Until this, every hook had been tested by feeding hand-written JSON to a Python script. 547 tests and 28 faults validated the plugin against itself; none of them proved that Claude Code would ever call any of it. That is a different claim and it had never been checked.",
     "how": "A throwaway project registered the hooks by absolute path in its own .claude/settings.json -- project scope only, nothing installed globally -- and real `claude -p` sessions were run in it.",
     "verified_live": [
@@ -196,14 +196,19 @@
       "A spawn whose agent_type owns no task is recorded as subagent_stopped_unattributed rather than guessed at -- observed with a real agent_id.",
       "execution_diverged fired on a real divergence: the stage declared `inline` and the work actually ran as a subagent. The evidence names the real agent id.",
       "guard_bash escalates a protected-branch push in a live session: the refusal text reached the model, the command never ran, and the audit recorded decision=escalate rules=GIT-00.",
-      "The SessionStart self-test runs and its Tier-0 deny is recorded."
+      "The SessionStart self-test runs and its Tier-0 deny is recorded.",
+      "The Golden Project certification path: `scripts/certify.py --live` against golden/, with this plugin's hooks and agents registered project-scope by absolute path. Kept as golden/certification-run.json.",
+      "A live session's write outside the role's scope was refused by guard_write and the refusal recorded in the audit log.",
+      "execution.actual disagreed with execution.resolved on a real task -- T-001 declared inline, resolved inline, actual subagent -- and the divergence was recorded from SubagentStart evidence. Until this, actual and resolved had never been observed to differ, which is consistent with actual being copied rather than observed.",
+      "An agent briefed only by SubagentStart reported its work item id and the intent verbatim, neither of which was in its prompt.",
+      "An agent held a task whose gates did not close, declined to mark it done, declined to dispatch the next one, and the task's state stayed queued. The organization's refusal to self-accept was observed rather than asserted."
     ],
     "still_never_run": [
       "Agent teams. Requires an interactive session and the experimental flag.",
       "Worktree isolation, and therefore the briefing_required path where an isolated spawn receives no injected context.",
       "Both task gates. TaskCompleted and TaskCreated need the native task tools, which no session here has used. Their payload shape and their place in the blocking set are read from the binary by scripts/check_platform_drift.py; that neither has ever been called by a real session is a different claim and still untested.",
       "The 28 LLM-judged evaluation cases.",
-      "Any complete work item. One task was briefed and observed; no change has been driven from intake to acceptance by real agents."
+      "Any complete work item. Real agents have now driven one stage of one work item (GOLD-FEAT-001, T-001) under certification; no change has been driven from intake to acceptance by real agents, and certify.py reports certified: false because of it."
     ]
   }
 }

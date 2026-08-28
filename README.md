@@ -89,7 +89,7 @@ And one principle runs through all of them:
 | **7 department cycles** | Level 2: human owner → agent head → lead → worker → peer review → rework → accept → rollup. A macro stage cannot advance until its department's internal loop reaches ACCEPTED. |
 | **9 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
 | **29 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution mode, **simplicity**, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
-| **80 evaluation cases** | 52 deterministic checks that run in CI, plus 28 behavioural cases with rubrics that are never auto-passed. |
+| **81 evaluation cases** | 53 deterministic checks that run in CI, plus 28 behavioural cases with rubrics that are never auto-passed. |
 | **28 artifact types** | Full contracts: who creates, modifies, reviews and approves each, where it is stored, what it depends on. Plus 27 definition-of-done predicates. |
 | **Zero runtime dependencies** | Everything runs on Python 3.8+ with no `pip install`. |
 
@@ -139,6 +139,7 @@ python3 scripts/run_evaluations.py    # deterministic evaluation cases
 python3 scripts/check_dod.py --grammar   # definition-of-done predicates
 python3 scripts/check_cycle.py           # department execution state machines
 python3 scripts/simulate_sdlc.py --all   # every loop, end to end, against a real project
+python3 scripts/certify.py               # Golden Project certification, synthetic path
 python3 scripts/resolve_model.py --all   # model routing for every stage
 ./scripts/check_all.sh                   # all of the above
 ```
@@ -260,6 +261,7 @@ Read in this order and each one builds on the last.
 | [evaluation.md](docs/evaluation.md) | Agent, workflow and organization evaluations; fault injection |
 | [telemetry.md](docs/telemetry.md) | What is measured, and what is refused as unmeasurable |
 | [production-readiness.md](docs/production-readiness.md) | The end-to-end simulation and what it proves |
+| [certification.md](docs/certification.md) | The Golden Project, and the line between synthetic validation and real-agent evidence |
 
 **Extending and changing it**
 
@@ -279,7 +281,7 @@ Read in this order and each one builds on the last.
 
 ## Status
 
-Version 0.35.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
+Version 0.36.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
 evaluated on its deterministic cases, and not yet promoted to `production`.
 Promotion requires a human governance decision per `GOVERNANCE.md`.
 

@@ -1,0 +1,129 @@
+# The Golden Project's configuration.
+#
+# This is not the shipped template and not the worked example. It is the project
+# the certification path actually runs against, so every value here is one a
+# human would have had to decide, and the file must validate exactly as a real
+# project's does. Nothing in it is aspirational.
+
+schema_version: 1
+
+project:
+  name: Retention Window Service
+  key: GOLD
+  description: Computes and applies data retention windows for records held under a compliance obligation.
+  tier: 3                       # internal service, one deployable, no partner-facing surface
+  owner: AI Engineering Platform Team
+  compliance: []
+
+technology:
+  backend:
+    language: python
+    version: "3.8"
+    framework: standard-library
+    status: approved
+    adr: GOLD-ADR-001
+  # No database, no queue, no cache, no frontend. The service reads a record set
+  # and returns a decision. Adding a component here would need a requirement that
+  # does not exist -- see policies/simplicity-policy.json.
+
+repository:
+  host: github
+  url: https://github.com/gypsy5oul/ai-engineering-os
+  edition: other
+  branching:
+    model: trunk-with-release-branches
+    protected_branches: [main]
+    feature_prefix: feature/
+    defect_prefix: defect/
+    hotfix_prefix: hotfix/
+    release_prefix: release/
+  merge_request:
+    min_approvals: 1
+    author_may_approve: false
+    required_pipelines: [test]
+
+environments:
+  - name: dev
+    purpose: Developer testing.
+    production: false
+    deployment_approval: none
+    data: synthetic
+  - name: staging
+    purpose: Release validation.
+    production: false
+    deployment_approval: peer
+    data: anonymised
+  - name: production
+    purpose: Live retention decisions against real records.
+    production: true
+    deployment_approval: human-owner
+    data: production
+
+deployment:
+  platform: container
+  strategy: rolling
+  rollback: Redeploy the previous image tag. The service holds no state of its own.
+
+security:
+  data_classification: confidential
+  secret_management: No secrets. The service takes its input on stdin and writes to stdout.
+  threat_model: docs/security/GOLD-SEC-001-threat-model.md
+  requirements:
+    - A record is never reported as deletable before its retention window has elapsed.
+    - A record under legal hold is never reported as deletable, whatever its age.
+    - The decision for a record is reproducible from the record and the policy alone.
+
+testing:
+  required_levels: [unit]
+  coverage_target: 90
+  test_data: synthetic
+  environments: [dev]
+
+release:
+  strategy: continuous
+  versioning: semver
+  approval: AI Engineering Platform Team lead, named per release.
+
+observability:
+  logs: structured-json-to-stdout
+  slos:
+    - name: decision-correctness
+      objective: Zero records reported deletable inside their retention window, measured per run.
+
+knowledge:
+  root: docs
+  id_prefix: GOLD
+
+sdlc:
+  required_stages: [REQ, ARCH, STORY, QADESIGN, DEV, REVIEW, CI]
+  skipped_stages:
+    - stage: UX
+      reason: The service has no user interface. Its interface is a record set in and a decision set out.
+
+approval:
+  release_approver:
+    role: release-approver
+    identity: github:gypsy5oul
+  architecture_owner:
+    role: architecture-owner
+    identity: github:gypsy5oul
+  security_owner:
+    role: security-owner
+    identity: github:gypsy5oul
+  engineering_owner:
+    role: engineering-owner
+    identity: github:gypsy5oul
+  project_owner:
+    role: project-owner
+    identity: github:gypsy5oul
+  on_call_owner:
+    role: on-call-owner
+    identity: github:gypsy5oul
+  qa_owner:
+    role: qa-owner
+    identity: github:gypsy5oul
+
+ai:
+  agent_teams_available: false
+  execution_overrides:
+    ARCH: subagent
