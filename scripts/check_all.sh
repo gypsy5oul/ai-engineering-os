@@ -48,6 +48,9 @@ step "Task graph semantics"
 python3 scripts/validate_graph_semantics.py --project . >/dev/null && \
   echo "invariants hold for every work item in this repository (none is normal here)"
 
+step "Golden Project certification (synthetic path)"
+python3 scripts/certify.py | tail -5
+
 step "Deterministic evaluations"
 python3 scripts/run_evaluations.py
 

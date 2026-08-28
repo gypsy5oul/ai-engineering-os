@@ -93,6 +93,20 @@ set are read out of the installed binary by `scripts/check_platform_drift.py`, s
 those are verified. That Claude Code has ever actually invoked either hook in a
 real session is a separate claim, and it is still untested.
 
+**What certification adds, and what it still refuses to claim.**
+`scripts/certify.py --live` runs the Golden Project against real sessions and
+records what happened; `golden/certification-run.json` is a kept run. Seven
+integration points now have real-agent evidence, including one that matters more
+than the rest: a task declared `inline`, resolved `inline` and actually ran as a
+`subagent`, and the divergence was recorded from platform evidence. `actual` is
+only worth having if it can disagree with `resolved`, and until that run it never
+had.
+
+The run is nonetheless **not certified**, and says so. Real agents drove one
+stage; certification requires six. Partial evidence is not certification, and the
+record names the missing stages rather than rounding up. See
+[certification.md](certification.md).
+
 **Behavioural rules are not enforcement.** "Never invent an availability target"
 is a contract, not a guarantee. The evaluation suite tests it; the suite does not
 run on every session.
