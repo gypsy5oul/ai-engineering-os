@@ -21,7 +21,7 @@ color: orange
 | Reports to | qa-lead |
 | Risk class | MEDIUM |
 | Tool profile | implementer (`Read, Grep, Glob, Edit, Write, Bash`) |
-| Write scope | May write only to: `tests/**`, `test/**`, `e2e/**`, `spec/**`, `**/*_test.*`, `**/*.test.*`, `**/*.spec.*`, `docs/qa/**` |
+| Write scope | May write only to: `tests/**`, `test/**`, `e2e/**`, `spec/**`, `**/*_test.*`, `**/*.test.*`, `**/*.spec.*`, `docs/qa/**`, `docs/ai/evaluation/**` |
 | Team spawn permission | May not spawn other agents. Delegation requests go to qa-lead. |
 
 ## Purpose

@@ -14,6 +14,9 @@ used_by_stages:
   - WF-DEFECT/VERIFY
   - WF-MIGRATION/REHEARSE
   - WF-MIGRATION/VERIFY
+  - WF-AI-CHANGE/BASELINE
+  - WF-AI-CHANGE/OFFLINE-EVAL
+  - WF-AI-CHANGE/REGRESSION
 work_item:
   kind: test scenario
   artifact: TEST

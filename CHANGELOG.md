@@ -3,6 +3,74 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.40.0] — "It looks better" is not a result
+
+An AI change is the one kind where somebody will say that sentence and mean it,
+because the output is prose and the improvement is visible. `WF-AI-CHANGE` exists
+to turn it into a comparison.
+
+Eleven stages: INTENT, CONTRACT, BASELINE, DESIGN, IMPLEMENT, OFFLINE-EVAL,
+REGRESSION, REVIEW, SHADOW, PRODUCTION, POST-DEPLOY. Three of them are there
+because a **sampled** behaviour needs what a **specified** one does not:
+
+- **A contract before the change.** `CONTRACT` states what the behaviour must do
+  precisely enough that a case can pass or fail it, and enumerates the ways the
+  output can be wrong. A contract written afterwards describes what was built,
+  which is the one thing an evaluation cannot check.
+- **A baseline before the work.** `BASELINE` is a stage, not a preparation for
+  one. 87% correct is good or catastrophic depending entirely on what it was
+  before.
+- **A comparison at the end.** `REGRESSION` compares every dimension, not the one
+  the change targeted.
+
+`policies/ai-evaluation-model.json` is the model underneath, and it is kept apart
+from `policies/evaluation-policy.json` deliberately: that one evaluates this
+organization's own agents, this one evaluates the product. Four predicates carry
+it, and each refuses something specific:
+
+| Predicate | Refuses |
+| --- | --- |
+| `baseline_recorded()` | A change with nothing to compare against |
+| `one_variable_changed()` | A prompt change and a model upgrade shipped together, whose delta nobody can attribute |
+| `no_unexplained_regression()` | A dimension that got worse and nobody said so |
+| `metrics_have_evidence(EVALRUN)` | A number with no run behind it |
+
+The third has an asymmetry that is the point of it: an **empty** regression list
+passes and an **absent** one fails. Empty says the comparison was made and found
+nothing; absent says nobody looked, and an improvement in the target alongside a
+quiet loss elsewhere is the normal shape of a bad AI change.
+
+Three artifacts — `AIBC`, `EVALSET`, `EVALRUN`. `EVALRUN` is immutable with an
+empty `may_modify`, on the same reasoning as `EVID`: a record whose numbers can be
+edited is not evidence.
+
+**It is not a parallel lifecycle.** Same work item (`--type ai-change`, code
+`AIC`), same task graph, same department cycles, same approval categories, same
+release model, no new agents. The brief said not to build one and it is the easy
+mistake, so a test asserts that every cycle, approval and reviewer it names
+already existed.
+
+**The simulation runs it.** Eleven stages, 49 predicates, every definition of done
+satisfied. Without that, `WF-AI-CHANGE` would be the only workflow never shown to
+be completable and the four new predicates would never have met a real artifact —
+which is how the first version got two of them wrong. `promoted_through` wanted a
+PROM record per rung and had been given a `promotions` field on the release, and
+`corrective_actions_tracked(EVALRUN)` was simply the wrong predicate: it is the
+RCA one, and demanding a corrective action for an evaluation run would have forced
+a defect to be invented, which is the exact failure that predicate was written to
+fix.
+
+**A drift of my own, from v0.35.0.** `schemas/artifact-header.schema.json` matches
+a `change` id against a pattern, and its own description says the pattern must
+equal the work-item id pattern *because they had drifted once before*. v0.35.0
+added `dependency`, `agent-change` and `onboarding` to one and not the other, so
+an artifact belonging to any of those three could not satisfy its own header
+schema. Nothing noticed until a simulation tried to write one.
+
+Both patterns are now equal, and `check_work_item_id_patterns_agree` compares them
+as strings — cruder than parsing, and deliberately so: there is no version of this
+where the two should legitimately disagree.
+
 ## [0.39.0] — A project had no way to say it was building an AI system
 
 Seven capabilities for building software whose behaviour comes from a model:

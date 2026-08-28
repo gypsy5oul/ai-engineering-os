@@ -88,10 +88,10 @@ And one principle runs through all of them:
 | **42 skills** | Reusable capabilities from requirements engineering to root cause analysis, including **engineering simplicity** and seven **AI product engineering** capabilities. Technology-neutral: they name no provider. |
 | **11 hook events** | Command, write and spawn guards, context injection, result observation, a **task-creation gate** that binds native tasks to the graph and refuses ones the graph forbids, a completion gate, a teammate-idle gate, worktree lifecycle recording and a session self-test. 45 command rules, **risk-tiered failure** so a broken policy file cannot open the guard, and a self-test at session start. |
 | **7 department cycles** | Level 2: human owner → agent head → lead → worker → peer review → rework → accept → rollup. A macro stage cannot advance until its department's internal loop reaches ACCEPTED. |
-| **9 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
-| **30 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution and isolation, **workflow intensity**, **simplicity**, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
-| **84 evaluation cases** | 56 deterministic checks that run in CI, plus 28 behavioural cases with rubrics that are never auto-passed. |
-| **28 artifact types** | Full contracts: who creates, modifies, reviews and approves each, where it is stored, what it depends on. Plus 27 definition-of-done predicates. |
+| **10 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
+| **31 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution and isolation, **workflow intensity**, **simplicity**, **AI evaluation**, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
+| **85 evaluation cases** | 57 deterministic checks that run in CI, plus 28 behavioural cases with rubrics that are never auto-passed. |
+| **31 artifact types** | Full contracts: who creates, modifies, reviews and approves each, where it is stored, what it depends on. Plus 31 definition-of-done predicates. |
 | **Zero runtime dependencies** | Everything runs on Python 3.8+ with no `pip install`. |
 
 ## Technology neutrality
@@ -247,7 +247,7 @@ Read in this order and each one builds on the last.
 | --- | --- |
 | [execution.md](docs/execution.md) | How the work runs and where it runs — two dimensions, resolved separately |
 | [liveness-and-limits.md](docs/liveness-and-limits.md) | What happens when nothing happens; concurrency caps |
-| [knowledge-structure.md](docs/knowledge-structure.md) | The 28 artifact types and their traceability |
+| [knowledge-structure.md](docs/knowledge-structure.md) | The 31 artifact types and their traceability |
 | [communications.md](docs/communications.md) | Events, routing, digests |
 | [gitlab.md](docs/gitlab.md) | GitLab as the system of record |
 | [enterprise-deployment.md](docs/enterprise-deployment.md) | Managed settings, and what they do not prevent |
@@ -282,7 +282,7 @@ Read in this order and each one builds on the last.
 
 ## Status
 
-Version 0.39.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
+Version 0.40.0. **Architecture frozen**: the agent set is fixed at 30 and further work is schema hardening and implementation correctness, not conceptual redesign. See [organization freeze](docs/organization-freeze.md). Every agent is in the `pilot` lifecycle state: validated,
 evaluated on its deterministic cases, and not yet promoted to `production`.
 Promotion requires a human governance decision per `GOVERNANCE.md`.
 

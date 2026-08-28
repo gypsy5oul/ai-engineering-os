@@ -21,8 +21,11 @@ Read the workflow definitions in `${CLAUDE_PLUGIN_ROOT}/sdlc/workflows/`:
 | Merged work needs to reach production | `release.yaml` (WF-RELEASE) |
 | Project has no `.ai-engineering/project.yaml` | `project-onboarding.yaml` (WF-ONBOARDING) |
 | This plugin's own agents, skills, hooks or policies change | `agent-change.yaml` (WF-AGENT-CHANGE) |
+| A prompt, model version, retrieval configuration, tool definition or evaluation dataset changes | `ai-change.yaml` (WF-AI-CHANGE) |
 
 If the request matches none of them, say so and treat it as ordinary work outside the lifecycle. Do not force a workflow onto a two-line question.
+
+Route to WF-AI-CHANGE only when the model-backed behaviour itself changes. Code around a model call that alters nothing about what the model decides is an ordinary change.
 
 Two workflows are missing from the table on purpose: `change-request.yaml` (WF-CHANGE), which is reached when an approved requirement changes rather than when new work arrives, and `data-migration.yaml` (WF-MIGRATION), which is usually a stage inside another change rather than a change of its own. Route to either only when the request is genuinely about the change or the migration itself.
 

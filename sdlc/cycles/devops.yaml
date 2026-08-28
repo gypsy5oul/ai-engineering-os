@@ -12,6 +12,7 @@ used_by_stages:
   - WF-FEATURE/DEPLOY
   - WF-RELEASE/DEPLOY
   - WF-MIGRATION/EXECUTE
+  - WF-AI-CHANGE/PRODUCTION
 work_item:
   kind: pipeline, container or infrastructure change
   artifact: REL

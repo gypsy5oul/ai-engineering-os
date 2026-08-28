@@ -1020,6 +1020,34 @@ def _documented_values(blob):
     return out if len(out) > 1 else set()
 
 
+def check_work_item_id_patterns_agree():
+    """A change is a work item, so the two patterns that describe one must be equal.
+
+    They are in different schemas and were written separately. They drifted once
+    before, and drifted again when v0.35.0 added `dependency`, `agent-change` and
+    `onboarding` to the work-item id pattern and not to the artifact header's
+    `change` field -- so an artifact belonging to any of those three could not
+    satisfy its own header schema, and nothing said so until a simulation tried to
+    write one.
+
+    Comparing the strings is cruder than parsing them and it is the point: any
+    difference at all is drift, because there is no version of this where the two
+    should legitimately disagree.
+    """
+    item = load_json("schemas/work-item.schema.json") or {}
+    header = load_json("schemas/artifact-header.schema.json") or {}
+    a = ((item.get("properties") or {}).get("id") or {}).get("pattern")
+    b = ((header.get("properties") or {}).get("change") or {}).get("pattern")
+    if not a or not b:
+        err("cannot compare the work-item id pattern with the artifact header's change "
+            "pattern; one of them is missing")
+        return
+    if a != b:
+        err("schemas/artifact-header.schema.json `change` accepts %s but a work item id is "
+            "%s. A change is a work item; an artifact belonging to a type only one of them "
+            "knows about cannot validate." % (b, a))
+
+
 def check_documented_vocabularies():
     """A prose list of a flag's accepted values matches what argparse accepts.
 
@@ -1953,6 +1981,7 @@ def main():
     check_hooks()
     check_ci_config()
     check_control_loop_policy_is_live()
+    check_work_item_id_patterns_agree()
     check_documented_vocabularies()
     check_every_workflow_is_reachable()
     check_execution_resolution_is_live()

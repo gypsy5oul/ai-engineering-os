@@ -48,6 +48,7 @@ TYPE_WORKFLOW = {
     "feature": "WF-FEATURE", "defect": "WF-DEFECT", "incident": "WF-INCIDENT",
     "release": "WF-RELEASE", "change-request": "WF-CHANGE", "migration": "WF-MIGRATION",
     "dependency": "WF-DEPENDENCY", "agent-change": "WF-AGENT-CHANGE",
+    "ai-change": "WF-AI-CHANGE",
     "onboarding": "WF-ONBOARDING",
     # Operational work follows the feature lifecycle rather than one of its own.
     # Deliberate: it is a delivery route, not a separate discipline, and giving it
@@ -61,6 +62,7 @@ TYPE_CODE = {
     "feature": "FEAT", "defect": "DEF", "incident": "INC", "release": "REL",
     "change-request": "CHG", "migration": "MIG", "operations": "OPS",
     "dependency": "DEP", "agent-change": "AGT", "onboarding": "ONB",
+    "ai-change": "AIC",
 }
 
 

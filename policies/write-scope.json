@@ -41,7 +41,8 @@
         "docs/adrs/**",
         "docs/design/**",
         "docs/observability/**",
-        "docs/decisions/**"
+        "docs/decisions/**",
+        "docs/ai/contracts/**"
       ]
     },
     "ux-designer": {
@@ -54,7 +55,8 @@
       "mode": "allow",
       "allow": [
         "docs/test-plans/**",
-        "docs/qa/**"
+        "docs/qa/**",
+        "docs/ai/evaluation/**"
       ]
     },
     "qa-engineer": {
@@ -67,7 +69,8 @@
         "**/*_test.*",
         "**/*.test.*",
         "**/*.spec.*",
-        "docs/qa/**"
+        "docs/qa/**",
+        "docs/ai/evaluation/**"
       ]
     },
     "security-architect": {

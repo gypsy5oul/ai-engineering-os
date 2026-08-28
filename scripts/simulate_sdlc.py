@@ -993,6 +993,136 @@ def scenario_migration_rollback(project, log):
             ("WF-MIGRATION", "ROLLBACK", rollback)]
 
 
+def scenario_ai_change(project, log):
+    """A summariser omits a legal-hold caveat. One prompt version moves.
+
+    The scenario exists because WF-AI-CHANGE would otherwise be the only workflow
+    never shown to be completable, and because the four predicates the AI
+    evaluation model adds -- baseline_recorded, one_variable_changed,
+    no_unexplained_regression, metrics_have_evidence -- are the kind that pass in
+    a unit test and fail against a real artifact.
+    """
+    set_change("SIM-AIC-001")
+    st = {}
+
+    def intent():
+        log("the changing element is named: a prompt, not a model")
+
+    def contract():
+        log("what the behaviour must do, and what happens when it is wrong")
+        st["aibc"] = write_artifact(
+            project, "AIBC", status="approved", source="SIM-AIC-001",
+            behaviour="Every summary of a held record states that it is held.",
+            inputs="a record and its hold status",
+            outputs="a summary, and a boolean saying whether the caveat was included",
+            wrong_answer_modes="omits the caveat; asserts a hold that does not exist; refuses",
+            autonomy="writes-a-record",
+            measured_by="caveat inclusion rate, hallucinated-hold rate, cost per summary",
+            reviewers=[verdict("qa-lead")],
+            rollup=rollup("CYCLE-ARCH", next_gate="BASELINE"))
+
+    def baseline():
+        log("the dataset first, then the current behaviour measured against it")
+        st["set"] = write_artifact(
+            project, "EVALSET", status="approved", source=st["aibc"],
+            links={"requirements": [st["aibc"]]},
+            cases="120, from real summaries; 31 of them held records",
+            held_out="24 cases, not used for tuning",
+            expected_outcome_owner="the compliance owner labelled the held cases",
+            hard_cases="records released from hold mid-window, and records held after summarising",
+            reviewers=[verdict("test-reviewer")],
+            rollup=rollup("CYCLE-QA", next_gate="DESIGN"))
+        st["base"] = write_artifact(
+            project, "EVALRUN", status="done", source=st["set"],
+            links={"requirements": [st["aibc"]]},
+            role="baseline", prompt_version="p-11", model_version="m-3",
+            retrieval_index_version="ix-4", dataset_version="d-2",
+            deterministic_metrics={"caveat_inclusion": {"value": 0.71, "run": "SIM-EVALRUN-001"},
+                                   "cost_per_summary": {"value": 0.004, "run": "SIM-EVALRUN-001"}},
+            judged_metrics={"hallucinated_hold": {"value": 0.02, "run": "SIM-EVALRUN-001"}})
+
+    def design():
+        log("one variable moves: the prompt. The deterministic alternative was assessed")
+        write_artifact(project, "ADR", status="accepted", source=st["aibc"],
+                       links={"requirements": [st["aibc"]]},
+                       complexity=[],
+                       reviewers=[verdict("architecture-reviewer")],
+                       approvals=[approval("AP-02", "architecture-owner",
+                                           recorded_in="project-decision-log")],
+                       rollup=rollup("CYCLE-ARCH", next_gate="IMPLEMENT"))
+
+    def implement():
+        log("the prompt changes and every other version is pinned")
+
+    def offline():
+        log("the candidate runs against the same dataset version as the baseline")
+        st["cand"] = write_artifact(
+            project, "EVALRUN", status="done", source=st["set"],
+            links={"requirements": [st["aibc"]]},
+            role="candidate", prompt_version="p-12", model_version="m-3",
+            retrieval_index_version="ix-4", dataset_version="d-2",
+            deterministic_metrics={"caveat_inclusion": {"value": 0.96, "run": "SIM-EVALRUN-002"},
+                                   "cost_per_summary": {"value": 0.005, "run": "SIM-EVALRUN-002"}},
+            judged_metrics={"hallucinated_hold": {"value": 0.04, "run": "SIM-EVALRUN-002"}},
+            # The target improved and two other dimensions got worse. That is the
+            # normal shape of a good AI change, and the point of recording it.
+            regressions=[
+                {"dimension": "cost_per_summary",
+                 "explanation": "accepted: +25% on a 0.4-cent call, for the caveat"},
+                {"dimension": "hallucinated_hold",
+                 "explanation": "accepted: 2% to 4% on 24 held-out cases is inside the "
+                                "difference between two baseline runs, so it is not a result"}],
+            rollup=rollup("CYCLE-QA", next_gate="REGRESSION"))
+
+    def regression():
+        log("every dimension compared, not the one the change targeted")
+        _rewrite(project, st["cand"], lambda fm: fm.update({
+            "reviewers": [verdict("test-reviewer")]}) or fm)
+
+    def review():
+        log("the prompt reviewed as source: what it now permits and what it now reads")
+        write_artifact(project, "REVIEW", status="approved", source=st["cand"],
+                       links={"requirements": [st["aibc"]]},
+                       reviewers=[verdict("code-reviewer"), verdict("security-reviewer")],
+                       rollup=rollup("CYCLE-DEV", next_gate="SHADOW"))
+
+    def shadow():
+        log("real traffic, no action taken on the output; cost watched as well as correctness")
+
+    def production():
+        log("the configuration promoted is the one that was evaluated, by version")
+        rel = write_artifact(project, "REL", status="authorized", source=st["cand"],
+                             links={"requirements": [st["aibc"]]},
+                             approvals=[approval("AP-01", "release-approver",
+                                                 recorded_in="gitlab-release")],
+                             rollup=rollup("CYCLE-DEVOPS", next_gate="POST-DEPLOY"))
+        # One PROM per rung, like every other release. A promotions field on the
+        # release is the release's own account of itself; the ladder wants a
+        # record per environment, and promoted_through reads those.
+        promote(project, rel, "production", version="p-12")
+
+    def post_deploy():
+        log("production scored against what the offline run predicted; the live "
+            "configuration becomes the next baseline")
+        write_artifact(
+            project, "EVALRUN", status="done", source=st["cand"],
+            links={"requirements": [st["aibc"]], "architecture": [st["aibc"]]},
+            role="baseline", prompt_version="p-12", model_version="m-3",
+            retrieval_index_version="ix-4", dataset_version="d-3",
+            deterministic_metrics={"caveat_inclusion": {"value": 0.94, "run": "SIM-EVALRUN-003"}},
+            judged_metrics={"hallucinated_hold": {"value": 0.03, "run": "SIM-EVALRUN-003"}},
+            regressions=[],
+            rollup=rollup("CYCLE-SRE", next_gate="none"))
+
+    return [("WF-AI-CHANGE", "INTENT", intent), ("WF-AI-CHANGE", "CONTRACT", contract),
+            ("WF-AI-CHANGE", "BASELINE", baseline), ("WF-AI-CHANGE", "DESIGN", design),
+            ("WF-AI-CHANGE", "IMPLEMENT", implement),
+            ("WF-AI-CHANGE", "OFFLINE-EVAL", offline),
+            ("WF-AI-CHANGE", "REGRESSION", regression), ("WF-AI-CHANGE", "REVIEW", review),
+            ("WF-AI-CHANGE", "SHADOW", shadow), ("WF-AI-CHANGE", "PRODUCTION", production),
+            ("WF-AI-CHANGE", "POST-DEPLOY", post_deploy)]
+
+
 SCENARIOS = {
     "onboarding": scenario_onboarding,
     "feature": scenario_feature,
@@ -1004,6 +1134,7 @@ SCENARIOS = {
     "change-request": scenario_change_request,
     "migration": scenario_migration,
     "migration-rollback": scenario_migration_rollback,
+    "ai-change": scenario_ai_change,
 }
 
 

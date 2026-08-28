@@ -23,7 +23,7 @@ color: orange
 | Reports to | engineering-director |
 | Risk class | MEDIUM |
 | Tool profile | delegating-author (`Read, Grep, Glob, Edit, Write, Agent`) |
-| Write scope | May write only to: `docs/test-plans/**`, `docs/qa/**` |
+| Write scope | May write only to: `docs/test-plans/**`, `docs/qa/**`, `docs/ai/evaluation/**` |
 | Team spawn permission | May spawn: `qa-engineer`, `test-reviewer`, `performance-reviewer` |
 
 ## Purpose
