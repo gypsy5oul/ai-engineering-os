@@ -387,7 +387,7 @@ python3 scripts/check_dod.py --workflow WF-FEATURE --stage REQ --project .
 
 - **Behavioural rules are contracts, not guarantees.** "Never invent an
   availability target" is tested by evaluation, not enforced by a hook.
-- **28 of 81 evaluation cases need a model run** and are reported pending, never
+- **28 of 82 evaluation cases need a model run** and are reported pending, never
   auto-passed.
 - **Secret detection is heuristic.** Use a dedicated scanner in CI as well.
 - **Agent teams are experimental.** Every workflow works without them; team

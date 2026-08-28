@@ -3,6 +3,76 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.37.0] — Isolating a team stopped it being a team
+
+How a task runs and where it runs are different questions. For eleven versions
+they shared one field.
+
+`worktree` sat in the execution enum next to `inline` and `subagent`. It is not
+an execution mode — nothing runs "as a worktree" — but there was nowhere else to
+put it, so all three resolver rules that isolate a task returned it as one. Each
+of them threw the real mode away on the way past:
+
+    declared team + overlapping paths  ->  "worktree"     (the team is gone)
+    sibling holds the coupled surface  ->  "worktree"     (inline? subagent? gone)
+    writer with siblings running       ->  "worktree"     (which of the two? gone)
+
+A team that needed its own checkout came back as a subagent, and every consumer
+downstream believed it. **`team` + `worktree` could not be expressed at all.**
+
+Two dimensions now, resolved separately:
+
+| | Values |
+| --- | --- |
+| **execution** | `inline`, `subagent`, `background`, `team`, `dynamic-workflow` |
+| **isolation** | `shared-checkout`, `worktree`, `remote` |
+
+`resolve()` returns `(execution, isolation, why)` and writes a
+declared/resolved/actual triple for each — isolation gets the same three values
+for the same reason execution has them: a worktree can be resolved and never
+created, and `actual` has to be able to disagree.
+
+The rules did not change; they moved to the axis they were always about.
+`read_only_role` used to resolve to `subagent`, which meant *declining to isolate
+a reviewer* and *demoting a reviewer's spawn* were the same event. It resolves to
+`shared-checkout` now, and the mode is untouched.
+
+`briefing_required` moved with them. It is the checkout that costs the injected
+briefing, not the mode — keying it off the execution value was only possible
+while `worktree` was pretending to be one.
+
+**`remote` is in the enum and has never run.** The policy says so in the mode's
+own `status`. It is there because the platform has it, and a resolver that cannot
+name a mode has to call it something else — which is the mistake this whole
+change is correcting.
+
+**Graphs written before the split still read.** `worktree` in a stored value is
+translated to `subagent` + `worktree`, at the accessor and again on the first
+write, so an existing task does not resolve to a value the enum no longer has.
+
+Two checks now hold the split open. `check_execution_resolution_is_live` already
+required every policy rule to exist in the resolver; it now requires each rule to
+**declare its dimension** and to be implemented inside that dimension's function,
+so an isolation rule cannot be written in the execution resolver and return a
+mode. And `EVAL-ORG-014` fails if `worktree` reappears in the execution enum, if
+a rule carries no dimension, or if the isolation default stops being
+`shared-checkout` — making every worker pay for a checkout is a cost, not a
+safety property.
+
+One test was renamed rather than fixed:
+`test_an_overlapping_team_becomes_a_worktree` is the conflation written down as a
+requirement. It is now
+`test_an_overlapping_team_stays_a_team_and_gets_its_own_checkout`, and a new case
+walks every declared mode against a colliding and a disjoint sibling to assert
+both dimensions actually vary independently — a dimension that can only take one
+value when the other changes is not a dimension.
+
+Decomposition inherits both. A child task took its parent's execution mode and
+not its isolation, so a decomposed task silently lost a decision its parent had
+been given for a reason. And `certify.py` reads the resolved isolation instead of
+writing `shared-checkout` into every unit, which had made the certification
+record agree with itself about the one dimension it exists to keep honest.
+
 ## [0.36.0] — Everything that proved this worked was the plugin proving it to itself
 
 640 tests. Ten simulated scenarios. 52 deterministic evaluations. Every one of

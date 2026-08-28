@@ -182,7 +182,10 @@ def synthetic_units(project):
             "model": None,
             "execution": {"declared": ex.get("declared"), "resolved": ex.get("resolved"),
                           "actual": ex.get("actual")},
-            "isolation": "shared-checkout",
+            # Read, not assumed. Hardcoding shared-checkout here would have made
+            # the certification record agree with itself about the one dimension
+            # the split exists to keep honest.
+            "isolation": W.effective_isolation(task),
             "artifacts": list(task.get("produces") or []),
             "dod": {"pass": passed, "fail": len(failing), "unsupported": len(unsupported),
                     "requires_evidence": len(unverifiable),
@@ -465,7 +468,7 @@ def real_units(project, wid, model):
             "model": model,
             "execution": {"declared": ex.get("declared"), "resolved": ex.get("resolved"),
                           "actual": ex.get("actual")},
-            "isolation": "shared-checkout",
+            "isolation": W.effective_isolation(task),
             "artifacts": list(task.get("produces") or []),
             "dod": {"pass": passed, "fail": len(failing), "unsupported": len(unsupported),
                     "requires_evidence": len(unverifiable),

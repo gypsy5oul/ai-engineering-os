@@ -399,6 +399,11 @@ def graft(graph, parent_id, children, mode="proposed", rationale=None, proposed_
                                  | {by_key[k] for k in (child.get("depends_on") or [])
                                     if k in by_key}),
             "execution": {"declared": declared_execution(parent)},
+            # The isolation too. A child inherits how its parent stage runs; it
+            # also inherits where, and inheriting only one of them meant a
+            # decomposed task silently lost an isolation decision its parent had
+            # been given for a reason.
+            "isolation": {"declared": declared_isolation(parent)},
         }
         if child.get("produces"):
             t["produces"] = list(child["produces"])
@@ -668,12 +673,33 @@ def dependencies_met(graph, t):
     return True
 
 
+# Execution and isolation are different questions and used to share one field.
+# `worktree` sat in the execution enum next to `inline` and `subagent`, so the
+# three resolver rules that isolate a task all returned "worktree" -- and each of
+# them threw away the execution mode on the way past. A team that needed
+# isolation resolved to "worktree", and nothing downstream could still tell it
+# was a team.
+EXECUTION_MODES = ("inline", "subagent", "background", "team", "dynamic-workflow")
+ISOLATION_MODES = ("shared-checkout", "worktree", "remote")
+
+# What a task written before the split means now. `worktree` was never an
+# execution mode; it was an isolation decision with nowhere else to live, and the
+# spawn it described was a subagent.
+LEGACY_EXECUTION = {"worktree": ("subagent", "worktree")}
+
+
+def _split_legacy(value):
+    """(execution, isolation) for a stored value that may predate the split."""
+    if value in LEGACY_EXECUTION:
+        return LEGACY_EXECUTION[value]
+    return value, None
+
+
 def declared_execution(task):
     """What the workflow asked for, whichever shape the field is in."""
     ex = task.get("execution")
-    if isinstance(ex, dict):
-        return ex.get("declared") or "subagent"
-    return ex or "subagent"
+    raw = ex.get("declared") if isinstance(ex, dict) else ex
+    return _split_legacy(raw)[0] or "subagent"
 
 
 def effective_execution(task):
@@ -682,18 +708,76 @@ def effective_execution(task):
     which is a request made before the situation existed."""
     ex = task.get("execution")
     if isinstance(ex, dict):
-        return ex.get("resolved") or ex.get("declared") or "subagent"
-    return ex or "subagent"
+        raw = ex.get("resolved") or ex.get("declared")
+    else:
+        raw = ex
+    return _split_legacy(raw)[0] or "subagent"
+
+
+def declared_isolation(task):
+    """Where the task runs: its own checkout, the shared one, or elsewhere.
+
+    Defaults to shared-checkout rather than to nothing. A task with no isolation
+    decision runs in the checkout everything else is in, and saying so is more
+    useful than an absent field every caller has to interpret.
+    """
+    iso = task.get("isolation")
+    if isinstance(iso, dict) and iso.get("declared"):
+        return iso["declared"]
+    if isinstance(iso, str) and iso:
+        return iso
+    # A task written before the split carries its isolation inside `execution`.
+    ex = task.get("execution")
+    raw = ex.get("declared") if isinstance(ex, dict) else ex
+    return _split_legacy(raw)[1] or "shared-checkout"
+
+
+def effective_isolation(task):
+    iso = task.get("isolation")
+    if isinstance(iso, dict):
+        if iso.get("resolved") or iso.get("declared"):
+            return iso.get("resolved") or iso["declared"]
+    elif isinstance(iso, str) and iso:
+        return iso
+    ex = task.get("execution")
+    if isinstance(ex, dict):
+        raw = ex.get("resolved") or ex.get("declared")
+    else:
+        raw = ex
+    return _split_legacy(raw)[1] or "shared-checkout"
 
 
 def set_execution(task, **fields):
-    """Record part of the execution triple, promoting the string form on first use."""
+    """Record part of the execution triple, promoting the string form on first use.
+
+    A legacy `worktree` is split as it is promoted, so the first write after the
+    upgrade fixes the shape rather than carrying it forward.
+    """
     ex = task.get("execution")
     if not isinstance(ex, dict):
-        ex = {"declared": ex or "subagent"}
+        mode, iso = _split_legacy(ex)
+        ex = {"declared": mode or "subagent"}
+        if iso:
+            set_isolation(task, declared=iso,
+                          resolution_reason="carried over from a pre-split execution mode")
+    for key in ("declared", "resolved", "actual"):
+        if key in fields and fields[key] in LEGACY_EXECUTION:
+            mode, iso = LEGACY_EXECUTION[fields[key]]
+            fields[key] = mode
+            set_isolation(task, **{key: iso})
     ex.update({k: v for k, v in fields.items() if v is not None})
     task["execution"] = ex
     return ex
+
+
+def set_isolation(task, **fields):
+    """Record part of the isolation triple. Same three questions, different axis."""
+    iso = task.get("isolation")
+    if not isinstance(iso, dict):
+        iso = {"declared": iso or "shared-checkout"}
+    iso.update({k: v for k, v in fields.items() if v is not None})
+    task["isolation"] = iso
+    return iso
 
 
 def runtime_binding(work_item_id, task):
@@ -705,6 +789,7 @@ def runtime_binding(work_item_id, task):
     rather than reconstructing it.
     """
     ex = task.get("execution") if isinstance(task.get("execution"), dict) else {}
+    iso = task.get("isolation") if isinstance(task.get("isolation"), dict) else {}
     return {
         "work_item": work_item_id,
         "graph_task": task.get("id"),
@@ -715,6 +800,11 @@ def runtime_binding(work_item_id, task):
             "declared": declared_execution(task),
             "resolved": ex.get("resolved"),
             "actual": ex.get("actual"),
+        },
+        "isolation": {
+            "declared": declared_isolation(task),
+            "resolved": iso.get("resolved"),
+            "actual": iso.get("actual"),
         },
     }
 

@@ -1,6 +1,6 @@
 {
   "version": "1",
-  "description": "How a stage is executed: inline in the current session, as a subagent, or as an agent team. Left to arbitrary model choice this becomes expensive and inconsistent, so each stage declares it.",
+  "description": "How a stage is executed and where. Two dimensions, deliberately separate: `modes` is how the work runs (inline, subagent, background, team) and `isolation` is which working copy it runs in (shared-checkout, worktree, remote). Left to arbitrary model choice this becomes expensive and inconsistent, so each stage declares the mode and the runtime resolves both.",
   "modes": {
     "inline": {
       "meaning": "The current session does the work.",
@@ -74,6 +74,17 @@
         },
         "returns": "When the worker changed nothing, the worktree is removed automatically. When it changed something, the result carries worktreePath and worktreeBranch. Those two values are what makes the merge a step rather than an archaeology exercise.",
         "cost": "A second working copy per worker on disk, and a checkout per spawn. In a large repository set worktree.sparsePaths and worktree.symlinkDirectories in .claude/settings.json before deciding it is too slow."
+      },
+      "remote": {
+        "meaning": "The worker runs in a remote environment rather than on this machine.",
+        "use_when": [
+          "a long or heavy job that should not hold local resources"
+        ],
+        "do_not_use_when": [
+          "anything the lifecycle depends on: availability is gated per account, so a stage that requires it is a stage that fails for most operators"
+        ],
+        "how": "Agent(subagent_type=..., isolation: \"remote\"). Always a background task.",
+        "status": "Never run here. It is in the enum because the platform has it and a resolver that cannot name it would have to call it something else -- which is the mistake this split exists to correct. policies/platform-capabilities.json records that no session here has used it."
       }
     },
     "integration": {
@@ -92,7 +103,7 @@
       ]
     },
     "what_the_plugin_can_enforce": [
-      "No workflow stage declares an isolation mode yet, so nothing validates one. When a stage does, validation should require it to declare the integration step and its owner in the same place. Stated here so the gap is a known omission rather than an assumed guarantee.",
+      "No workflow stage declares an isolation mode yet; the resolver decides it from runtime facts and records it on the task's own isolation triple. When a stage does declare one, validation should require it to declare the integration step and its owner in the same place. Stated here so the gap is a known omission rather than an assumed guarantee.",
       "A PreToolUse hook on Agent sees the spawn's tool_input, including isolation, so it can refuse a spawn. It cannot add isolation to one.",
       "What is enforced today is coherence: tests/test_execution_isolation.py fails if this policy, docs/execution.md and skills/team-patterns/SKILL.md stop naming the same mechanisms, or if this policy stops declaring what it cannot enforce."
     ],
@@ -138,7 +149,7 @@
     "Isolation is not free: a checkout per worker, and a merge the lead must run and test. Count the merge before choosing parallelism, not after the branches exist."
   ],
   "resolution": {
-    "description": "How a task's execution mode is chosen at the moment it runs, rather than inherited from what its stage declared. A stage says what kind of work it is; only the runtime knows whether teams are available, whether siblings would collide, and how much is in flight.",
+    "description": "How a task's execution mode and isolation are chosen at the moment it runs, rather than inherited from what its stage declared. A stage says what kind of work it is; only the runtime knows whether teams are available, whether siblings would collide, and how much is in flight. The two dimensions resolve separately and both answers are recorded.",
     "why": "A declared mode is a recommendation made before the situation existed. `execution: team` on a stage is correct advice and wrong instruction in a headless session, where teammates do not spawn at all. Resolving at runtime turns the declaration into a starting point that gets overruled by facts.",
     "inputs": [
       "risk",
@@ -151,44 +162,111 @@
     ],
     "rules": [
       {
+        "dimension": "execution",
         "when": "teams_unavailable",
         "resolve_to": "subagent",
         "why": "Teams are experimental, off by default and interactive-only. Nothing in the lifecycle may depend on them, so an unavailable team degrades rather than failing."
       },
       {
-        "when": "read_only_role",
-        "resolve_to": "subagent",
-        "why": "A reviewer that cannot write has nothing to isolate. Giving it a worktree costs setup and disk to protect files it could not have touched."
-      },
-      {
+        "dimension": "execution",
         "when": "critical_risk",
         "resolve_to": "subagent",
         "why": "CRITICAL work is not sent to the background. The point of the risk tier is that somebody is watching, and a background task is precisely the one nobody is."
       },
       {
+        "dimension": "execution",
+        "when": "declared_mode_is_available",
+        "resolve_to": "declared",
+        "why": "No fact overruled the stage's recommendation, so it stands."
+      },
+      {
+        "dimension": "isolation",
+        "when": "read_only_role",
+        "resolve_to": "shared-checkout",
+        "why": "A role that writes nothing another role touches is protected from nobody. Giving it a worktree costs setup, disk and the injected briefing an isolated spawn does not receive. This used to resolve to `subagent`, which meant declining to isolate a reviewer and demoting a reviewer's spawn were the same event."
+      },
+      {
+        "dimension": "isolation",
+        "when": "team_with_overlapping_paths",
+        "resolve_to": "worktree",
+        "why": "Teammates share one checkout, so two of them editing one file overwrite each other. The task stays a team; only its checkout changes."
+      },
+      {
+        "dimension": "isolation",
         "when": "sibling_holds_surface",
         "resolve_to": "worktree",
         "why": "Two tasks that would edit the same coupled surface are isolated rather than sequenced when both are otherwise ready, so the parallelism survives and the integration becomes an explicit step."
       },
       {
+        "dimension": "isolation",
         "when": "writes_files_and_siblings_running",
         "resolve_to": "worktree",
         "why": "Parallel writers in one checkout produce a build output nobody owns. The cost is real -- setup, disk, a merge -- which is why it applies only when something else is genuinely running."
       },
       {
-        "when": "declared_mode_is_available",
-        "resolve_to": "declared",
-        "why": "No fact overruled the stage's recommendation, so it stands."
+        "dimension": "isolation",
+        "when": "nothing_would_collide",
+        "resolve_to": "shared-checkout",
+        "why": "Isolation is not free and is not a default virtue."
       }
     ],
     "never": {
       "team": "in a non-interactive session, or for a task no other task runs alongside",
       "background": "for CRITICAL risk, or where the next step needs the result",
-      "worktree": "for a role that writes nothing a worktree would protect. A reviewer holds a write tool so it can record its verdict, and its scope is docs/reviews/** alone, which no other role writes to"
+      "worktree": "for a role that writes nothing a worktree would protect. A reviewer holds a write tool so it can record its verdict, and its scope is docs/reviews/** alone, which no other role writes to. This is an isolation answer now, not an execution one.",
+      "remote": "for anything the lifecycle depends on. Availability is gated per account."
     },
-    "enforced_by": "scripts/resolve_execution.py, and control_loop.py next --resolve",
+    "enforced_by": "scripts/resolve_execution.py, which returns (execution, isolation, why) and persists both triples; hooks/scripts/inject_context.py calls it at claim time.",
     "not_enforceable": "Nothing makes an agent honour the resolved mode. A PreToolUse hook can refuse a spawn but cannot rewrite one, so this resolves and records; it does not compel."
   },
   "enforced_by": "hooks/scripts/inject_context.py resolves and persists at claim time; scripts/resolve_execution.py --record does the same by hand. The resolution is written to the task's execution.resolved, and the runtime's own answer to execution.actual at SubagentStop.",
-  "why_enforced_by_changed": "It previously named `scripts/resolve_execution.py, and control_loop.py next --resolve`. The second does not exist and the first was a standalone CLI that printed and never persisted, so nothing on the spawn path consulted the resolver at all: a stage could declare team, the resolver could say subagent, and the spawn could do a third thing with no record that the three disagreed."
+  "why_enforced_by_changed": "It previously named `scripts/resolve_execution.py, and control_loop.py next --resolve`. The second does not exist and the first was a standalone CLI that printed and never persisted, so nothing on the spawn path consulted the resolver at all: a stage could declare team, the resolver could say subagent, and the spawn could do a third thing with no record that the three disagreed.",
+  "dimensions": {
+    "why_separate": "They answer different questions and used to share one field. `worktree` sat in the execution enum next to `inline` and `subagent`, so the three resolver rules that isolate a task all returned it as a *mode* -- and each threw the real mode away on the way past. A team that needed its own checkout resolved to `worktree`, and nothing downstream could still tell it had been a team.",
+    "execution": [
+      "inline",
+      "subagent",
+      "background",
+      "team",
+      "dynamic-workflow"
+    ],
+    "isolation": [
+      "shared-checkout",
+      "worktree",
+      "remote"
+    ],
+    "combinations": [
+      {
+        "execution": "inline",
+        "isolation": "shared-checkout",
+        "means": "The session does the work in the checkout it is standing in. The default."
+      },
+      {
+        "execution": "subagent",
+        "isolation": "shared-checkout",
+        "means": "A focused worker in the same checkout. Correct for anything read-only, and for a writer with nothing running alongside it."
+      },
+      {
+        "execution": "subagent",
+        "isolation": "worktree",
+        "means": "A writer alongside other writers. The isolation is about the files, not about how the worker runs."
+      },
+      {
+        "execution": "background",
+        "isolation": "worktree",
+        "means": "Background sessions are worktree-isolated by default -- worktree.bgIsolation blocks Edit and Write in the main checkout until EnterWorktree is called."
+      },
+      {
+        "execution": "team",
+        "isolation": "shared-checkout",
+        "means": "Teammates who own disjoint paths. The usual team case."
+      },
+      {
+        "execution": "team",
+        "isolation": "worktree",
+        "means": "Teammates who must touch the same file. It is still a team; only its checkout changed. This combination could not be expressed at all before the dimensions were split."
+      }
+    ],
+    "rule": "Isolating a task never changes how it runs, and changing how it runs never decides where. A resolver that returns one value for both is expressing a preference about which question matters."
+  }
 }

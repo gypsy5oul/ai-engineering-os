@@ -389,8 +389,13 @@ def cmd_next(args):
     needs_briefing = []
     for t in ready:
         ex = t.get("execution") if isinstance(t.get("execution"), dict) else {}
-        mode = ex.get("resolved") or W.declared_execution(t)
-        print("  %-6s %-30s %-22s %s" % (t["id"], t["title"][:30], t["role"], mode))
+        mode = W.effective_execution(t)
+        isolation = W.effective_isolation(t)
+        # Both, always. One column is how `worktree` came to be an execution mode
+        # in the first place: there was nowhere to print the other answer.
+        print("  %-6s %-28s %-20s %-10s %s"
+              % (t["id"], t["title"][:28], t["role"], mode,
+                 "" if isolation == "shared-checkout" else isolation))
         if ex.get("briefing_required"):
             needs_briefing.append(t["id"])
     if needs_briefing:

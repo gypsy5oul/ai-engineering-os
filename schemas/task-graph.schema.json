@@ -77,7 +77,7 @@
             ]
           },
           "execution": {
-            "description": "How this task runs. Three values, because they answer three different questions: `declared` is what the workflow author asked for before the situation existed, `resolved` is what the resolver decided at claim time, and `actual` is what the runtime reports having done. Recording only one of them means the organization cannot tell the difference between a policy it chose, a degradation it accepted, and a spawn that ignored both.",
+            "description": "How this task runs. Three values, because they answer three different questions: `declared` is what the workflow author asked for before the situation existed, `resolved` is what the resolver decided at claim time, and `actual` is what the runtime reports having done. Recording only one of them means the organization cannot tell the difference between a policy it chose, a degradation it accepted, and a spawn that ignored both. `worktree` is not here: where a task runs is `isolation`, a separate dimension, because a team that needs its own checkout is still a team and resolving it to 'worktree' threw that away.",
             "oneOf": [
               {
                 "type": "string",
@@ -86,7 +86,6 @@
                   "subagent",
                   "background",
                   "team",
-                  "worktree",
                   "dynamic-workflow"
                 ],
                 "description": "Shorthand for declared, before anything has been resolved."
@@ -105,7 +104,6 @@
                       "subagent",
                       "background",
                       "team",
-                      "worktree",
                       "dynamic-workflow"
                     ]
                   },
@@ -116,7 +114,6 @@
                       "subagent",
                       "background",
                       "team",
-                      "worktree",
                       "dynamic-workflow"
                     ]
                   },
@@ -127,7 +124,6 @@
                       "subagent",
                       "background",
                       "team",
-                      "worktree",
                       "dynamic-workflow"
                     ]
                   },
@@ -139,7 +135,7 @@
                   },
                   "briefing_required": {
                     "type": "boolean",
-                    "description": "The resolved mode isolates the spawn, and an isolated spawn does not receive SubagentStart's additionalContext. The task briefing has to travel in the spawn prompt instead."
+                    "description": "The resolved isolation puts the spawn in its own checkout, and an isolated spawn does not receive SubagentStart's additionalContext. The task briefing has to travel in the spawn prompt instead. Kept on execution rather than on isolation because it is a fact about how the spawn must be made, which is the spawner's concern."
                   },
                   "actual_evidence": {
                     "type": "string",
@@ -303,6 +299,67 @@
                 }
               }
             }
+          },
+          "isolation": {
+            "description": "Where this task runs: the checkout everything else is in, its own git worktree, or a remote environment. Orthogonal to execution -- subagent+worktree, background+worktree, team+shared-checkout and inline+shared-checkout are all real combinations. The same three values as execution, and for the same reason: a worktree can be resolved and not created, and `actual` has to be able to disagree.",
+            "oneOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "shared-checkout",
+                  "worktree",
+                  "remote"
+                ],
+                "description": "Shorthand for declared, before anything has been resolved."
+              },
+              {
+                "type": "object",
+                "required": [
+                  "declared"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "declared": {
+                    "type": "string",
+                    "enum": [
+                      "shared-checkout",
+                      "worktree",
+                      "remote"
+                    ]
+                  },
+                  "resolved": {
+                    "type": "string",
+                    "enum": [
+                      "shared-checkout",
+                      "worktree",
+                      "remote"
+                    ]
+                  },
+                  "actual": {
+                    "type": "string",
+                    "enum": [
+                      "shared-checkout",
+                      "worktree",
+                      "remote"
+                    ]
+                  },
+                  "resolution_reason": {
+                    "type": "string"
+                  },
+                  "resolved_at": {
+                    "type": "string"
+                  },
+                  "actual_evidence": {
+                    "type": "string",
+                    "description": "The runtime event that determined `actual` -- for a worktree, the WorktreeCreate the hook recorded. SubagentStart carries no isolation flag, so without a worktree event there is nothing to observe and `actual` stays unset rather than assumed."
+                  },
+                  "actual_undetermined": {
+                    "type": "string",
+                    "description": "Why the runtime could not name the isolation. This is the common case: no event says a spawn ran in the shared checkout, so shared-checkout is inferred from the absence of a worktree rather than observed, and saying so keeps the inference visible."
+                  }
+                }
+              }
+            ]
           }
         }
       }
