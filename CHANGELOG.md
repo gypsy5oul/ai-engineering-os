@@ -3,6 +3,77 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.42.0] — It deferred to a reviewer who was reviewing something else
+
+`policies/task-synthesis.json` validates that a decomposition is coherent with the
+graph — children cover the parent, roles can write what they are assigned, no
+dependency cycle. Its own `not_enforceable` said it could not tell whether a split
+was any *good*, and deferred: *"That is what the reviewer on the stage is for."*
+
+It was not true. Every stage gate reviews the stage's **artifact** — testability of
+stories, coverage of scenarios, feasibility completeness — and not one of the
+sixteen gate purposes mentions the decomposition. The four stages most likely to
+synthesize (`WF-FEATURE/DEV`, `WF-AI-CHANGE/IMPLEMENT`, `WF-AI-CHANGE/OFFLINE-EVAL`,
+`WF-DEFECT/TRIAGE`) have no reviewer at all. The policy deferred to a review that
+did not happen.
+
+**Seven dimensions**, from the brief: cohesion, coupling, parallelizability, task
+size, ownership, handoff cost, integration cost. Each is a question with an
+answer — *"Does each child do one thing, or is it a bag of leftovers?"*, *"How much
+does each child need to know about the others to be correct?"* — with the shapes
+that indicate a problem, and why it matters.
+
+**There is no score, and that is the point.** The brief said not to build a fake
+heuristic and it was the single easiest thing to add here. A number for cohesion
+on a set of engineering tasks would be defensible-looking, arguable, and wrong
+often enough that people would route around it — and a decomposition that scored
+well would stop being read, which is worse than the gap it was meant to close.
+
+So the answers are prose, and what is checked mechanically is **provenance and
+completeness, never quality**: that the review happened where it is required, that
+every dimension was answered rather than left blank, that the reviewer was not the
+proposer, and that a verdict was reached. The same shape as `complexity_justified`
+and `metrics_have_evidence` — the checker refuses an absence, and a person refuses
+a bad answer. A test parses `check_review` and asserts its body contains no
+arithmetic over the answers at all.
+
+Four verdicts, and `do-not-split` is deliberately first-class rather than a
+variant of `resplit`: **the stage is one task** is a real and under-used answer.
+`sound-with-findings` grafts, because blocking a workable, imperfect split is how
+a review becomes something people work around.
+
+**Required narrowly.** A review is needed before grafting only when the parent is
+HIGH or CRITICAL risk or holds a coupled surface. Demanding a second reader for a
+three-way split of a LOW-risk documentation stage would make synthesis expensive
+enough that stages stop being decomposed at all, which is worse than an imperfect
+split.
+
+**A load-bearing belief failed on a capability that was fine.** Claude Code moved
+2.1.250 → 2.1.251 mid-work, and `task-created-blocks` went red. The checker said
+the right thing — *"either the pattern moved or the capability went away, and this
+cannot tell which"* — so it was checked by hand: the blocking set is intact and
+the minified variable holding it was renamed `aen` → `_in`.
+
+The belief now matches the array literal rather than the name holding it. A
+minified identifier is the least stable thing in that file and the last thing a
+belief should depend on. A second belief was added while the binary was open,
+because the first only asserts membership of the blocking set: `Exit code 2 -
+show stderr to model and prevent task creation` is the sentence that makes
+`bind_task.py`'s refusals destructive rather than advisory, and it is why they are
+drawn as narrowly as they are.
+
+The one thing a machine can genuinely check here is independence, and it does:
+`solution-architect` reviewing its own split is refused, for the same reason an
+author reviewing its own design is. That matters more than it looks — all three
+roles that can synthesize (`development-lead`, `qa-lead`, `solution-architect`)
+are leads, so the fallback reviewer is frequently the one that applies.
+
+What it cannot do is in the policy's own `not_enforceable` and in
+`docs/limitations.md`: a reviewer can write "cohesion: fine" on every dimension
+and the checker will accept it; nothing correlates a review with the artifacts it
+claims to have read; and a stage that should have been decomposed and was not
+produces no proposal, so this catches bad splits and never missing ones.
+
 ## [0.41.0] — Told a fact, it invented a reason and wrote itself a rule
 
 Five reviewer roles now hold persistent project-scope memory:

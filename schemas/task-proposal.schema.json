@@ -95,6 +95,85 @@
           }
         }
       }
+    },
+    "review": {
+      "type": "object",
+      "description": "The decomposition review, per policies/decomposition-review.json. Required before grafting where the parent is HIGH or CRITICAL risk or holds a coupled surface; recommended otherwise. Every dimension is prose because there is no metric here and there will not be one -- a number for cohesion on a set of engineering tasks would be a heuristic wearing a decimal point.",
+      "required": [
+        "reviewer",
+        "verdict",
+        "dimensions"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "reviewer": {
+          "type": "string",
+          "description": "The role that reviewed it. Never the proposer: a role reviewing its own split will find it sound, for the same reason an author reviewing its own design does."
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "sound",
+            "sound-with-findings",
+            "resplit",
+            "do-not-split"
+          ]
+        },
+        "dimensions": {
+          "type": "object",
+          "description": "One answer per dimension. A blank is refused; a lazy answer is refused by the person reading it, which is the honest division of labour here.",
+          "required": [
+            "cohesion",
+            "coupling",
+            "parallelizability",
+            "task_size",
+            "ownership",
+            "handoff_cost",
+            "integration_cost"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cohesion": {
+              "type": "string",
+              "minLength": 12
+            },
+            "coupling": {
+              "type": "string",
+              "minLength": 12
+            },
+            "parallelizability": {
+              "type": "string",
+              "minLength": 12
+            },
+            "task_size": {
+              "type": "string",
+              "minLength": 12
+            },
+            "ownership": {
+              "type": "string",
+              "minLength": 12
+            },
+            "handoff_cost": {
+              "type": "string",
+              "minLength": 12
+            },
+            "integration_cost": {
+              "type": "string",
+              "minLength": 12
+            }
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What is wrong, where the verdict is not `sound`. Carried onto the grafted children's history so it is not lost at the graft."
+        },
+        "reviewed_at": {
+          "type": "string"
+        }
+      }
     }
   }
 }

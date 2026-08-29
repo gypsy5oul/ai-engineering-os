@@ -11,7 +11,7 @@
     {
       "name": "ai-engineering-os",
       "description": "Governed AI engineering organization for Claude Code: SDLC agents, skills, safety hooks, agent-team patterns, evaluation and governance.",
-      "version": "0.41.0",
+      "version": "0.42.0",
       "category": "engineering",
       "tags": [
         "sdlc",

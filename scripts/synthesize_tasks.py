@@ -61,6 +61,68 @@ def owner_of(code):
 # Validation. Every rule here is one entry in policies/task-synthesis.json.
 # --------------------------------------------------------------------------
 
+def review_policy():
+    with open(os.path.join(ROOT, "policies", "decomposition-review.json"), encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def review_required(parent):
+    """Whether this decomposition may be grafted without a second reader.
+
+    Narrow on purpose. Requiring a review of every three-way split of a LOW-risk
+    documentation stage would make synthesis expensive enough that stages stop
+    being decomposed at all, which is worse than an imperfect split.
+    """
+    risk = str(parent.get("risk") or "MEDIUM").upper()
+    return risk in ("HIGH", "CRITICAL") or bool(parent.get("coupled_surface"))
+
+
+def check_review(proposal, parent, errors):
+    """What can be checked about a decomposition review: that it happened, that it
+    is complete, and that the reviewer is not the proposer.
+
+    Never whether the answers are any good. A number for cohesion on a set of
+    engineering tasks would be a heuristic wearing a decimal point -- defensible-
+    looking, arguable, and wrong often enough that a decomposition which scored
+    well would stop being read. So this refuses an absence and a person refuses a
+    bad answer, which is the same division of labour as complexity_justified.
+    """
+    pol = review_policy()
+    dims = [d["dimension"] for d in pol["dimensions"]]
+    review = proposal.get("review")
+
+    if not review:
+        if review_required(parent):
+            errors.append(
+                "DQ: %s is %s risk%s, so this decomposition needs a review before it is "
+                "grafted. policies/task-synthesis.json rejects a split that is incoherent; it "
+                "cannot reject one that is merely poor, and this is where that happens."
+                % (parent["id"], parent.get("risk", "MEDIUM"),
+                   " and holds the %s surface" % parent["coupled_surface"]
+                   if parent.get("coupled_surface") else ""))
+        return
+
+    if review.get("reviewer") and review["reviewer"] == parent.get("role"):
+        errors.append(
+            "DQ: %s reviewed its own decomposition. A role reviewing its own split will find "
+            "it sound, for the same reason an author reviewing its own design does."
+            % review["reviewer"])
+
+    missing = [d for d in dims if not str((review.get("dimensions") or {}).get(d, "")).strip()]
+    if missing:
+        errors.append("DQ: the review does not answer %s. A blank is refused; a lazy answer is "
+                      "refused by whoever reads it." % ", ".join(missing))
+
+    if review.get("verdict") == "do-not-split":
+        errors.append("DQ: the review says do-not-split. The stage is one task, which is a real "
+                      "and under-used answer; nothing is grafted.")
+    elif review.get("verdict") == "resplit":
+        errors.append("DQ: the review says resplit. %s"
+                      % ("Findings: " + "; ".join(review.get("findings") or [])
+                         if review.get("findings") else "No findings were recorded, which makes "
+                         "the verdict unactionable."))
+
+
 def check(proposal, graph, project):
     """Returns (errors, parent). An empty error list is the only way in."""
     pol = policy()
@@ -171,6 +233,7 @@ def check(proposal, graph, project):
                           % (len(owners), surface, ", ".join(owners)))
 
     errors.extend(cycles(children))
+    check_review(proposal, parent, errors)
     return errors, parent
 
 

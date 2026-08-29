@@ -54,7 +54,41 @@ class Synthesis(unittest.TestCase):
                 return t
         raise unittest.SkipTest("no stage in the fixture produces %s" % (codes,))
 
-    def propose(self, payload, *extra):
+    # A decomposition review that satisfies policies/decomposition-review.json, so a
+    # test about a structural rule reaches that rule rather than stopping at the
+    # review gate. The answers are deliberately thin: what the checker verifies is
+    # that every dimension was answered and that the reviewer is not the proposer,
+    # and a test that supplied thoughtful prose would be testing nothing extra.
+    REVIEW = {
+        "reviewer": "engineering-director",
+        "verdict": "sound",
+        "dimensions": {
+            "cohesion": "each child produces one artifact",
+            "coupling": "the two followers read the contract and nothing else",
+            "parallelizability": "adr and sec run together once api lands",
+            "task_size": "one sitting each",
+            "ownership": "the roles that own these artifacts",
+            "handoff_cost": "one contract, handed over once",
+            "integration_cost": "the parent is the checkpoint; nothing to merge",
+        },
+    }
+
+    # A decomposition review, for proposals whose parent needs one. These tests
+    # predate the review and exercise the structural rules; attaching a default
+    # keeps each of them testing what it was written to test. The review's own
+    # behaviour -- absent, incomplete, self-reviewed -- is in
+    # tests/test_decomposition_review.py.
+    REVIEW = {
+        "reviewer": "engineering-director",
+        "verdict": "sound",
+        "dimensions": {d: "answered for the purposes of this fixture" for d in
+                       ("cohesion", "coupling", "parallelizability", "task_size",
+                        "ownership", "handoff_cost", "integration_cost")},
+    }
+
+    def propose(self, payload, *extra, **kw):
+        if kw.get("review", True) and "review" not in payload:
+            payload = dict(payload, review=self.REVIEW)
         return subprocess.run(
             [sys.executable, os.path.join(ROOT, "scripts", "synthesize_tasks.py"),
              "--project", self.project, "--item", self.ITEM, "--from", "-"] + list(extra),
@@ -169,7 +203,8 @@ class TestTheSplitActuallyParallelises(Synthesis):
                  "role": "solution-architect", "produces": ["ADR"], "depends_on": ["api"]},
                 {"key": "sec", "title": "Threat model the activation credentials",
                  "role": "security-architect", "produces": ["SEC"], "depends_on": ["api"]},
-            ]})
+            ],
+            "review": self.REVIEW})
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         kids = {c["id"]: c for c in W.children_of(self.graph(), parent["id"])}
         holders = [c for c in kids.values() if c.get("coupled_surface")]

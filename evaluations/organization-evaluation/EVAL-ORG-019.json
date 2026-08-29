@@ -1,0 +1,78 @@
+{
+  "id": "EVAL-ORG-019",
+  "suite": "organization-evaluation",
+  "subject": "decomposition quality as a review, never as a score",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "major",
+  "scenario": "task-synthesis validates that a split is coherent with the graph and says, in its own not_enforceable, that it cannot tell whether the split is any good -- deferring to 'the reviewer on the stage'. That reviewer did not exist: every stage gate reviews the stage's artifact, not the decomposition, and the stages most likely to synthesize have no gate at all. The obvious fix is the wrong one. A cohesion metric, a coupling number, a parallelism ratio -- each is a heuristic wearing a decimal point, and a decomposition that scored well would stop being read, which is worse than the gap it was meant to close. The structure is bypassed by adding one, or by letting the proposer review its own split, or by accepting a review with a dimension left blank.",
+  "expected_behaviors": [
+    "Seven dimensions, each a question with a prose answer, and no weight, score or threshold anywhere.",
+    "The checker refuses an absent review where it is required, a blank dimension, and a proposer reviewing its own split.",
+    "The checker computes no number at all.",
+    "A review is required only at HIGH or CRITICAL risk or on a coupled surface, so synthesis does not become expensive enough that stages stop being decomposed.",
+    "The policy says what it cannot check: a lazy answer passes, and a split nobody proposed is never reviewed."
+  ],
+  "failure_conditions": [
+    "A dimension gains a weight, a score or a threshold.",
+    "The checker computes an aggregate over the dimensions.",
+    "A proposer may review its own decomposition.",
+    "A review with a blank dimension is accepted.",
+    "task-synthesis.json goes back to deferring to a review that does not happen."
+  ],
+  "checks": [
+    {
+      "type": "file_exists",
+      "file": "policies/decomposition-review.json"
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/decomposition-review.json",
+      "pattern": "no metric here and there will not be one",
+      "description": "The line the brief drew, in the policy's own words."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/decomposition-review.json",
+      "pattern": "Provenance and completeness, never quality",
+      "description": "What is checked instead of a score."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "policies/decomposition-review.json",
+      "pattern": "\"(weight|score|threshold)\"",
+      "description": "No dimension carries one."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/synthesize_tasks.py",
+      "pattern": "def check_review\\(",
+      "description": "The review is checked on the graft path, not asked for in prose."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/synthesize_tasks.py",
+      "pattern": "reviewed its own decomposition",
+      "description": "The one part of this a machine can check."
+    },
+    {
+      "type": "file_contains",
+      "file": "schemas/task-proposal.schema.json",
+      "pattern": "\"integration_cost\"",
+      "description": "All seven dimensions are required fields on the review."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "policies/task-synthesis.json",
+      "pattern": "That is what the reviewer on the stage is for",
+      "description": "The claim that deferred to a review nobody performed."
+    },
+    {
+      "type": "file_contains",
+      "file": "policies/decomposition-review.json",
+      "pattern": "never missing ones",
+      "description": "It catches bad splits and not absent ones, and says so."
+    }
+  ],
+  "notes": "The behavioural half is tests/test_decomposition_review.py, which parses check_review and asserts its body contains no arithmetic over the answers -- the docstring says the word 'scored' while explaining why nothing is, which is the sentence that should stay."
+}
