@@ -78,8 +78,10 @@ If someone has a local `code-reviewer.md`, that is what runs.
 
 Agent teams are experimental and off by default. Set
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Interactivity is not the constraint it
-was once read as: at 2.1.241 `-p` carries a full teammate lifecycle, and
-`--teammate-mode in-process` needs no TTY. See `docs/agent-teams.md`.
+was once read as: `-p` carries a full teammate lifecycle and
+`--teammate-mode in-process` needs no TTY. The version that was verified against,
+and whether it still holds, is in `policies/platform-capabilities.json`. See
+`docs/agent-teams.md`.
 
 A teammate row that vanished has been hidden after going idle, not stopped.
 

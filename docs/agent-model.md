@@ -8,7 +8,7 @@ Most requests for "a new agent" are not agents.
 | --- | --- |
 | A durable role with its own authority, inputs, outputs and accountability | **Agent** |
 | A capability several roles use | **Skill** |
-| An independent check on another role's output | **Reviewer agent**, read-only |
+| An independent check on another role's output | **Reviewer agent**, whose write scope is its own review record |
 | A rule that must hold regardless of what the model decides | **Hook** |
 | A statement of who may do what | **Policy** |
 
@@ -74,7 +74,7 @@ ceiling, review depth, evaluation depth and whether a human is required.
 | LOW | Advisory or cosmetic; a wrong result is obvious and cheap | Single automated review, smoke evaluation |
 | MEDIUM | Changes behaviour inside a reviewed merge request, reversible | Peer plus routed specialist review, standard evaluation |
 | HIGH | Shapes system-wide properties, security, data or production | Independent same-discipline review, full suite with adversarial cases |
-| CRITICAL | Can compromise the ability to detect or prevent harm | Two independent reviewers, named human owner, read-only tool ceiling |
+| CRITICAL | Can compromise the ability to detect or prevent harm | Two independent reviewers, named human owner, no write tool at all |
 
 CRITICAL agents may not hold write tools. `tests/test_repository.py` enforces it.
 

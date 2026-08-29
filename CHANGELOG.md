@@ -3,6 +3,58 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.43.0] — Seven agents held a write tool and were told not to write anything
+
+An external review found one reviewer whose instructions contradicted its tools.
+It was seven.
+
+Every reviewer holds `Write` and `Edit` with a write scope of `docs/reviews/**` —
+0.29 gave them that so a review with findings had somewhere to record a verdict.
+Their own **Forbidden actions** still said:
+
+> Editing any file, including the design under review.
+
+Both sentences are defensible alone and they cannot both be followed. A strong
+model resolves that silently, and the safest reading — write nothing — is exactly
+the failure the write scope was introduced to fix. This costs more than a missing
+feature: nothing errors, and nobody sees which way the model went.
+
+Each of the seven now names the real boundary — *modifying the artifact under
+review, or anything outside its review scope* — and says what the tools are **for**,
+quoting the scope it may write. A role holding no write tool is told the
+restriction is structural rather than instructional, because those are different
+facts and reading one as the other is how this started.
+
+Two documents said the same stale thing. `docs/agent-model.md` described a
+reviewer as *read-only* and put a *read-only tool ceiling* on the CRITICAL tier.
+The first is wrong since 0.29; the second was right under a phrase that had come
+to mean something else, and now says *no write tool at all*.
+
+**The vocabulary checker generalized, which is the real fix.** `docs/sdlc.md`
+described a stage's `execution` as *"inline, subagent or team"* for two releases
+after the enum grew `background` and `dynamic-workflow` and isolation became a
+field of its own. 0.35's checker compares documented CLI values against argparse;
+`check_schema_vocabularies_are_documented` does the same one layer along, against
+schema enums. One direction only, deliberately: a document naming a value the
+schema lacks is caught everywhere else, and a document *omitting* one is the quiet
+failure — an agent simply never considers the value.
+
+**A teammate does not inherit its definition's skills.** Five stages run as teams
+and declare skills; `team-patterns` tells every spawn prompt to invoke them; and
+nothing checked either fact. `check_team_stages_carry_their_skills` now requires a
+team stage to declare the skills its teammates cannot inherit, and the platform
+claim underneath it is recorded in the capability model rather than living in
+prose — with an explicit `evidence_limit`, because no teammate/skills string was
+found in the 2.1.251 binary and confirming it needs a live team, which has never
+run here. A load-bearing claim that cannot be verified says so.
+
+**Version claims moved out of prose.** `docs/execution.md` and
+`docs/troubleshooting.md` restated behaviour "at 2.1.241" as current guidance.
+They now point at `policies/platform-capabilities.json`, which
+`check_platform_drift.py` re-checks against the installed binary. A version
+restated in prose is how a claim outlives the release it was true of — which
+0.42 had just watched happen from the other direction.
+
 ## [0.42.0] — It deferred to a reviewer who was reviewing something else
 
 `policies/task-synthesis.json` validates that a decomposition is coherent with the
