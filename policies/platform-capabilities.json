@@ -150,6 +150,14 @@
       "used_by": "the memory instructions in the five roles that hold it, which forbid both",
       "load_bearing": true,
       "verified": "2026-08-28 against 2.1.250, on the first probe."
+    },
+    "agent_frontmatter.skills_apply_to_a_teammate": {
+      "available": false,
+      "evidence": "documented",
+      "note": "Claude Code applies an agent definition's `skills:` frontmatter when the role runs as a subagent, and not when the same definition runs as a teammate. So a role documented as holding a capability arrives without it the moment a stage resolves to `team` -- silently, because nothing errors and the role simply reasons without the skill. skills/team-patterns/SKILL.md therefore tells every spawn prompt to invoke the needed skills explicitly.",
+      "used_by": "skills/team-patterns/SKILL.md; check_team_stages_carry_their_skills in scripts/validate_plugin.py, which requires every team-execution stage to declare the skills its teammates cannot inherit",
+      "load_bearing": true,
+      "evidence_limit": "Documented, not confirmed against the binary: no teammate/skills string was found in 2.1.251 by inspection, and confirming it properly needs a live team, which has never run here. It is recorded as load-bearing anyway, because a check now depends on it and the failure mode -- a teammate reasoning without a capability it is documented to hold -- is silent."
     }
   },
   "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent.",

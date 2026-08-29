@@ -48,8 +48,12 @@ it runs never decides where.
    declared integration step. In a shared checkout, no.
 5. Would the workers run a build, a test suite or a formatter? → **isolation `worktree`**,
    even if their source files are disjoint: those write shared output.
-6. Is the session non-interactive? → a team is still possible at 2.1.241, but it
-   is unverified here; prefer **subagent** unless the parallelism is the point.
+6. Is the session non-interactive? → a team is still possible, and unverified
+   here; prefer **subagent** unless the parallelism is the point. The version this
+   was established against is in `policies/platform-capabilities.json`, which
+   `scripts/check_platform_drift.py` re-checks against the installed binary —
+   restating a version in prose is how a claim outlives the release it was true
+   of.
 
 Rule 4 is not a preference. Two workers editing one file in one checkout
 overwrite each other and the loser's work vanishes silently. What has changed is

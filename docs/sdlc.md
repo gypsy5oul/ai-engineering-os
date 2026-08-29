@@ -49,7 +49,7 @@ Every stage in every workflow declares the same thing, validated against
 | `human_gate` | A named human's decision, with where it is durably recorded |
 | `human_gate.required_when` | The condition under which the gate has something to decide. A gate that fires when the answer is already settled teaches people to approve without reading |
 | `risk`, `complexity` | Feed `scripts/resolve_model.py` |
-| `execution` | `inline`, `subagent` or `team`; see [execution](execution.md) |
+| `execution` | `inline`, `subagent`, `background`, `team` or `dynamic-workflow`. Where the work runs is a separate field, `isolation`; see [execution](execution.md) |
 | `department_cycle` | The Level 2 cycle this stage runs internally, if any |
 
 The definition of done is the part that makes this executable rather than

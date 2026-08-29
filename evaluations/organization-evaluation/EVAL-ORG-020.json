@@ -1,0 +1,87 @@
+{
+  "id": "EVAL-ORG-020",
+  "suite": "organization-evaluation",
+  "subject": "instructions that a role can follow without choosing between them",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "Seven reviewer agents held Write and Edit, had a write scope of docs/reviews/**, and were told in their own Forbidden actions that 'Editing any file, including the design under review' was prohibited. Both sentences are defensible in isolation and they cannot both be followed. A strong model resolves the contradiction silently, and the safest reading -- write nothing -- is the one that leaves a real review with findings and nowhere to record them, which is the exact failure the write scope was introduced to fix. This is the class of defect that costs more than a missing feature: nothing errors, and nobody sees which way the model went. The same shape appears in documentation. docs/agent-model.md described a reviewer as read-only after reviewers gained a scoped write, and docs/sdlc.md named three of the five execution modes for two releases after the enum grew.",
+  "expected_behaviors": [
+    "No agent holding a write tool is told it may not edit any file.",
+    "Every reviewer is told what it may write and what it may not, in terms of the artifact under review rather than of files in general.",
+    "No document describes a reviewer as read-only or as holding no write tool.",
+    "Every value a schema enum permits appears in the documents that describe that vocabulary.",
+    "Every team-execution stage declares the skills its teammates cannot inherit."
+  ],
+  "failure_conditions": [
+    "An agent's tools and its instructions disagree about whether it may write.",
+    "A document restates a vocabulary and omits a value the schema permits.",
+    "A team stage declares no skills, so a teammate arrives without capabilities its definition promises.",
+    "A platform claim a checker depends on is recorded nowhere, or recorded without its evidence level."
+  ],
+  "checks": [
+    {
+      "type": "registry_invariant",
+      "invariant": "reviewers_write_only_their_own_record"
+    },
+    {
+      "type": "file_not_contains",
+      "file": "agents/architecture-reviewer.md",
+      "pattern": "Editing any file",
+      "description": "It holds Write and Edit for one purpose; forbidding all editing forbids that purpose too."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "agents/code-reviewer.md",
+      "pattern": "Editing any file"
+    },
+    {
+      "type": "file_not_contains",
+      "file": "agents/security-reviewer.md",
+      "pattern": "Editing any file"
+    },
+    {
+      "type": "file_contains",
+      "file": "agents/architecture-reviewer.md",
+      "pattern": "Modifying the artifact under review",
+      "description": "The real boundary, named."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "docs/agent-model.md",
+      "pattern": "\\*\\*Reviewer agent\\*\\*, read-only",
+      "description": "Reviewers stopped being read-only in 0.29; the doc said otherwise until 0.43."
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/sdlc.md",
+      "pattern": "dynamic-workflow",
+      "description": "The stage contract names every execution mode the schema permits."
+    },
+    {
+      "type": "file_contains",
+      "file": "docs/sdlc.md",
+      "pattern": "background"
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/validate_plugin.py",
+      "pattern": "def check_schema_vocabularies_are_documented\\(",
+      "description": "The CLI vocabulary checker generalized from argparse to schema enums, which is where this drift lived."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/validate_plugin.py",
+      "pattern": "def check_team_stages_carry_their_skills\\(",
+      "description": "A teammate inherits no skills from its definition, and until now nothing checked that the stages running as teams had any to carry."
+    },
+    {
+      "type": "json_path_equals",
+      "file": "policies/platform-capabilities.json",
+      "path": "capabilities[\"agent_frontmatter.skills_apply_to_a_teammate\"].load_bearing",
+      "value": true,
+      "description": "A check now depends on it, so it is recorded with its evidence level rather than left in prose."
+    }
+  ],
+  "notes": "The behavioural half is tests/test_instruction_consistency.py, which breaks a copy of the repository two ways -- a doc omitting an execution mode, a team stage with no skills -- and asserts the validator says so. The teammate-skills capability is recorded as `documented` with an explicit evidence_limit: no teammate/skills string was found in the 2.1.251 binary, and confirming it needs a live team, which has never run here."
+}

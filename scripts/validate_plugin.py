@@ -1122,6 +1122,125 @@ def _documented_values(blob):
     return out if len(out) > 1 else set()
 
 
+# A vocabulary the schemas define, and where the documentation restates it. The
+# CLI checker compares prose against argparse; this compares prose against a
+# schema enum, which is the same defect one layer along -- docs/sdlc.md described
+# `execution` as "inline, subagent or team" for two releases after the enum grew
+# `background` and `dynamic-workflow` and isolation became a separate field, so an
+# agent reading the stage contract got an execution model missing two values.
+SCHEMA_VOCABULARIES = [
+    {
+        "id": "stage-execution",
+        "schema": "schemas/task-graph.schema.json",
+        "path": ["properties", "tasks", "items", "properties", "execution",
+                 "oneOf", 0, "enum"],
+        "documented_in": ["docs/sdlc.md", "docs/execution.md"],
+        "why": "A stage contract that names three of five execution modes is an agent "
+               "choosing from an incomplete set.",
+    },
+    {
+        "id": "stage-isolation",
+        "schema": "schemas/task-graph.schema.json",
+        "path": ["properties", "tasks", "items", "properties", "isolation",
+                 "oneOf", 0, "enum"],
+        "documented_in": ["docs/execution.md"],
+        "why": "Isolation became a dimension of its own in 0.37. A document that still "
+               "folds it into execution describes the model that had the defect.",
+    },
+    {
+        "id": "work-item-type",
+        "schema": "schemas/work-item.schema.json",
+        "path": ["properties", "type", "enum"],
+        "documented_in": ["skills/work-item/SKILL.md"],
+        "why": "The same vocabulary the CLI checker holds, from the schema side.",
+    },
+]
+
+
+def _dig(doc, path):
+    cur = doc
+    for part in path:
+        cur = cur[part] if not isinstance(part, int) else cur[part]
+    return cur
+
+
+def check_schema_vocabularies_are_documented():
+    """Every value a schema enum permits appears in the documents that describe it.
+
+    One direction only, deliberately. A document naming a value the schema does not
+    have is caught by every other check here; a document *omitting* one is the
+    quiet failure -- nothing errors, and an agent simply never considers the value.
+    """
+    for entry in SCHEMA_VOCABULARIES:
+        schema = load_json(entry["schema"])
+        if not schema:
+            continue
+        try:
+            values = _dig(schema, entry["path"])
+        except (KeyError, IndexError, TypeError):
+            err("%s: %s no longer has the vocabulary at %s, so nothing compares it with "
+                "the documentation" % (entry["schema"], entry["id"],
+                                       ".".join(str(p) for p in entry["path"])))
+            continue
+        for rel in entry["documented_in"]:
+            path = os.path.join(ROOT, rel)
+            if not os.path.exists(path):
+                continue
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            missing = [v for v in values if v not in text]
+            if missing:
+                err("%s describes the %s vocabulary and omits %s. %s"
+                    % (rel, entry["id"], ", ".join(missing), entry["why"]))
+
+
+def check_team_stages_carry_their_skills():
+    """A teammate does not get its agent definition's `skills:` frontmatter.
+
+    Verified and recorded in policies/platform-capabilities.json: Claude Code
+    applies the frontmatter `skills` list to a subagent and not to a teammate, so a
+    role that runs as a teammate arrives without the capabilities its definition
+    says it has. skills/team-patterns/SKILL.md tells every spawn prompt to invoke
+    them explicitly -- and nothing checked that it still said so, or that the
+    stages running as teams had skills worth carrying.
+    """
+    base = os.path.join(ROOT, "sdlc", "workflows")
+    team_stages = []
+    for name in sorted(os.listdir(base)):
+        if not name.endswith((".yaml", ".yml")):
+            continue
+        try:
+            wf = parse_file(os.path.join(base, name))
+        except Exception:
+            continue
+        for stage in wf["stages"]:
+            if stage.get("execution") == "team":
+                team_stages.append((wf["id"], stage))
+
+    if not team_stages:
+        return
+
+    skill_path = os.path.join(ROOT, "skills", "team-patterns", "SKILL.md")
+    if not os.path.exists(skill_path):
+        err("stages run as teams and skills/team-patterns/SKILL.md does not exist, so "
+            "nothing tells a spawn prompt to carry the skills a teammate will not inherit")
+        return
+    with open(skill_path, encoding="utf-8") as fh:
+        guidance = fh.read()
+    if "skills" not in guidance.lower():
+        err("skills/team-patterns/SKILL.md does not mention skills. A teammate does not "
+            "inherit its definition's `skills:` frontmatter, so a spawn prompt that does "
+            "not name them produces a role without the capabilities it is documented to "
+            "have.")
+
+    for wid, stage in team_stages:
+        declared = stage.get("skills") or []
+        if not declared:
+            err("%s/%s runs as a team and declares no skills. A teammate inherits none "
+                "from its agent definition, so the stage is either missing its "
+                "capabilities or should not be a team." % (wid, stage["id"]))
+
+
 def check_work_item_id_patterns_agree():
     """A change is a work item, so the two patterns that describe one must be equal.
 
@@ -2084,6 +2203,8 @@ def main():
     check_hooks()
     check_ci_config()
     check_control_loop_policy_is_live()
+    check_schema_vocabularies_are_documented()
+    check_team_stages_carry_their_skills()
     check_work_item_id_patterns_agree()
     check_documented_vocabularies()
     check_every_workflow_is_reachable()
