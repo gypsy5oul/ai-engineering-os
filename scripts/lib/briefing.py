@@ -8,7 +8,76 @@ the spawn prompt instead.
 Two routes and one text. Written twice, they would drift, and the isolated route
 is the one nobody would notice drifting: the agent still gets *a* briefing, just
 not the one the hook would have given it.
+
+A definition of done arrives as predicate identifiers -- `every_skip_recorded();
+config_valid()` -- and for two releases that is all it arrived as. Watched live,
+an agent given exactly that spent six blocked commands trying to read the
+plugin's own source to find out what the identifiers meant, because the meanings
+live here and the plugin is outside an agent's read scope. It guessed correctly
+in the end. Guessing correctly is not the same as being told.
+
+So each predicate is glossed from `policies/artifact-model.json`, which is where
+the evaluator reads it from too. A gloss written out here instead would be a
+second copy of a definition, and the copy is always the one that goes stale.
 """
+import json
+import os
+import re
+
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_GLOSS = None
+
+
+def _glossary():
+    """`predicate name -> one sentence`, read from the artifact model.
+
+    Cached, because a briefing is rendered on every SubagentStart and the file is
+    large. Failure is silent and returns an empty glossary: a briefing with bare
+    predicate names is what this used to be, and is much better than a hook that
+    raises during a spawn.
+    """
+    global _GLOSS
+    if _GLOSS is not None:
+        return _GLOSS
+    _GLOSS = {}
+    try:
+        with open(os.path.join(_ROOT, "policies", "artifact-model.json"),
+                  encoding="utf-8") as fh:
+            model = json.load(fh)
+    except (OSError, ValueError):
+        return _GLOSS
+
+    def walk(node):
+        if not isinstance(node, dict):
+            return None
+        if "every_skip_recorded" in node:
+            return node
+        for value in node.values():
+            found = walk(value)
+            if found is not None:
+                return found
+        return None
+
+    registry = walk(model) or {}
+    for name, spec in registry.items():
+        means = (spec or {}).get("means") or ""
+        if means:
+            # The first sentence is the definition. What follows is usually the
+            # history of why the predicate is shaped the way it is, which the
+            # evaluator's reader needs and the agent doing the work does not.
+            _GLOSS[name] = re.split(r"(?<=[.])\s+", means.strip())[0]
+    return _GLOSS
+
+
+def _dod_lines(predicates):
+    """Each predicate as written, with what it means where that is known."""
+    gloss = _glossary()
+    out = ["- Definition of done:"]
+    for pred in predicates:
+        name = pred.split("(")[0].strip()
+        meaning = gloss.get(name)
+        out.append("  - `%s`%s" % (pred, " — %s" % meaning if meaning else ""))
+    return out
 
 
 def render(item, task=None, graph=None):
@@ -29,7 +98,7 @@ def render(item, task=None, graph=None):
         if task.get("produces"):
             lines.append("- Must produce: %s" % ", ".join(task["produces"]))
         if task.get("definition_of_done"):
-            lines.append("- Definition of done: %s" % "; ".join(task["definition_of_done"]))
+            lines += _dod_lines(task["definition_of_done"])
         if task.get("reviewer"):
             lines.append("- Reviewed by: %s" % task["reviewer"])
         if task.get("owns_paths"):

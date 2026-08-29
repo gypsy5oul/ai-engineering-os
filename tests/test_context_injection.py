@@ -18,6 +18,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
 import workitem as W  # noqa: E402
+import briefing  # noqa: E402
 
 
 class Hooked(unittest.TestCase):
@@ -132,6 +133,66 @@ class TestContextInjection(Hooked):
         ctx = self.start("docs-writer")["hookSpecificOutput"]["additionalContext"]
         self.assertIn("SFTP-FEAT-001", ctx)
         self.assertNotIn("## Your task", ctx)
+
+
+class TestTheDefinitionOfDoneArrivesMeaningful(unittest.TestCase):
+    """A briefing used to hand over predicate identifiers and nothing else.
+
+    Watched live against 2.1.251, an agent given `every_skip_recorded();
+    config_valid()` spent six commands trying to read the plugin's own source to
+    find out what they meant, and every one was refused -- the meanings live in
+    the plugin and the plugin is outside an agent's read scope. It guessed
+    correctly. Guessing correctly is not being told, and the next agent guesses
+    something else.
+    """
+
+    def render(self, dod):
+        return briefing.render(
+            {"id": "X-001", "type": "feature", "risk": "MEDIUM", "stage": "intake",
+             "intent": "i", "objective": "o"},
+            {"id": "T-001", "title": "t", "role": "engineering-director",
+             "definition_of_done": dod})
+
+    def test_a_predicate_arrives_with_its_meaning(self):
+        out = self.render(["every_skip_recorded()"])
+        self.assertIn("every_skip_recorded()", out)
+        self.assertIn("Every stage this change skips carries a written reason", out)
+
+    def test_the_two_predicates_from_the_live_run_are_both_glossed(self):
+        out = self.render(["every_skip_recorded()", "config_valid()"])
+        self.assertIn("Every stage this change skips carries a written reason", out)
+        self.assertIn("validates against schemas/project-config.schema.json", out)
+
+    def test_a_predicate_with_arguments_is_glossed_on_its_name(self):
+        out = self.render(["complexity_justified(ARTIFACT_CODE)"])
+        self.assertIn("complexity_justified(ARTIFACT_CODE)", out)
+        self.assertIn("complexity ledger", out)
+
+    def test_an_unknown_predicate_still_appears(self):
+        """Degrading to the old behaviour for one predicate beats dropping it."""
+        out = self.render(["not_a_real_predicate()"])
+        self.assertIn("not_a_real_predicate()", out)
+
+    def test_the_gloss_is_read_from_the_artifact_model_not_restated(self):
+        source = open(os.path.join(ROOT, "scripts", "lib", "briefing.py"),
+                      encoding="utf-8").read()
+        self.assertIn("artifact-model.json", source)
+        self.assertNotIn("Every stage this change skips carries", source,
+                         "the gloss is copied into the briefing; the copy will go stale")
+
+    def test_every_predicate_the_model_defines_can_be_glossed(self):
+        gloss = briefing._glossary()
+        self.assertGreaterEqual(len(gloss), 25)
+        for name, text in gloss.items():
+            with self.subTest(predicate=name):
+                self.assertTrue(text.endswith("."), name)
+
+    def test_only_the_first_sentence_travels(self):
+        """`means` carries the definition and then the history of why the
+        predicate is shaped that way. The agent doing the work needs the first."""
+        gloss = briefing._glossary()
+        self.assertEqual(gloss["every_skip_recorded"],
+                         "Every stage this change skips carries a written reason.")
 
 
 class TestSubagentObservation(Hooked):

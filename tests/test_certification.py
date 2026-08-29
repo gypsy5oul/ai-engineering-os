@@ -89,6 +89,42 @@ class TestTheVerdictRefusesToOverclaim(unittest.TestCase):
         self.assertEqual(v["real_agent"], "pass")
         self.assertTrue(v["certified"])
 
+    def test_a_probe_that_never_ran_blocks_certification(self):
+        """`not-run` is not a quiet `pass`. A probe that never fired measured
+        nothing, and the mechanism it asks about is exactly the one that breaks
+        in a pilot -- the live baseline for v0.44.0 had every stage's probe green
+        and `task-binding-recorded` never fired at all, because no session ever
+        created a native task."""
+        units = [unit(s, evidence="real-agent") for s in certify.REQUIRED_STAGES]
+        v = certify.build_verdict(units, [probe(), probe(pid="never-fired",
+                                                         result="not-run")], "live")
+        self.assertEqual(v["real_agent"], "partial")
+        self.assertFalse(v["certified"])
+        self.assertIn("never-fired", v["probes"]["unmeasured"])
+
+    def test_the_reason_names_the_probes_that_did_not_run(self):
+        units = [unit(s, evidence="real-agent") for s in certify.REQUIRED_STAGES]
+        v = certify.build_verdict(units, [probe(), probe(pid="never-fired",
+                                                         result="not-run")], "live")
+        self.assertIn("never-fired", v["why"])
+        self.assertIn("unmeasured", v["why"])
+
+    def test_a_run_where_no_probe_fired_at_all_is_not_run_not_partial(self):
+        """Stronger than partial, and the distinction is real: partial means some
+        mechanisms were measured, not-run means none were."""
+        units = [unit(s, evidence="real-agent") for s in certify.REQUIRED_STAGES]
+        v = certify.build_verdict(units, [probe(result="not-run")], "live")
+        self.assertEqual(v["real_agent"], "not-run")
+        self.assertFalse(v["certified"])
+
+    def test_the_verdict_counts_its_probes(self):
+        units = [unit(s, evidence="real-agent") for s in certify.REQUIRED_STAGES]
+        v = certify.build_verdict(units, [probe(), probe(pid="b", result="fail"),
+                                          probe(pid="c", result="not-run")], "live")
+        self.assertEqual(v["probes"]["total"], 3)
+        self.assertEqual(v["probes"]["failed"], 1)
+        self.assertEqual(v["probes"]["not_run"], 1)
+
     def test_the_verdict_always_says_why(self):
         for units, probes, mode in [([unit()], [], "synthetic"),
                                     ([unit(evidence="real-agent")], [probe()], "live"),
