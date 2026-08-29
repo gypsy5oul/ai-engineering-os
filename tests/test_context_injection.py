@@ -220,6 +220,77 @@ class TestTheDefinitionOfDoneArrivesMeaningful(unittest.TestCase):
         self.assertIn("No agent may create one", evidence)
 
 
+class TestARetryIsNotAFreshStart(unittest.TestCase):
+    """A REQ task refused and re-run produced GOLD-REQ-002 beside the
+    GOLD-REQ-001 it had written the first time -- a second artifact with a
+    different owner and fewer fields, which then failed the predicates the first
+    one had passed and dragged the department rollup down with it.
+
+    The agent had no way to know one existed. It was given a task and a
+    definition of done, and both read identically on attempt one and attempt
+    three."""
+
+    def project(self, artifacts):
+        tmp = tempfile.mkdtemp(prefix="aieos-retry-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for aid, owner in artifacts:
+            d = os.path.join(tmp, "docs", "requirements")
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, "%s.md" % aid), "w", encoding="utf-8") as fh:
+                fh.write("---\nid: %s\ntype: requirement\nchange: G-1\nowner: %s\n---\n\nbody\n"
+                         % (aid, owner))
+        return tmp
+
+    def render(self, project):
+        return briefing.render(
+            {"id": "G-1", "type": "feature", "risk": "MEDIUM", "stage": "req",
+             "intent": "i", "objective": "o"},
+            {"id": "T-002", "title": "REQ", "role": "product-manager",
+             "produces": ["REQ"], "definition_of_done": ["artifact_exists(REQ)"]},
+            None, project)
+
+    def test_an_existing_artifact_is_named(self):
+        out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
+        self.assertIn("GOLD-REQ-001", out)
+        self.assertIn("amend rather than replace", out)
+
+    def test_its_owner_is_named_too(self):
+        """The duplicate had a different owner, which is what failed
+        artifact_owned_by."""
+        out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
+        self.assertIn("requirements-analyst", out)
+
+    def test_the_briefing_says_a_second_one_does_not_supersede(self):
+        out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
+        self.assertIn("does not supersede the first", out)
+
+    def test_nothing_is_claimed_when_no_artifact_exists_yet(self):
+        out = self.render(self.project([]))
+        self.assertNotIn("Already produced", out)
+
+    def test_an_artifact_of_another_type_is_not_offered(self):
+        tmp = self.project([])
+        d = os.path.join(tmp, "docs", "decisions")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "GOLD-DEC-001.md"), "w", encoding="utf-8") as fh:
+            fh.write("---\nid: GOLD-DEC-001\ntype: decision\nchange: G-1\n---\n\nx\n")
+        self.assertNotIn("GOLD-DEC-001", self.render(tmp))
+
+    def test_another_change_s_artifact_is_not_offered(self):
+        tmp = self.project([])
+        d = os.path.join(tmp, "docs", "requirements")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "OTHER-REQ-001.md"), "w", encoding="utf-8") as fh:
+            fh.write("---\nid: OTHER-REQ-001\ntype: requirement\nchange: G-9\n---\n\nx\n")
+        self.assertNotIn("OTHER-REQ-001", self.render(tmp))
+
+    def test_the_hook_passes_the_project_so_this_reaches_a_real_session(self):
+        source = open(os.path.join(ROOT, "hooks", "scripts", "inject_context.py"),
+                      encoding="utf-8").read()
+        self.assertEqual(source.count("briefing.render(item, None, graph, project)"), 1)
+        self.assertEqual(source.count("briefing.render(item, claimed, graph, project)"), 1)
+
+
 class TestSubagentObservation(Hooked):
     def start(self, agent_type, agent_id="a1"):
         self.unblock_role(agent_type)

@@ -790,11 +790,20 @@ MECHANISM_PROMPTS = [
      "using the task tools rather than doing the work inline. Give the task a subject "
      "that names the work item identifier %(item)s. Then complete it. Report the task "
      "identifier you created."),
-    ("worktree", 900,
-     "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
-     "Create a git worktree for isolated work on %(item)s, make one small change inside "
-     "it, and integrate that change back into the main checkout. Report the worktree "
-     "path, what you changed, and how the integration went."),
+    ("worktree", 1500,
+     "This project runs on the AI Engineering OS and work item %(item)s is open.\n\n"
+     "Exercise the whole isolation lifecycle, using the EnterWorktree and ExitWorktree "
+     "tools rather than raw `git worktree` commands, because the organization's hooks "
+     "observe those:\n"
+     "1. Enter a new worktree for %(item)s.\n"
+     "2. Inside it, make one small real change to `src/retention/policy.py` -- a comment "
+     "or a docstring is enough, but it must be a genuine edit.\n"
+     "3. Run the project's tests inside the worktree and report the result.\n"
+     "4. Integrate the change back into the main checkout, so the edit is present there.\n"
+     "5. Leave the worktree and remove it.\n\n"
+     "Report the worktree path, the test result, whether the change reached the main "
+     "checkout, and whether the worktree was removed. A worktree that was created and "
+     "never integrated is a failure of this exercise, not a success."),
     ("team", 1200,
      "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
      "Start a team to work on %(item)s and give at least one teammate a task. Tell each "
@@ -987,6 +996,51 @@ def _p_worktree(ctx):
         return None, ("no worktree was created, so isolation stayed at shared-checkout "
                       "and the WorktreeCreate hook never fired")
     return True, "%d worktree(s) created, %d removed" % (len(created), len(removed))
+
+
+@probe("worktree-work-was-integrated-not-just-isolated",
+       "Did work done inside a worktree reach the main checkout, and was the worktree "
+       "then removed?",
+       "the main checkout's own contents, and worktree_removed in the history")
+def _p_worktree_integration(ctx):
+    """Creation is not the exercise.
+
+    Two runs recorded `worktree_created` and were read as isolation working. An
+    isolated branch nobody merged is a change that did not happen, and a worktree
+    nobody removed is state left behind -- so this asks for the two events that
+    make the lifecycle a lifecycle rather than a beginning.
+    """
+    project, wid = ctx.get("project"), ctx.get("work_item")
+    if not wid:
+        return None, "no work item to read"
+    entries = _history(project, wid)
+    if not [h for h in entries if h.get("kind") == "worktree_created"]:
+        return None, "no worktree was created, so there is nothing to integrate"
+
+    removed = [h for h in entries if h.get("kind") == "worktree_removed"]
+    # Integration can arrive two ways and both count: a commit that landed on the
+    # main checkout, or an uncommitted edit sitting in its working tree. What does
+    # not count is the change existing only inside the worktree.
+    marker = os.path.join("src", "retention", "policy.py")
+    integrated, how = False, "no commit and no working-tree change"
+    try:
+        log = subprocess.run(["git", "log", "--oneline", "-15", "--", marker],
+                             cwd=project, capture_output=True, text=True, timeout=60)
+        if len((log.stdout or "").strip().splitlines()) > 1:
+            integrated, how = True, "a new commit touches %s" % marker
+        else:
+            diff = subprocess.run(["git", "status", "--porcelain", "--", marker],
+                                  cwd=project, capture_output=True, text=True, timeout=60)
+            if (diff.stdout or "").strip():
+                integrated, how = True, "%s is modified in the main checkout" % marker
+    except Exception as exc:
+        return None, "the main checkout could not be inspected: %r" % exc
+
+    if integrated and removed:
+        return True, "%s, and %d worktree(s) were removed" % (how, len(removed))
+    return False, ("worktree created but %s%s"
+                   % (how if not integrated else how,
+                      "; no worktree_removed was recorded" if not removed else ""))
 
 
 @probe("a-team-stage-carried-its-skills",

@@ -96,7 +96,47 @@ def _dod_lines(predicates):
     return out
 
 
-def render(item, task=None, graph=None):
+def _existing(project, item, task):
+    """Artifacts of the types this task produces that already exist for this change.
+
+    A retry is not a fresh start, and nothing told the agent that. Watched live,
+    a REQ task refused and re-run produced GOLD-REQ-002 beside the GOLD-REQ-001 it
+    had written the first time -- a second artifact with a different owner and
+    fewer fields, which then failed the predicates the first one had passed. The
+    agent had no way to know one existed; it had been given a task and a
+    definition of done, and both read the same on attempt one and attempt three.
+    """
+    produces = [p for p in (task or {}).get("produces") or []]
+    if not (project and produces):
+        return []
+    found = []
+    docs = os.path.join(project, "docs")
+    for base, _dirs, files in os.walk(docs) if os.path.isdir(docs) else []:
+        for name in sorted(files):
+            if not name.endswith(".md"):
+                continue
+            path = os.path.join(base, name)
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    head = fh.read(2000)
+            except OSError:
+                continue
+            aid = re.search(r"^id:\s*([A-Z][A-Z0-9-]+)\s*$", head, re.M)
+            if not aid:
+                continue
+            code = aid.group(1).split("-")
+            if len(code) < 3 or code[-2] not in produces:
+                continue
+            change = re.search(r"^change:\s*(\S+)\s*$", head, re.M)
+            if change and item and change.group(1).strip() != item.get("id"):
+                continue
+            owner = re.search(r"^owner:\s*(\S+)\s*$", head, re.M)
+            found.append((aid.group(1), os.path.relpath(path, project),
+                          owner.group(1) if owner else None))
+    return found
+
+
+def render(item, task=None, graph=None, project=None):
     """The briefing for this work item, and this task if one is claimed."""
     graph = graph or {"tasks": []}
     lines = ["## Your work item", "",
@@ -128,6 +168,16 @@ def render(item, task=None, graph=None):
             lines.append("- Execution: declared `%s`, resolved to `%s` — %s"
                          % (ex.get("declared"), ex["resolved"],
                             (ex.get("resolution_reason") or "")[:120]))
+        existing = _existing(project, item, task)
+        if existing:
+            lines.append("- Already produced for this change, and yours to amend rather "
+                         "than replace:")
+            for aid, path, owner in existing:
+                lines.append("  - `%s` at `%s`%s"
+                             % (aid, path, " (owner: %s)" % owner if owner else ""))
+            lines.append("  A second artifact of the same type does not supersede the "
+                         "first; both are then evaluated, and the weaker one fails the "
+                         "stage.")
         attempts = task.get("attempts", 0)
         if attempts:
             lines.append("- Attempt %d of %d. Previously: %s"

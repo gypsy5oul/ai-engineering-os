@@ -49,7 +49,7 @@ def build(project, agent_type, agent_id=None, session=None):
     # agent on every task its role owned, and two agents on the same one.
     claimed = W.claim(project, wid, agent_type, agent_id, session) if agent_id else None
     if claimed is None:
-        return briefing.render(item, None, graph)
+        return briefing.render(item, None, graph, project)
 
     # Everything after the claim can fail, and until this existed a failure left
     # the task leased to an agent that had received nothing: the organization
@@ -61,7 +61,7 @@ def build(project, agent_type, agent_id=None, session=None):
         resolve_and_record(project, wid, claimed, agent_id)
         graph = W.load_graph(project, wid) or graph
         claimed = W.task(graph, claimed["id"])
-        return briefing.render(item, claimed, graph)
+        return briefing.render(item, claimed, graph, project)
     except Exception as exc:
         return abandon_claim(project, wid, item, claimed, agent_id, exc)
 
