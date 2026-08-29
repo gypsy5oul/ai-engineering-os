@@ -250,6 +250,16 @@ class TestADetectorIsNotAFailure(unittest.TestCase):
         data = M.measure(self.project([{"kind": "execution_diverged", "task": "T-001"}]))
         self.assertIn("designed response", data["not_measured"]["workflow_recovery_rate"])
 
+    def test_an_unattributed_stop_is_a_detection_too(self):
+        """The same mistake, made twice. A subagent stopping without a lease is
+        the OS noticing it ran outside one; in the mechanism sessions that is the
+        expected shape, and four of them reported a run where nothing failed as
+        0% recovered."""
+        data = M.measure(self.project([
+            {"kind": "subagent_stopped_unattributed", "agent": "x"}]))
+        self.assertIsNone(data["rates"]["workflow_recovery_rate"])
+        self.assertEqual(data["detections_recorded"], 1)
+
     def test_a_real_block_does_enter_the_denominator(self):
         data = M.measure(self.project([{"kind": "task_completion_blocked", "task": "T-001"}]))
         self.assertEqual(data["rates"]["workflow_recovery_rate"], 0.0)

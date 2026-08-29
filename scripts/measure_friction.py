@@ -214,9 +214,17 @@ def measure(project, wid=None):
     # Counting it in the denominator reported the detector working as a 0%
     # recovery rate, which is the opposite of what happened.
     divergences = [h for h in entries if "diverged" in (h.get("kind") or "")]
+    # Same class as a divergence, and it cost the same mistake twice. A
+    # `subagent_stopped_unattributed` is the OS noticing that an agent ran
+    # without holding a lease -- a detection. In the mechanism sessions that is
+    # the expected shape, because no task was delegated to them, and counting
+    # four of them as unrecovered failures reported a 0% recovery rate for a run
+    # in which nothing had failed.
+    detections = divergences + [h for h in entries
+                                if "unattributed" in (h.get("kind") or "")]
     needed_recovery = [h for h in entries
                        if any(k in (h.get("kind") or "")
-                              for k in ("blocked", "failed", "unattributed"))]
+                              for k in ("blocked", "failed"))]
     recovered = [h for h in entries
                  if any(k in (h.get("kind") or "")
                         for k in ("released", "recovered", "reworked", "replanned"))]
@@ -229,6 +237,7 @@ def measure(project, wid=None):
                "no subagent transcript was recorded, so nothing was executed to measure",
         "agents_measured": len([a for a in per_agent if a.get("measured")]),
         "execution_divergences": len(divergences),
+        "detections_recorded": len(detections),
         "totals": totals,
         "per_agent": per_agent,
         "rates": {
@@ -269,9 +278,11 @@ def measure(project, wid=None):
                 "no task reached a verdict, so there is no first pass to measure",
             "workflow_recovery_rate":
                 None if needed_recovery else
-                "nothing entered a state needing recovery; %d execution divergence(s) "
-                "were detected and recorded, which is the designed response rather "
-                "than a failure" % len(divergences),
+                "nothing entered a state needing recovery; %d drift detection(s) "
+                "were recorded -- %d execution divergence(s) and %d unattributed "
+                "subagent stop(s) -- which is the designed response rather than a "
+                "failure" % (len(detections), len(divergences),
+                             len(detections) - len(divergences)),
         },
     }
 
