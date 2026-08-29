@@ -1,0 +1,79 @@
+{
+  "id": "EVAL-ORG-022",
+  "suite": "organization-evaluation",
+  "subject": "an unmeasured mechanism is never a certified one, and an unmeasured metric is never zero",
+  "mode": "deterministic",
+  "adversarial": true,
+  "severity": "critical",
+  "scenario": "Certification and measurement fail the same way, in opposite directions. A certification overclaims by treating silence as success: a probe that never fired asked about a mechanism nobody exercised, and if `not-run` quietly counts as `pass` then the run certifies the probes that happened to fire and says nothing about the rest -- which is exactly the mechanism that breaks in the pilot. A metric overclaims by treating absence as evidence: zero and unmeasured render identically, so a harness that reports 0 where it means 'no evidence' produces a dashboard saying the organization is frictionless precisely when it has measured nothing. The live baseline is the case in point. Every probe that ran passed, and four never ran at all -- TaskCreated, TaskCompleted, worktree isolation and team skill propagation were entirely unmeasured. And an unattended run has no human in it, so counting zero human interventions describes the harness rather than the organization. The structure is bypassed by weakening the certification to make a run pass, by defaulting an unmeasured rate to zero, or by counting a detector firing as a failure.",
+  "expected_behaviors": [
+    "Certification requires every probe to have produced evidence: a run with an unrun probe is `partial`, never `pass`, and the reason names the probes that did not run.",
+    "A run where no probe fired at all is `not-run` rather than `partial`, because partial means some mechanisms were measured.",
+    "Every friction rate is either a number or None with a stated reason; no rate defaults to zero when there is no evidence.",
+    "human_intervention_rate is never a number in an unattended run, and says why.",
+    "A recorded execution divergence is the OS detecting drift, not a failure awaiting recovery, and does not enter the recovery denominator.",
+    "Friction is counted from subagent transcripts rather than from a session's own account of itself."
+  ],
+  "failure_conditions": [
+    "A probe with result `not-run` is treated as passing.",
+    "A certification failure is resolved by removing or weakening a probe rather than by exercising the mechanism.",
+    "An unmeasured rate is reported as 0.",
+    "human_intervention_rate is reported as a number from an unattended run.",
+    "An execution divergence is counted as an unrecovered failure."
+  ],
+  "checks": [
+    {
+      "type": "file_contains",
+      "file": "scripts/certify.py",
+      "pattern": "not-run` is not a quiet `pass",
+      "description": "The rule stated where it is enforced."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/certify.py",
+      "pattern": "certified = real_verdict == \"pass\" and not missing and not unrun",
+      "description": "An unrun probe blocks certification."
+    },
+    {
+      "type": "file_exists",
+      "file": "scripts/measure_friction.py"
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/measure_friction.py",
+      "pattern": "Nothing is fabricated",
+      "description": "The first of the two rules that shape what is reported."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/measure_friction.py",
+      "pattern": "Nothing is judged",
+      "description": "The second, with the undercount admitted rather than smoothed over."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/measure_friction.py",
+      "pattern": "\"human_intervention_rate\": None",
+      "description": "Never a number in an unattended run."
+    },
+    {
+      "type": "file_contains",
+      "file": "scripts/measure_friction.py",
+      "pattern": "designed response rather",
+      "description": "A detector firing is not a failure awaiting recovery."
+    },
+    {
+      "type": "file_contains",
+      "file": "tests/test_friction.py",
+      "pattern": "def test_human_intervention_rate_is_never_a_number_in_an_unattended_run",
+      "description": "The property is tested, not only documented."
+    },
+    {
+      "type": "file_contains",
+      "file": "tests/test_certification.py",
+      "pattern": "def test_a_probe_that_never_ran_blocks_certification",
+      "description": "So does the certification rule."
+    }
+  ],
+  "notes": "The four probes that were unmeasured in the live baseline are the point of the case: task-binding-recorded, task-completion-is-gated, worktree-isolation-was-actually-used and a-team-stage-carried-its-skills. The correct response to those is to exercise the mechanisms, never to drop the probes."
+}

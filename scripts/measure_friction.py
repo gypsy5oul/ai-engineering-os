@@ -226,6 +226,19 @@ def measure(project, wid=None):
             "human_intervention_rate": None,
         },
         "not_measured": {
+            # Every rate that can come back None needs a reason here. A `None`
+            # with no explanation is the same defect this file exists to avoid,
+            # one level along: the reader sees a blank and supplies their own
+            # story for it.
+            "unnecessary_turn_rate":
+                None if totals.get("turns") else
+                "no transcript recorded a turn, so there is nothing to divide",
+            "command_failure_rate":
+                None if totals.get("tool_calls") else
+                "no transcript recorded a tool call, so there is nothing to divide",
+            "permission_refusal_share":
+                None if totals.get("failed_tool_calls") else
+                "nothing failed, so there is no share of failures to attribute",
             "human_intervention_rate":
                 "unattended run: no human was present, so zero interventions is an "
                 "artefact of the harness and not a property of the organization",

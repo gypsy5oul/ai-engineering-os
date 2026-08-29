@@ -707,9 +707,10 @@ def build_verdict(units, probes, mode):
     ran = [p for p in probes if p["result"] != "not-run"]
     failed = [p for p in probes if p["result"] == "fail"]
     # A probe that never ran has produced no evidence, and a certification that
-    # ignores it is certifying the probes that happened to fire. `not-run` is not
-    # a quiet `pass`: the mechanism it asks about is simply unmeasured, and an
-    # unmeasured mechanism is exactly the one that breaks in the pilot.
+    # ignores it is certifying the probes that happened to fire.
+    # `not-run` is not a quiet `pass`.
+    # The mechanism it asks about is simply unmeasured, and an unmeasured
+    # mechanism is exactly the one that breaks in the pilot.
     unrun = [p for p in probes if p["result"] == "not-run"]
     covered = sorted({u["stage"] for u in real})
     missing = [s for s in REQUIRED_STAGES if s not in covered]
