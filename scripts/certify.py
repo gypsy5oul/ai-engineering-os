@@ -460,13 +460,21 @@ def drive_lifecycle(project, wid, model, budget=14, timeout=1800):
     stalled task to collect coverage from an independent branch: a stage reached
     by stepping over its own dependency is not evidence that the lifecycle runs.
     """
-    attempted, stalled = [], set()
+    attempted, stalled, tries = [], set(), {}
     for _ in range(budget):
         target = _first_runnable(project, wid)
         if target is None:
             break
         tid = target["id"]
         if tid in stalled:
+            break
+        # The loop's own bound, not one invented here. A task the organization
+        # decided to retry or rework is a task it wants run again, and a walk
+        # that stopped at the first refusal would never exercise the retry path
+        # at all -- which is the path most worth watching.
+        tries[tid] = tries.get(tid, 0) + 1
+        if tries[tid] > int(target.get("max_attempts") or 3):
+            stalled.add(tid)
             break
 
         step = {"task": tid, "stage": target.get("stage"), "role": target.get("role"),
@@ -495,18 +503,27 @@ def drive_lifecycle(project, wid, model, budget=14, timeout=1800):
             stalled.add(tid)
             break
 
-        rc, out = _control(project, wid, "observe", "--task", tid, "--outcome", "accepted",
-                           "--detail", "certification: a real session held this task")
+        # No `--detail`. `observe` writes it straight over `task["result"]`, and
+        # that field holds what the agent itself reported -- which is the only
+        # evidence `the-agent-knew-what-was-not-in-its-prompt` has to read. The
+        # first full walk passed a helpful-looking note here and overwrote the
+        # agent's own words with the harness's, and the probe correctly reported
+        # that the evidence was gone. A harness that narrates over what it is
+        # measuring is measuring itself.
+        rc, out = _control(project, wid, "observe", "--task", tid, "--outcome", "accepted")
         if rc == 0:
             step["accepted"] = True
         else:
             step["accepted"] = False
             step["why_refused"] = out.strip()[-400:]
-            _control(project, wid, "observe", "--task", tid, "--outcome", "failed",
-                     "--detail", "the definition of done was not met by the live session")
+            _control(project, wid, "observe", "--task", tid, "--outcome", "failed")
             _rc, decision = _control(project, wid, "decide", "--task", tid)
             step["decision"] = decision.strip()[:400]
-            stalled.add(tid)
+            # RETRY and REWORK mean run it again. REPLAN and ESCALATE are the
+            # organization saying this task is not the problem, and walking on
+            # would be the harness overruling the decision it just asked for.
+            if not any(w in decision.upper() for w in ("RETRY", "REWORK")):
+                stalled.add(tid)
         attempted.append(step)
     return attempted
 

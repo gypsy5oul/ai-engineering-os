@@ -125,6 +125,23 @@ class TestTheVerdictRefusesToOverclaim(unittest.TestCase):
         self.assertEqual(v["probes"]["failed"], 1)
         self.assertEqual(v["probes"]["not_run"], 1)
 
+    def test_the_walk_never_overwrites_what_an_agent_reported(self):
+        """`observe --detail` writes straight over `task["result"]`, which is
+        where the agent's own words live and the only evidence one probe has to
+        read. The first full walk passed a helpful-looking note and overwrote
+        them; the probe correctly reported that the evidence was gone. A harness
+        that narrates over what it is measuring is measuring itself."""
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        fn = next(n for n in tree.body
+                  if isinstance(n, ast.FunctionDef) and n.name == "drive_lifecycle")
+        literals = {n.value for n in ast.walk(fn)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+        self.assertIn("observe", literals, "the fixture no longer describes the walk")
+        self.assertNotIn("--detail", literals,
+                         "the walk writes over the agent's own result")
+
     def test_the_verdict_always_says_why(self):
         for units, probes, mode in [([unit()], [], "synthetic"),
                                     ([unit(evidence="real-agent")], [probe()], "live"),
