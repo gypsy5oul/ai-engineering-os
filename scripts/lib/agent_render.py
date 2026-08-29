@@ -23,7 +23,35 @@ def _sections():
         return json.load(fh)["role_contract_sections"]
 
 
+def _optional_sections():
+    """Sections a role carries only when its frontmatter declares the capability.
+
+    Same reasoning as `_sections`: read rather than restated. A renderer that does
+    not know about them emits a file the validator refuses for exactly the roles
+    that have one, which is the defect `_sections` was written to fix, one level
+    along.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(os.path.dirname(here))
+    with open(os.path.join(root, "policies", "agent-registry.json"), encoding="utf-8") as fh:
+        return json.load(fh).get("role_contract_optional_sections") or {}
+
+
 SECTIONS = _sections()
+OPTIONAL_SECTIONS = _optional_sections()
+
+
+def sections_for(frontmatter):
+    """The section order this particular agent's contract must follow.
+
+    An optional section is present exactly when its frontmatter trigger is: the
+    key named by the section, lowercased. `Memory` appears when `memory:` does.
+    """
+    out = list(SECTIONS)
+    for section, spec in OPTIONAL_SECTIONS.items():
+        if (frontmatter or {}).get(section.lower()) is not None:
+            out.insert(out.index(spec["after"]) + 1, section)
+    return out
 
 
 def load_policies():

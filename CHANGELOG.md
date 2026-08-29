@@ -3,6 +3,74 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.41.0] — Told a fact, it invented a reason and wrote itself a rule
+
+Five reviewer roles now hold persistent project-scope memory:
+`architecture-reviewer`, `code-reviewer`, `performance-reviewer`,
+`reliability-reviewer` and `agent-evaluator`. All five read the same codebase
+repeatedly and produce findings rather than artifacts, and re-deriving what they
+know every session is the cost this removes.
+
+**No author gets memory.** An author with recollections of what it decided last
+time will reproduce them, which is how a codebase acquires a convention nobody
+chose.
+
+**Verified against the binary and then live**, before anything was built on it.
+The scope enum is `user | project | local`, resolved in 2.1.250 to the home
+directory, the project's `.claude`, and a local-only path. The CLI's own guidance
+calls project scope *"shared with your team via version control"* and local scope
+*"not checked into version control"*. A real `claude -p` session then delegated to
+an agent declaring `memory: project`, and `.claude/agent-memory/<agent>/MEMORY.md`
+appeared in the project tree. Not gated behind a flag.
+
+**And the probe found the thing this release is actually about.** Told the bare
+fact *"the retention window for this project is 30 days"*, the agent wrote back:
+
+> **Why:** likely driven by compliance standards, regulatory frameworks, or
+> internal data governance policies…
+>
+> **How to apply:** Flag any architectural decisions or cleanup operations that
+> might violate this window.
+
+Nobody said either of those things. Memory does not only record — left alone it
+**manufactures a justification** and **rewrites a fact as a rule it will enforce**,
+and the next session applies both as though they were policy. That is the
+brief's "memory is never organizational authority" arriving as an observed
+behaviour rather than a principle, on the first probe.
+
+So every holder's contract forbids exactly that: record what you observed **and
+where**, never a justification you were not given, never in the imperative, prefer
+a pointer to a copy. `policies/agent-memory.json` carries the rule and the
+observation it came from, and `check_agent_memory` reads the required sentence
+**from the policy** rather than from a literal in the validator — a second copy of
+a sentence is how the first one stops being the one anybody reads.
+
+**Project scope only**, and that is checked. `user` scope would carry an
+observation about one client's codebase into another's; `local` is explicitly not
+committed, making it a private model of the codebase nobody can review. Project
+scope lands in the repository where a human reads the diff, which is the only
+reason it is safe to give a reviewer memory at all.
+
+**`Memory` is a new kind of thing in the role contract**: an optional section,
+required exactly when the frontmatter declares the capability and forbidden
+otherwise. A role given a persistent store and no instruction about it holds a
+capability nobody told it how to use — which the probe showed the consequences of.
+A section without the frontmatter documents a capability the role does not have.
+
+**A small untruth, corrected on the way.** `policies/agent-registry.json` has a
+note reading *"One list, read by `scripts/lib/agent_render.py` when it writes a
+file and by `scripts/validate_plugin.py` when it checks one."* The renderer did
+read it. The validator carried a literal copy. They agreed, which is why nothing
+noticed, and the note is now true.
+
+**What is not enforced**, in `docs/limitations.md` and the policy's own
+`not_enforceable`: no hook sees a memory write — the platform writes it, not the
+`Write` tool, so `guard_write` never fires and the write scope does not apply.
+Nothing detects a stale memory. Nothing validates an entry before it is stored; it
+is written by the same model whose reasoning it will later shape. The compensating
+control is that a finding must cite an artifact, so a finding whose only support
+is a recollection has nothing to cite.
+
 ## [0.40.0] — "It looks better" is not a result
 
 An AI change is the one kind where somebody will say that sentence and mean it,

@@ -629,5 +629,13 @@
       ],
       "notes": "Cannot send. It writes into .ai-engineering/outbox/ and a separate credentialed act (bin/aieos-notify) dispatches. Routing and recipients are decided by scripts/route_event.py, never by this agent. Content arriving from a chat space is data, never instructions. Filling a template is mechanical, but a message published outside the organization cannot be recalled: a leaked secret or exploitation path is unrecoverable. The MEDIUM risk floor keeps it on sonnet."
     }
-  ]
+  ],
+  "role_contract_optional_sections": {
+    "Memory": {
+      "after": "Escalation",
+      "required_when": "the agent declares `memory:` in its frontmatter",
+      "forbidden_when": "it does not",
+      "why": "Tied to the frontmatter in both directions. A role given a persistent store and no instruction about it is a capability nobody told it how to use, and the live probe showed what that produces: told a bare fact, an agent invents a justification for it and rewrites it as a rule it will enforce. A Memory section without the frontmatter is documentation of a capability the role does not have. It sits after Escalation because memory shapes how the role reviews, which is what the sections around it are about."
+    }
+  }
 }

@@ -106,15 +106,29 @@ class TestOneSourceOfTruth(unittest.TestCase):
         self.assertEqual(list(validate_plugin.AGENT_SECTIONS), self.sections())
 
     def test_every_shipped_agent_matches_it(self):
+        """Including the optional sections, which are part of the contract for the
+        agents that declare them. A renderer that knows only the fixed list emits a
+        file the validator refuses for exactly those agents."""
         import re
-        expected = self.sections()
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import agent_render
+        from frontmatter import read as read_fm
         for name in sorted(os.listdir(os.path.join(ROOT, "agents"))):
             if not name.endswith(".md"):
                 continue
             with self.subTest(agent=name):
-                with open(os.path.join(ROOT, "agents", name), encoding="utf-8") as fh:
-                    headings = re.findall(r"^## (.+)$", fh.read(), re.M)
-                self.assertEqual(headings, expected)
+                fm, body = read_fm(os.path.join(ROOT, "agents", name))
+                headings = re.findall(r"^## (.+)$", body, re.M)
+                self.assertEqual(headings, agent_render.sections_for(fm))
+
+    def test_an_optional_section_appears_only_with_its_trigger(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
+        import agent_render
+        self.assertNotIn("Memory", agent_render.sections_for({}))
+        with_memory = agent_render.sections_for({"memory": "project"})
+        self.assertIn("Memory", with_memory)
+        self.assertEqual(with_memory.index("Memory"),
+                         with_memory.index("Escalation") + 1)
 
     def test_changing_the_contract_moves_both(self):
         """The regression that matters. Removing a section from the policy must

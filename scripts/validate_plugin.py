@@ -34,6 +34,7 @@ AGENT_FM_KEYS = {"name", "description", "tools", "disallowedTools", "model",
 # of control." Allowing them here would let the repository carry configuration
 # that looks effective and is not.
 AGENT_FM_IGNORED_FOR_PLUGINS = ("permissionMode", "hooks", "mcpServers")
+
 AGENT_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 SKILL_FM_KEYS = {"name", "description", "when_to_use", "argument-hint", "arguments",
                  "disable-model-invocation", "user-invocable", "allowed-tools", "disallowed-tools",
@@ -58,10 +59,25 @@ MODEL_ALIASES = _model_aliases()
 # frontmatter and "Model policy" was addressed to whoever spawns the agent, stored
 # where only the agent itself would read it -- and a running subagent cannot change
 # its own model. Both are in policies/agent-registry.json and the docs.
-AGENT_SECTIONS = ["Role contract", "Purpose", "Responsibilities", "Not your responsibility",
-                  "Authority", "Allowed actions", "Forbidden actions", "Required inputs",
-                  "Expected outputs", "Escalation",
-                  "Review requirements", "Handoff", "Definition of done"]
+def _registry_json():
+    try:
+        with open(os.path.join(ROOT, "policies", "agent-registry.json"), encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
+# From the registry, which is what its own note has said all along -- "One list,
+# read by scripts/lib/agent_render.py when it writes a file and by
+# scripts/validate_plugin.py when it checks one." The renderer did read it; this
+# file carried a literal copy, so the claim was true of one caller and not the
+# other. They agreed, which is why nothing noticed.
+AGENT_SECTIONS = _registry_json().get("role_contract_sections") or [
+    "Role contract", "Purpose", "Responsibilities", "Not your responsibility",
+    "Authority", "Allowed actions", "Forbidden actions", "Required inputs",
+    "Expected outputs", "Escalation", "Review requirements", "Handoff",
+    "Definition of done"]
+AGENT_OPTIONAL_SECTIONS = _registry_json().get("role_contract_optional_sections") or {}
 
 
 def err(msg):
@@ -194,10 +210,33 @@ def check_agents(registry, profiles, write_scope):
                 err("%s: preloads skill %r which does not exist" % (rel, skill))
 
         headings = re.findall(r"^## (.+)$", body, re.M)
-        if headings != AGENT_SECTIONS:
-            missing = [s for s in AGENT_SECTIONS if s not in headings]
-            extra = [s for s in headings if s not in AGENT_SECTIONS]
-            err("%s: role contract sections wrong. missing=%s unexpected=%s" % (rel, missing, extra))
+        # An optional section is required exactly when its frontmatter trigger is
+        # present, and forbidden otherwise. Both directions matter: a role given a
+        # persistent store and no instruction about it is a capability nobody told
+        # it how to use, and a section describing one the role does not have is
+        # documentation of nothing.
+        expected = list(AGENT_SECTIONS)
+        for section, spec in AGENT_OPTIONAL_SECTIONS.items():
+            trigger = section.lower()
+            declared = fm.get(trigger) is not None
+            present = section in headings
+            if declared and not present:
+                err("%s: declares %s: %r and has no '## %s' section, so it holds a capability "
+                    "nothing tells it how to use" % (rel, trigger, fm.get(trigger), section))
+            if present and not declared:
+                err("%s: has a '## %s' section and does not declare %s: in its frontmatter, so "
+                    "it documents a capability it does not have" % (rel, section, trigger))
+            if declared and present:
+                expected.insert(expected.index(spec["after"]) + 1, section)
+        if headings != expected:
+            missing = [s for s in expected if s not in headings]
+            extra = [s for s in headings if s not in expected]
+            if missing or extra:
+                err("%s: role contract sections wrong. missing=%s unexpected=%s"
+                    % (rel, missing, extra))
+            else:
+                err("%s: role contract sections are out of order. expected %s, got %s"
+                    % (rel, expected, headings))
 
     for name in reg_names:
         if name not in file_names:
@@ -435,6 +474,69 @@ def check_spawn_edges_are_executable():
             err("policies/review-routing.json: %s routes %s, which no role may spawn. Either grant "
                 "an edge or record in the route's notes why it is dispatched from the main session."
                 % (route["id"], unreachable))
+
+
+def check_agent_memory():
+    """Memory is project-scope, held by an approved role, and never a second truth.
+
+    Three things are checkable and one is not. Checkable: the scope, the role, and
+    that the role's contract tells it how to use the thing. Not checkable: whether
+    a role treats a memory as authority in its reasoning, which is a contract like
+    every other role instruction -- the compensating control is that a finding must
+    cite an artifact, and a finding whose only support is a recollection has
+    nothing to cite.
+
+    The scope matters most. `user` stores at ~/.claude/agent-memory and applies
+    across every project, so a reviewer carries an observation from one client's
+    codebase into another's; `local` is explicitly not checked into version
+    control, which makes it a private model of the codebase nobody can review.
+    Only `project` lands in the repository where a human reads the diff.
+    """
+    policy = load_json("policies/agent-memory.json")
+    if not policy:
+        return
+    scope = (policy.get("scope") or {}).get("required", "project")
+    approved = {r["role"] for r in (policy.get("who_holds_it") or {}).get("roles") or []}
+
+    agents_dir = os.path.join(ROOT, "agents")
+    holders = set()
+    for name in sorted(os.listdir(agents_dir)):
+        if not name.endswith(".md"):
+            continue
+        rel = "agents/" + name
+        try:
+            fm, body = read_fm(os.path.join(agents_dir, name))
+        except ValueError:
+            continue
+        declared = fm.get("memory")
+        if declared is None:
+            continue
+        role = name[:-3]
+        holders.add(role)
+        if declared != scope:
+            err("%s: declares memory: %r. Only %r is permitted -- see policies/agent-memory.json, "
+                "which says why the other two are not." % (rel, declared, scope))
+        if role not in approved:
+            err("%s: holds memory and is not in policies/agent-memory.json. Adding a role to that "
+                "list is an AP-10 decision recorded with its reason, not a default that grew."
+                % rel)
+        # The instruction the live probe showed is load-bearing: left alone, memory
+        # invents a justification and rewrites a fact as a rule. The rule text
+        # comes from the policy rather than from a literal here -- a second copy
+        # of a sentence is how the first one stops being the one anybody reads.
+        rule = ((policy.get("the_rule") or {}).get("statement") or "").rstrip(".").lower()
+        for phrase in (rule, "imperative"):
+            if phrase and phrase not in body.lower():
+                err("%s: its Memory section does not say %r. Verified against 2.1.250: given a "
+                    "bare fact, an agent wrote back an invented justification and promoted it to "
+                    "a rule it would enforce, so the instruction not to is load-bearing."
+                    % (rel, phrase))
+
+    missing = sorted(approved - holders)
+    if missing:
+        err("policies/agent-memory.json lists %s as holding memory, and their agent files do not "
+            "declare it. The policy describes a capability nobody has."
+            % ", ".join(missing))
 
 
 def check_skills_are_reachable():
@@ -1971,6 +2073,7 @@ def main():
     check_registry_consistency(registry, profiles, write_scope, routing)
     check_skills()
     check_skill_paths()
+    check_agent_memory()
     check_skills_are_reachable()
     check_agent_frontmatter_is_effective()
     check_frontmatter_is_strict_yaml()
