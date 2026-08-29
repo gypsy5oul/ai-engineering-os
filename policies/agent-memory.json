@@ -1,0 +1,74 @@
+{
+  "version": "1",
+  "description": "Persistent memory for the roles that review the same codebase repeatedly. A reviewer that has read this repository forty times knows things a fresh one does not, and re-deriving them every session is the cost this removes. What it must never become is a second source of truth.",
+  "the_rule": {
+    "statement": "Memory is never organizational authority.",
+    "means": "It can make a role faster at finding something, and it can never make a role right about something. Where memory and durable state disagree, durable state wins and the memory is wrong.",
+    "authority_remains": [
+      "policies/ — what the organization requires",
+      "approved artifacts — what was decided and reviewed",
+      "the work item and the task graph — what is being done and by whom",
+      "decision records — why, and who decided"
+    ],
+    "consequence": "A finding whose only support is a memory is not a finding. It is a reason to go and look at the artifact, and the artifact is what the finding cites."
+  },
+  "what_it_is_for": [
+    "Recurring codebase patterns: where a thing lives, what a convention is, which module is the one everybody gets wrong.",
+    "Recurring review findings: the mistake this codebase keeps making, so the reviewer looks for it early rather than finding it on the fourth pass.",
+    "Project-specific architectural observations: which boundaries are real and which are nominal, what the actual coupling is as opposed to the declared coupling.",
+    "Debugging insights: what a symptom turned out to mean last time, and where the investigation started paying off."
+  ],
+  "what_it_is_not_for": [
+    "Verdicts. A previous approval is not evidence about this change, and remembering that something passed is how a reviewer stops reviewing.",
+    "Policy. What is required lives in policies/ and changes without telling the memory.",
+    "Approvals. A remembered human decision is a decision nobody can audit, and an agent verdict was never an approval to begin with.",
+    "Requirements, targets or numbers. A remembered NFR is a number with no owner.",
+    "Anything about a person. Not who writes bad code, not who is slow to review.",
+    "Anything the artifact already says. Memory that duplicates durable state is a copy that goes stale silently."
+  ],
+  "how_to_write_one": {
+    "why_this_matters": "Memory does not only record. Verified live against 2.1.250: given the bare fact 'the retention window is 30 days', the agent wrote back an invented justification -- 'likely driven by compliance standards, regulatory frameworks, or internal data governance policies' -- and promoted the fact into a rule it would enforce: 'Flag any architectural decisions or cleanup operations that might violate this window.' Nobody said either of those things. Left alone, memory manufactures a `why` and an imperative, and the next session applies both as though they were policy.",
+    "rules": [
+      "Record the observation and where it was observed. `docs/architecture/ACME-ARCH-004 says the transfer path is synchronous` is a memory. `the transfer path is synchronous` is a claim with no owner.",
+      "Never record a justification you were not given. If nobody said why, the memory says what and stops.",
+      "Never write a memory in the imperative. `Flag any change that...` is a rule; a role that writes rules for itself has replaced the policy with its own recollection.",
+      "Date it, or name the artifact version it came from. A memory with no age cannot be recognised as stale.",
+      "Prefer a pointer to a copy. `the retry policy is in ACME-ARCH-002 section 4` survives the retry policy changing; the retry policy itself does not."
+    ]
+  },
+  "scope": {
+    "required": "project",
+    "why": "The CLI's own guidance says project scope is 'shared with your team via version control' and stores it at <project>/.claude/agent-memory/<agent>/. That makes it reviewable in a diff like every other artifact, which is the only reason it is safe to give a reviewer memory at all.",
+    "user_is_forbidden": "User scope stores at ~/.claude/agent-memory and applies across every project. A reviewer carrying an observation from one client's codebase into another's is a reasoning error and a confidentiality incident, and which one it is depends on facts the plugin cannot see.",
+    "local_is_forbidden": "Local scope is explicitly not checked into version control. A memory nobody can review is a private model of the codebase held by an agent, which is the thing this policy exists to prevent.",
+    "enforced_by": "scripts/validate_plugin.py refuses any agent declaring a scope other than project."
+  },
+  "who_holds_it": {
+    "roles": [
+      {"role": "architecture-reviewer", "why": "Reviews the same structure repeatedly. What the real boundaries are, as opposed to the declared ones, is expensive to re-derive and cheap to remember."},
+      {"role": "code-reviewer", "why": "Sees every diff. The mistake this codebase keeps making is the highest-value thing a reviewer can know before it starts reading."},
+      {"role": "performance-reviewer", "why": "A baseline is only meaningful against history, and the hot paths of a system are learned rather than declared."},
+      {"role": "reliability-reviewer", "why": "What has actually failed here, and how, is the input to every review it does."},
+      {"role": "agent-evaluator", "why": "Evaluates this organization's own agents across releases, and the pattern in what agents get wrong is the substance of that job."}
+    ],
+    "why_only_reviewers": "These five read the same repository repeatedly and produce findings rather than artifacts. A role that authors gets no memory: an author with recollections of what it decided last time will reproduce them, which is how a codebase acquires a convention nobody chose.",
+    "adding_one": "A governance decision under AP-10, recorded here with the reason. The list is not a default that grew."
+  },
+  "not_enforceable": [
+    "No hook sees a memory write. The platform writes it, not the Write tool, so guard_write never fires and the write scope in policies/write-scope.json does not apply. What makes project-scope memory reviewable is that it lands in the repository and a human reads the diff.",
+    "Nothing stops a role treating a memory as authority in its reasoning. The instruction is a contract like every other role instruction, and the compensating control is that a finding must cite an artifact -- a finding whose only support is a recollection has nothing to cite.",
+    "Nothing detects a stale memory. An artifact changes and the memory that described it does not; the pointer-over-copy rule reduces this and does not remove it.",
+    "Memory is written by the same model whose reasoning it will later shape. Nothing external validates an entry before it is stored."
+  ],
+  "review": {
+    "cadence": "A memory directory is reviewed when the role that owns it is reviewed, per policies/agent-lifecycle.json.",
+    "what_to_look_for": [
+      "An entry written as a rule rather than an observation.",
+      "An entry carrying a justification nobody gave.",
+      "An entry that duplicates something an artifact says.",
+      "An entry about a person.",
+      "An entry old enough that the thing it describes has probably changed."
+    ],
+    "deleting_one": "Deleting a memory needs no approval. It is a cache, and the cost of dropping a true one is that it gets re-derived."
+  }
+}

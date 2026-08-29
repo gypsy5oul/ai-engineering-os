@@ -118,6 +118,61 @@ Two design consequences worth stating:
 - **Reviewers have no `Write`.** Independence that depends on the model choosing
   not to edit is not independence.
 
+## Memory
+
+Five roles hold persistent memory: `architecture-reviewer`, `code-reviewer`,
+`performance-reviewer`, `reliability-reviewer` and `agent-evaluator`. All five
+review the same codebase repeatedly and produce findings rather than artifacts.
+
+**No author gets memory.** An author with recollections of what it decided last
+time will reproduce them, which is how a codebase acquires a convention nobody
+chose.
+
+**Project scope only**, at `.claude/agent-memory/<role>/` inside the project. The
+CLI's own guidance calls project scope "shared with your team via version
+control", which is the only reason it is safe to give a reviewer memory at all —
+it lands in the repository and a human reads the diff like any other change.
+`user` scope would carry an observation about one client's codebase into
+another's; `local` is explicitly not committed, making it a private model of the
+codebase nobody can review. `validate_plugin.py` refuses both.
+
+### The rule
+
+> **Memory is never organizational authority.**
+
+It can make a role faster at finding something. It can never make a role right
+about something. Where a memory and an artifact disagree, the artifact is right.
+A finding whose only support is a recollection **is not a finding** — it is a
+reason to go and open the artifact, and the artifact is what the finding cites.
+
+Authority stays where it was: `policies/`, approved artifacts, the work item and
+task graph, and decision records.
+
+### Why the instruction is specific
+
+Memory does not only record. Verified live against 2.1.250: given the bare fact
+*"the retention window is 30 days"*, the probe agent wrote back an invented
+justification — *"likely driven by compliance standards, regulatory frameworks, or
+internal data governance policies"* — and promoted the fact into a rule it would
+enforce: *"Flag any architectural decisions or cleanup operations that might
+violate this window."*
+
+Nobody said either of those things. Left alone, memory manufactures a `why` and an
+imperative, and the next session applies both as though they were policy. So every
+holder's contract forbids exactly that: record what you observed and where, never
+a justification you were not given, never in the imperative.
+
+### What is not enforced
+
+**No hook sees a memory write.** The platform writes it, not the `Write` tool, so
+`guard_write` never fires and `policies/write-scope.json` does not apply. What
+makes project-scope memory safe is that it lands in the repository and is
+reviewed, not that anything intercepts it.
+
+Nothing detects a stale memory, and nothing validates an entry before it is
+stored — it is written by the same model whose reasoning it will later shape.
+`policies/agent-memory.json` says all of this in its own `not_enforceable`.
+
 ## Ownership and lifecycle
 
 Every agent has an owner, a version, a risk class, a review frequency and an

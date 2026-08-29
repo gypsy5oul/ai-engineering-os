@@ -134,6 +134,22 @@
       "used_by": "hooks/scripts/bind_task.py",
       "load_bearing": true,
       "re_verified": "2026-08-28 against 2.1.250, by reading the binary."
+    },
+    "agent.memory.project_scope": {
+      "available": true,
+      "evidence": "empirical",
+      "note": "`memory: project` in an agent's frontmatter gives it a persistent store at <project>/.claude/agent-memory/<agent-type>/, as MEMORY.md plus one file per entry. The scope enum is user | project | local, resolved in the binary to the home directory, the project's .claude, and a local-only path respectively. The CLI's own guidance text says project scope is 'shared with your team via version control' and local scope is 'not checked into version control', so project scope is designed to be committed and reviewed.",
+      "used_by": "policies/agent-memory.json; five reviewer roles",
+      "load_bearing": false,
+      "verified": "2026-08-28 against 2.1.250, live: a real `claude -p` session delegated to an agent declaring memory: project, and .claude/agent-memory/<agent>/MEMORY.md plus an entry file appeared in the project tree. Not gated behind a flag."
+    },
+    "agent.memory.elaborates_what_it_is_told": {
+      "available": true,
+      "evidence": "empirical",
+      "note": "Memory does not only record. Given the bare fact 'the retention window is 30 days', the probe agent wrote back an invented justification ('likely driven by compliance standards, regulatory frameworks, or internal data governance policies') and promoted the fact to a rule it would enforce ('Flag any architectural decisions or cleanup operations that might violate this window'). Nobody said either. This is why memory is never organizational authority here: left alone it manufactures a `why` and an imperative, and next session it applies both as though they were policy.",
+      "used_by": "the memory instructions in the five roles that hold it, which forbid both",
+      "load_bearing": true,
+      "verified": "2026-08-28 against 2.1.250, on the first probe."
     }
   },
   "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent.",

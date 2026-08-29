@@ -55,6 +55,16 @@ technology neutrality.
 **No graph database for traceability.** Identifiers and file conventions first;
 a tool once the convention demonstrably holds.
 
+**No guard on agent memory.** Five reviewer roles hold persistent project-scope
+memory. The platform writes it, not the `Write` tool, so `guard_write` never fires
+and `policies/write-scope.json` does not apply to it. What makes it safe is that
+project scope lands in the repository and a human reads the diff — not that
+anything intercepts the write. Nothing detects a stale memory, and nothing
+validates an entry before it is stored: it is written by the same model whose
+reasoning it will later shape. The compensating control is that a finding must
+cite an artifact, so a finding whose only support is a recollection has nothing to
+cite. See [agent-model.md](agent-model.md#memory).
+
 **No guard on simplicity.** `policies/simplicity-policy.json` is enforced by a
 definition-of-done predicate and a review route, never by a hook, and it
 prohibits no technology, pattern or component. This is deliberate and it is a

@@ -8,3 +8,9 @@ dist/
 reports/
 *.local.json
 *.local.yaml
+
+# Agent memory written while working on this repository. Project-scope memory is
+# meant to be committed in the project it describes; this repository is the
+# plugin, not a project it reviews, so what lands here is a development artifact
+# rather than a shared observation.
+.claude/agent-memory/
