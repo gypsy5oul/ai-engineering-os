@@ -429,8 +429,12 @@ def _p_binding(ctx):
         return True, "TaskCreated bound a native task; history: %s" % ", ".join(sorted(set(kinds)))
     if "task_creation_blocked" in kinds:
         return False, "the hook refused every task it saw: %s" % ", ".join(sorted(set(kinds)))
-    return None, ("the session created no native task, so TaskCreated never fired. "
-                  "History: %s" % ", ".join(sorted(set(kinds))))
+    return None, ("no native task was created, so TaskCreated never fired. A `claude -p` "
+                  "session is given no tool that creates one -- recorded as "
+                  "headless.native_task_tools in platform-capabilities.json and verified "
+                  "against 2.1.251 -- so an unattended run cannot close this probe "
+                  "however many sessions it spends. History: %s"
+                  % ", ".join(sorted(set(kinds))))
 
 
 def _control(project, wid, *args):
@@ -594,7 +598,9 @@ def _p_completion_gate(ctx):
         allowed = kinds.count("task_completion_allowed")
         blocked = kinds.count("task_completion_blocked")
         return True, "TaskCompleted fired: %d allowed, %d blocked" % (allowed, blocked)
-    return None, ("no native task completed, so TaskCompleted never fired. History: %s"
+    return None, ("no native task completed, so TaskCompleted never fired. Nothing "
+                  "created one either: a headless session has no tool that does, per "
+                  "headless.native_task_tools in platform-capabilities.json. History: %s"
                   % ", ".join(sorted(set(kinds))))
 
 

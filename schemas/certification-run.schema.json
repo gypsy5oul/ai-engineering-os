@@ -3,22 +3,51 @@
   "title": "Certification run",
   "description": "One run of the Golden Project certification path. The deterministic suite proves the organization is coherent; this records what happened when it was run against a real project, and by what evidence. The two are never merged: `evidence` is per unit, and `verdict.real_agent` cannot be satisfied by synthetic units however many of them pass.",
   "type": "object",
-  "required": ["run_id", "started_at", "claude_code_version", "plugin_version",
-               "golden_project", "mode", "units", "probes", "verdict"],
+  "required": [
+    "run_id",
+    "started_at",
+    "claude_code_version",
+    "plugin_version",
+    "golden_project",
+    "mode",
+    "units",
+    "probes",
+    "verdict"
+  ],
   "additionalProperties": false,
   "properties": {
-    "run_id": {"type": "string", "minLength": 1},
-    "started_at": {"type": "string"},
-    "finished_at": {"type": ["string", "null"]},
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "started_at": {
+      "type": "string"
+    },
+    "finished_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "claude_code_version": {
-      "type": ["string", "null"],
+      "type": [
+        "string",
+        "null"
+      ],
       "description": "The CLI actually on PATH when the run happened. Null when no CLI was present, which is itself a fact about the run."
     },
-    "plugin_version": {"type": "string"},
-    "golden_project": {"type": "string"},
+    "plugin_version": {
+      "type": "string"
+    },
+    "golden_project": {
+      "type": "string"
+    },
     "mode": {
       "type": "string",
-      "enum": ["synthetic", "live"],
+      "enum": [
+        "synthetic",
+        "live"
+      ],
       "description": "What was asked for. What was achieved is in `verdict`; a live run whose sessions did not start is still a live-mode run that produced no real-agent evidence."
     },
     "units": {
@@ -26,16 +55,39 @@
       "description": "One entry per unit of work the run drove.",
       "items": {
         "type": "object",
-        "required": ["stage", "work_item", "task", "role", "evidence", "outcome"],
+        "required": [
+          "stage",
+          "work_item",
+          "task",
+          "role",
+          "evidence",
+          "outcome"
+        ],
         "additionalProperties": false,
         "properties": {
-          "stage": {"type": "string"},
-          "workflow": {"type": ["string", "null"]},
-          "work_item": {"type": "string"},
-          "task": {"type": "string"},
-          "role": {"type": "string"},
+          "stage": {
+            "type": "string"
+          },
+          "workflow": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "work_item": {
+            "type": "string"
+          },
+          "task": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
           "model": {
-            "type": ["string", "null"],
+            "type": [
+              "string",
+              "null"
+            ],
             "description": "The model that actually ran the work. Null for a synthetic unit: nothing ran, and naming a model there would be the exact conflation this record exists to prevent."
           },
           "execution": {
@@ -43,52 +95,141 @@
             "description": "The three values kept apart everywhere else in this repository: what the workflow asked for, what the resolver decided, and what the runtime reported.",
             "additionalProperties": false,
             "properties": {
-              "declared": {"type": ["string", "null"]},
-              "resolved": {"type": ["string", "null"]},
-              "actual": {"type": ["string", "null"]}
+              "declared": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "resolved": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "actual": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
             }
           },
           "isolation": {
-            "type": ["string", "null"],
-            "enum": ["shared-checkout", "worktree", "remote", null],
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "shared-checkout",
+              "worktree",
+              "remote",
+              null
+            ],
             "description": "Separate from execution mode. A subagent may run in a shared checkout or a worktree; those are different questions."
           },
-          "artifacts": {"type": "array", "items": {"type": "string"}},
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "dod": {
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "pass": {"type": "integer", "minimum": 0},
-              "fail": {"type": "integer", "minimum": 0},
-              "unsupported": {"type": "integer", "minimum": 0},
-              "requires_evidence": {"type": "integer", "minimum": 0},
-              "result": {"type": "string", "enum": ["pass", "fail", "incomplete"]},
-              "failing": {"type": "array", "items": {"type": "string"}}
+              "pass": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "fail": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "unsupported": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "requires_evidence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "result": {
+                "type": "string",
+                "enum": [
+                  "pass",
+                  "fail",
+                  "incomplete"
+                ]
+              },
+              "failing": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             }
           },
           "review": {
-            "type": ["object", "null"],
+            "type": [
+              "object",
+              "null"
+            ],
             "additionalProperties": false,
             "properties": {
-              "reviewer": {"type": "string"},
-              "verdict": {"type": "string"},
-              "findings": {"type": "integer", "minimum": 0}
+              "reviewer": {
+                "type": "string"
+              },
+              "verdict": {
+                "type": "string"
+              },
+              "findings": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           },
-          "rework": {"type": "integer", "minimum": 0},
-          "replan": {"type": "integer", "minimum": 0},
-          "escalation": {"type": "integer", "minimum": 0},
-          "attempts": {"type": "integer", "minimum": 0},
+          "rework": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "replan": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "escalation": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "attempts": {
+            "type": "integer",
+            "minimum": 0
+          },
           "outcome": {
             "type": "string",
-            "enum": ["accepted", "failed", "rejected", "blocked", "escalated", "not-run"]
+            "enum": [
+              "accepted",
+              "failed",
+              "rejected",
+              "blocked",
+              "escalated",
+              "not-run"
+            ]
           },
           "evidence": {
             "type": "string",
-            "enum": ["synthetic", "real-agent"],
+            "enum": [
+              "synthetic",
+              "real-agent"
+            ],
             "description": "synthetic: the organization drove itself with no model in the loop. real-agent: a Claude Code session did the work and the result was read back from durable state, never from what the session said about itself."
           },
-          "evidence_note": {"type": ["string", "null"]}
+          "evidence_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
@@ -97,48 +238,234 @@
       "description": "Named integration points checked against a real session. A probe passes on durable evidence -- the audit log, the work item's history, a file on disk -- never on a model's account of its own behaviour, which is the thing under test.",
       "items": {
         "type": "object",
-        "required": ["id", "asks", "result", "evidence_source"],
+        "required": [
+          "id",
+          "asks",
+          "result",
+          "evidence_source"
+        ],
         "additionalProperties": false,
         "properties": {
-          "id": {"type": "string"},
-          "asks": {"type": "string", "minLength": 10},
-          "result": {"type": "string", "enum": ["pass", "fail", "not-run"]},
+          "id": {
+            "type": "string"
+          },
+          "asks": {
+            "type": "string",
+            "minLength": 10
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "not-run"
+            ]
+          },
           "evidence_source": {
             "type": "string",
             "description": "Where the answer was read from. `self-report` is not permitted."
           },
-          "observed": {"type": ["string", "null"]},
-          "why_not_run": {"type": ["string", "null"]}
+          "observed": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "why_not_run": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
         }
       }
     },
     "verdict": {
       "type": "object",
-      "required": ["synthetic", "real_agent", "certified", "why"],
+      "required": [
+        "synthetic",
+        "real_agent",
+        "certified",
+        "why"
+      ],
       "additionalProperties": false,
       "properties": {
-        "synthetic": {"type": "string", "enum": ["pass", "fail", "not-run"]},
+        "synthetic": {
+          "type": "string",
+          "enum": [
+            "pass",
+            "fail",
+            "not-run"
+          ]
+        },
         "real_agent": {
           "type": "string",
-          "enum": ["pass", "fail", "partial", "not-run"],
+          "enum": [
+            "pass",
+            "fail",
+            "partial",
+            "not-run"
+          ],
           "description": "Never derived from synthetic units. `partial` means some probes passed and the lifecycle was not driven end to end by real agents."
         },
         "certified": {
           "type": "boolean",
           "description": "True only when real_agent is pass and every stage in `coverage.required` carries a real-agent unit. A run with a perfect synthetic result and no session is not certified, and saying so is the point of this file."
         },
-        "why": {"type": "string", "minLength": 10},
+        "why": {
+          "type": "string",
+          "minLength": 10
+        },
         "coverage": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "required": {"type": "array", "items": {"type": "string"}},
-            "real_agent": {"type": "array", "items": {"type": "string"}},
-            "synthetic_only": {"type": "array", "items": {"type": "string"}}
+            "required": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "real_agent": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "synthetic_only": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
           }
+        },
+        "probes": {
+          "type": "object",
+          "description": "How much of the question was actually asked. `not_run` is the number that matters: a probe that never fired measured nothing, and certification refuses a run with any of them.",
+          "required": [
+            "total",
+            "passed",
+            "failed",
+            "not_run"
+          ],
+          "properties": {
+            "total": {
+              "type": "integer"
+            },
+            "passed": {
+              "type": "integer"
+            },
+            "failed": {
+              "type": "integer"
+            },
+            "not_run": {
+              "type": "integer"
+            },
+            "unmeasured": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
         }
       }
     },
-    "notes": {"type": ["string", "null"]}
+    "notes": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "lifecycle": {
+      "type": "array",
+      "description": "One entry per real session the lifecycle walk spent, in order. A task can appear more than once: the walk honours a RETRY or REWORK decision, so the repeats are the retry path being exercised rather than duplicates.",
+      "items": {
+        "type": "object",
+        "required": [
+          "task",
+          "session"
+        ],
+        "properties": {
+          "task": {
+            "type": "string"
+          },
+          "stage": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "session": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "completed, exited N, or timed out after N s"
+          },
+          "accepted": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "the organization's answer, not the harness's: null means it was never asked"
+          },
+          "why_refused": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decision": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "what the control loop decided to do about a refusal -- retry, rework, replan or escalate"
+          },
+          "timed_out": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "mechanisms": {
+      "type": "array",
+      "description": "One entry per execution or isolation mechanism the walk cannot reach by delegating a task. Recorded whatever happens, including when the platform will not do it: a mechanism that could not be attempted leaves its probe not-run, and the run does not certify.",
+      "items": {
+        "type": "object",
+        "required": [
+          "mechanism"
+        ],
+        "properties": {
+          "mechanism": {
+            "type": "string"
+          },
+          "session": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "said": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the tail of what the session reported. Context for a reader, never evidence: the probes read the hooks' own records instead."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
   }
 }

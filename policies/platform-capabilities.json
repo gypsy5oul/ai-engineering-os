@@ -158,6 +158,12 @@
       "used_by": "skills/team-patterns/SKILL.md; check_team_stages_carry_their_skills in scripts/validate_plugin.py, which requires every team-execution stage to declare the skills its teammates cannot inherit",
       "load_bearing": true,
       "evidence_limit": "Documented, not confirmed against the binary: no teammate/skills string was found in 2.1.251 by inspection, and confirming it properly needs a live team, which has never run here. It is recorded as load-bearing anyway, because a check now depends on it and the failure mode -- a teammate reasoning without a capability it is documented to hold -- is silent."
+    },
+    "headless.native_task_tools": {
+      "available": false,
+      "evidence": "empirical",
+      "note": "A `claude -p` session is not given any tool that creates a native task. Asked to list its own tools, a headless session against 2.1.251 returned Agent, Bash, Edit, ListAgents, Read, ReportFindings, ScheduleWakeup, Skill, ToolSearch, Workflow, Write, the Cron tools, DesignSync, EnterWorktree, ExitWorktree, Monitor, NotebookEdit, PushNotification, RemoteTrigger, SendMessage, TaskOutput, TaskStop, WebFetch, WebSearch and the MCP tools -- and nothing that creates a task. TaskOutput and TaskStop read and stop tasks; neither makes one. Consequence for certification: TaskCreated and TaskCompleted cannot be exercised from an unattended `-p` run, so the probes that ask about them stay `not-run` however many sessions the harness spends. Closing them needs an interactive session or a teammate-driven one. The correct response is to leave the run uncertified, not to drop the probes -- the hooks are registered and the mechanism is real, it is this harness that cannot reach it.",
+      "re_verified": "2026-08-29 against 2.1.251, by asking a headless session for its own tool list."
     }
   },
   "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent.",

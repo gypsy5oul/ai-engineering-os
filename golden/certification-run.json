@@ -1,9 +1,9 @@
 {
-  "run_id": "2017759f9cab",
-  "started_at": "2026-08-28T16:10:10",
-  "finished_at": "2026-08-28T16:14:12",
-  "claude_code_version": "2.1.250",
-  "plugin_version": "0.35.0",
+  "run_id": "46a581090bce",
+  "started_at": "2026-08-29T15:33:00",
+  "finished_at": "2026-08-29T16:13:12",
+  "claude_code_version": "2.1.251",
+  "plugin_version": "0.43.0",
   "golden_project": "GOLD",
   "mode": "live",
   "units": [
@@ -608,7 +608,7 @@
       "work_item": "GOLD-FEAT-001",
       "task": "T-001",
       "role": "engineering-director",
-      "model": "haiku",
+      "model": null,
       "execution": {
         "declared": "inline",
         "resolved": "inline",
@@ -627,11 +627,52 @@
       "review": null,
       "rework": 0,
       "replan": 0,
-      "escalation": 0,
+      "escalation": 1,
       "attempts": 0,
-      "outcome": "not-run",
+      "outcome": "accepted",
       "evidence": "real-agent",
-      "evidence_note": "claimed and run by a real session; SubagentStart fired for ab9c69bb536d2eb50"
+      "evidence_note": "claimed and run by a real session; SubagentStart fired for a1558b891253bca3b"
+    },
+    {
+      "stage": "REQ",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-002",
+      "role": "product-manager",
+      "model": null,
+      "execution": {
+        "declared": "subagent",
+        "resolved": "subagent",
+        "actual": "subagent"
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "REQ",
+        "NFR"
+      ],
+      "dod": {
+        "pass": 4,
+        "fail": 6,
+        "unsupported": 0,
+        "requires_evidence": 1,
+        "result": "fail",
+        "failing": [
+          "artifact_status(REQ, approved) -- not approved: GOLD-REQ-001",
+          "field_quantified(NFR, target) -- unquantified: GOLD-NFR-001",
+          "agent_verdict(qa-lead, pass) -- no recorded pass verdict from qa-lead",
+          "cycle_accepted(CYCLE-PROD) -- no work item carries a CYCLE-PROD rollup",
+          "cycle_rollup_reported(CYCLE-PROD) -- no rollup for CYCLE-PROD. A department that completed without reporting has not finished.",
+          "no_open_rework(CYCLE-PROD) -- no work item carries a CYCLE-PROD rollup"
+        ]
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 1,
+      "attempts": 3,
+      "outcome": "failed",
+      "evidence": "real-agent",
+      "evidence_note": "claimed and run by a real session; SubagentStart fired for a7635643bf86b6f49"
     }
   ],
   "probes": [
@@ -640,7 +681,7 @@
       "asks": "Does SessionStart fire in a real session, and does the guard self-test run?",
       "result": "pass",
       "evidence_source": "the plugin's own audit log, written by the hook",
-      "observed": "11 audit record(s), 6 deny",
+      "observed": "69 audit record(s), 25 deny",
       "why_not_run": null
     },
     {
@@ -656,7 +697,7 @@
       "asks": "Does the write guard refuse a path outside the role's write scope, in a live session?",
       "result": "pass",
       "evidence_source": "the plugin's own audit log",
-      "observed": "2 write-guard refusal(s) recorded",
+      "observed": "9 write-guard refusal(s) recorded",
       "why_not_run": null
     },
     {
@@ -664,7 +705,7 @@
       "asks": "Does SubagentStart hand a spawned role its work item and its own task?",
       "result": "pass",
       "evidence_source": "the task's own record in the graph, written by the hook at claim time",
-      "observed": "T-001 claimed by engineering-director; evidence: SubagentStart fired for ab9c69bb536d2eb50",
+      "observed": "T-001 claimed by engineering-director; evidence: SubagentStart fired for a1558b891253bca3b",
       "why_not_run": null
     },
     {
@@ -672,7 +713,7 @@
       "asks": "Is a spawned role's result recorded against the task it held, rather than trusted?",
       "result": "pass",
       "evidence_source": "the work item's own history.jsonl, written by the hook",
-      "observed": "1 subagent stop(s), 1 attributed to a task",
+      "observed": "10 subagent stop(s), 6 attributed to a task",
       "why_not_run": null
     },
     {
@@ -680,7 +721,7 @@
       "asks": "Is what actually ran recorded from platform evidence, rather than from the policy?",
       "result": "pass",
       "evidence_source": "the task's execution triple in the graph",
-      "observed": "T-001 declared inline, resolved inline, actual subagent (SubagentStart fired for ab9c69bb536d2eb50)",
+      "observed": "T-001 declared inline, resolved inline, actual subagent (SubagentStart fired for a1558b891253bca3b)",
       "why_not_run": null
     },
     {
@@ -697,14 +738,46 @@
       "result": "not-run",
       "evidence_source": "the work item's own history.jsonl",
       "observed": null,
-      "why_not_run": "the session created no native task, so TaskCreated never fired. History: execution_diverged, opened, planned, subagent_stopped"
+      "why_not_run": "the session created no native task, so TaskCreated never fired. History: acceptance_checked, acceptance_refused, decided, escalated, execution_diverged, observed, opened, planned, subagent_stopped, subagent_stopped_unattributed, worktree_created"
+    },
+    {
+      "id": "task-completion-is-gated",
+      "asks": "When a native task completes, does the completion gate actually run?",
+      "result": "not-run",
+      "evidence_source": "the work item's own history.jsonl",
+      "observed": null,
+      "why_not_run": "no native task completed, so TaskCompleted never fired. History: acceptance_checked, acceptance_refused, decided, escalated, execution_diverged, observed, opened, planned, subagent_stopped, subagent_stopped_unattributed, worktree_created"
+    },
+    {
+      "id": "execution-modes-were-exercised-not-just-named",
+      "asks": "Which execution modes did a real agent actually run in?",
+      "result": "pass",
+      "evidence_source": "the graph's `execution.actual`, written by the hook from the event it received",
+      "observed": "subagent (T-001, T-002)",
+      "why_not_run": null
+    },
+    {
+      "id": "worktree-isolation-was-actually-used",
+      "asks": "Did an isolated execution create a worktree, and is the isolation recorded?",
+      "result": "pass",
+      "evidence_source": "worktree_created / worktree_removed in the work item history",
+      "observed": "1 worktree(s) created, 0 removed",
+      "why_not_run": null
+    },
+    {
+      "id": "a-team-stage-carried-its-skills",
+      "asks": "When a stage runs as a team, do the teammates get the skills the stage declares?",
+      "result": "not-run",
+      "evidence_source": "teammate events in the work item history and the stage's declared skills",
+      "observed": null,
+      "why_not_run": "no stage ran as a team, so teammate skill propagation is unmeasured"
     }
   ],
   "verdict": {
     "synthetic": "pass",
     "real_agent": "partial",
     "certified": false,
-    "why": "Probes passed but real agents did not drive every required stage. Missing: REQ, ARCH, QADESIGN, DEV, REVIEW, CI. Partial evidence is not certification.",
+    "why": "Every probe that ran passed, but real agents did not drive every required stage (missing: ARCH, QADESIGN, DEV, REVIEW, CI); and 3 probe(s) never ran, so the mechanism each asks about is unmeasured: task-binding-recorded, task-completion-is-gated, a-team-stage-carried-its-skills. Partial evidence is not certification.",
     "coverage": {
       "required": [
         "REQ",
@@ -715,17 +788,82 @@
         "CI"
       ],
       "real_agent": [
-        "IDEA"
+        "IDEA",
+        "REQ"
       ],
       "synthetic_only": [
-        "REQ",
         "ARCH",
         "QADESIGN",
         "DEV",
         "REVIEW",
         "CI"
       ]
+    },
+    "probes": {
+      "total": 12,
+      "passed": 9,
+      "failed": 0,
+      "not_run": 3,
+      "unmeasured": [
+        "task-binding-recorded",
+        "task-completion-is-gated",
+        "a-team-stage-carried-its-skills"
+      ]
     }
   },
+  "lifecycle": [
+    {
+      "task": "T-001",
+      "stage": "IDEA",
+      "role": "engineering-director",
+      "session": "completed",
+      "accepted": true,
+      "decision": null
+    },
+    {
+      "task": "T-002",
+      "stage": "REQ",
+      "role": "product-manager",
+      "session": "completed",
+      "accepted": false,
+      "decision": "GOLD-FEAT-001 T-002: REWORK\n  A rejection is information the implementer has not seen yet.",
+      "why_refused": "a CYCLE-PROD rollup\n  fails      cycle_rollup_reported(CYCLE-PROD) -- no rollup for CYCLE-PROD. A department that completed without reporting has not finished.\n  fails      no_open_rework(CYCLE-PROD) -- no work item carries a CYCLE-PROD rollup\n\nRecord what actually happened instead -- `--outcome failed`, `rejected` or `blocked` -- and let `decide` choose between retry, rework, replan and escalate."
+    },
+    {
+      "task": "T-002",
+      "stage": "REQ",
+      "role": "product-manager",
+      "session": "completed",
+      "accepted": false,
+      "decision": "GOLD-FEAT-001 T-002: REWORK\n  A rejection is information the implementer has not seen yet.",
+      "why_refused": "a CYCLE-PROD rollup\n  fails      cycle_rollup_reported(CYCLE-PROD) -- no rollup for CYCLE-PROD. A department that completed without reporting has not finished.\n  fails      no_open_rework(CYCLE-PROD) -- no work item carries a CYCLE-PROD rollup\n\nRecord what actually happened instead -- `--outcome failed`, `rejected` or `blocked` -- and let `decide` choose between retry, rework, replan and escalate."
+    },
+    {
+      "task": "T-002",
+      "stage": "REQ",
+      "role": "product-manager",
+      "session": "completed",
+      "accepted": false,
+      "decision": "GOLD-FEAT-001 T-002: ESCALATE\n  The bound exists to be honoured. Checked before retry so an exhausted task cannot loop once more. (3 of 3)\n  ladder: lead -> head -> human_owner",
+      "why_refused": "a CYCLE-PROD rollup\n  fails      cycle_rollup_reported(CYCLE-PROD) -- no rollup for CYCLE-PROD. A department that completed without reporting has not finished.\n  fails      no_open_rework(CYCLE-PROD) -- no work item carries a CYCLE-PROD rollup\n\nRecord what actually happened instead -- `--outcome failed`, `rejected` or `blocked` -- and let `decide` choose between retry, rework, replan and escalate."
+    }
+  ],
+  "mechanisms": [
+    {
+      "mechanism": "native-task",
+      "session": "completed",
+      "said": "T-002.\n- **CYCLE-PROD rollup** \u2014 `engineering-director`'s, and `GOLD-DEC-002` sequences it after the qa-lead review. Now unblocked, but producing it for an escalated task presumes a replan that hasn't happened.\n\nNext real move is yours, not an agent's: decide whether T-002 replans, and answer AP-12."
+    },
+    {
+      "mechanism": "worktree",
+      "session": "completed",
+      "said": "ide()`'s hold short-circuit (`src/retention/policy.py:92`) is already covered. Integration would be a merge of `feature/GOLD-FEAT-001` into `main`; note `main` is protected and `merge_request.min_approvals: 1` with `author_may_approve: false`, so the merge itself likely needs the same approval path."
+    },
+    {
+      "mechanism": "team",
+      "session": "completed",
+      "said": " have no defined producer anywhere** \u2014 not in product-manager's write scope, not in engineering-director's. Three of T-002's eleven predicates reference an artifact type with no schema and no owner. Not retryable by anyone.\n\nBoth agents are resumable via `SendMessage` if you want them to go further."
+    }
+  ],
   "notes": null
 }
