@@ -118,7 +118,54 @@ ones that catch real proposals:
 
 What is **not** checked is whether the decomposition is any good. The rules
 reject one that is incoherent with the graph; they cannot reject one that is
-merely poor. That is what the stage's reviewer is for.
+merely poor. That is the review below — which used to say "the stage's reviewer",
+and was not true: every stage gate reviews the stage's artifact, not the split.
+
+## Reviewing a decomposition
+
+The structural rules reject a split that is incoherent with the graph. They cannot
+reject one that is merely poor, and a poor split is the more common failure: it
+parses, it grafts, and it costs a week.
+
+So a proposal carries a review, by a role that is **not the proposer**. Seven
+dimensions, each a question with an answer:
+
+| Dimension | Asks |
+| --- | --- |
+| **cohesion** | Does each child do one thing, or is it a bag of leftovers? |
+| **coupling** | How much does each child need to know about the others to be correct? |
+| **parallelizability** | How many of these can genuinely run at the same time, and does the split buy anything? |
+| **task size** | Is each child something a competent implementer finishes in one sitting, and a reviewer holds in their head? |
+| **ownership** | Is each child's role the one that would actually do this work, and does any child have two owners? |
+| **handoff cost** | What has to be explained between children, and to whom? |
+| **integration cost** | What has to happen after all the children are done, and who owns it? |
+
+**There is no score.** A number for cohesion on a set of engineering tasks would
+be a heuristic wearing a decimal point — defensible-looking, arguable, and wrong
+often enough that a decomposition which scored well would stop being read. The
+answers are prose. What is checked mechanically is that the review happened, that
+every dimension was answered rather than left blank, and that the reviewer was not
+the proposer. What refuses a lazy answer is the person reading it.
+
+Four verdicts, and the last one is under-used:
+
+| Verdict | What happens |
+| --- | --- |
+| `sound` | Grafted |
+| `sound-with-findings` | Grafted, findings recorded. Use this rather than blocking a workable, imperfect split |
+| `resplit` | Not grafted. The findings say what is wrong |
+| `do-not-split` | **The stage is one task.** Rejecting the decomposition entirely is a real answer |
+
+### When it is required
+
+A review is **required** before grafting when the parent is HIGH or CRITICAL risk,
+or holds a coupled surface. Otherwise it is recommended and not required —
+demanding a second reader for a three-way split of a LOW-risk documentation stage
+would make synthesis expensive enough that stages stop being decomposed at all,
+which is worse than an imperfect split.
+
+`${CLAUDE_PLUGIN_ROOT}/scripts/synthesize_tasks.py` refuses to graft an unreviewed
+proposal where the review is required.
 
 ## What happens to the stage
 

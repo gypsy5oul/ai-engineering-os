@@ -1,0 +1,114 @@
+{
+  "version": "1",
+  "description": "How a proposed decomposition is reviewed. policies/task-synthesis.json rejects a split that is incoherent with the graph -- children that do not cover the parent, a role that cannot write what it is assigned, a dependency cycle. It cannot reject one that is merely poor, and it says so. This is the review that was supposed to catch the rest.",
+  "why_this_exists": {
+    "the_gap": "task-synthesis.json's own not_enforceable said 'That is what the reviewer on the stage is for.' It was not true. Every stage gate reviews the stage's artifact -- testability of stories, coverage of scenarios, feasibility completeness -- and not one of them mentions the decomposition. The four stages most likely to synthesize (WF-FEATURE/DEV, WF-AI-CHANGE/IMPLEMENT, WF-AI-CHANGE/OFFLINE-EVAL, WF-DEFECT/TRIAGE) have no reviewer at all. The policy deferred to a review that did not happen.",
+    "what_changed": "The review is now recorded on the proposal itself, by a role that is not the proposer, before the children are grafted."
+  },
+  "not_a_score": {
+    "statement": "There is no metric here and there will not be one.",
+    "why": "A number for cohesion or coupling on a set of engineering tasks would be a heuristic wearing a decimal point. It would be defensible-looking, arguable, and wrong often enough that people would learn to route around it -- and a decomposition that scored well would stop being read. The dimensions below are questions with answers, and the answers are prose.",
+    "what_is_checked_instead": "That the review happened, that every dimension was answered rather than left blank, that the reviewer was not the proposer, and that a verdict was reached. Provenance and completeness, never quality. The same shape as complexity_justified and metrics_have_evidence: the checker refuses an absence, and a human refuses a bad answer."
+  },
+  "dimensions": [
+    {
+      "id": "DQ-01",
+      "dimension": "cohesion",
+      "asks": "Does each child do one thing, or is it a bag of leftovers?",
+      "looks_like_a_problem_when": [
+        "A child's title needs the word 'and' to be accurate.",
+        "A child exists because the work did not fit anywhere else.",
+        "Two children would always be worked on by the same person in the same sitting, in which case they are one task with a seam drawn through them."
+      ],
+      "why_it_matters": "A child with no single subject cannot have a definition of done that means anything, and it is the one that gets abandoned half-finished."
+    },
+    {
+      "id": "DQ-02",
+      "dimension": "coupling",
+      "asks": "How much does each child need to know about the others to be correct?",
+      "looks_like_a_problem_when": [
+        "A child cannot be reviewed without reading a sibling.",
+        "Two children must agree on a decision neither of them owns.",
+        "A change to one child's approach forces a change to another's."
+      ],
+      "why_it_matters": "Coupling is what turns parallel work into two people waiting for each other. It is also invisible in the graph: the dependency edges show what must happen first, not what must be known."
+    },
+    {
+      "id": "DQ-03",
+      "dimension": "parallelizability",
+      "asks": "How many of these can genuinely run at the same time, and does the split buy anything?",
+      "looks_like_a_problem_when": [
+        "The dependency chain is as long as the child list, which is a pipeline wearing a graph's shape.",
+        "Every child touches the same file, so they serialise on the checkout whatever the graph says.",
+        "The split was made for tidiness and the work was always sequential."
+      ],
+      "why_it_matters": "A decomposition that cannot run in parallel has bought coordination cost and sold nothing. That is a legitimate outcome when the stage is genuinely several accountabilities -- but it should be a decision rather than a surprise."
+    },
+    {
+      "id": "DQ-04",
+      "dimension": "task_size",
+      "asks": "Is each child something a competent implementer finishes in one sitting, and a reviewer holds in their head?",
+      "looks_like_a_problem_when": [
+        "A child is obviously the whole stage with a smaller name.",
+        "A child has no definition of done of its own, which usually means it is a step rather than a task.",
+        "The children are wildly uneven, so one of them is the stage and the rest are errands."
+      ],
+      "why_it_matters": "Both directions cost. Too large and the decomposition achieved nothing; too small and the organization pays a full cycle for a task worth five minutes -- which is what workflow intensity exists to reduce and cannot remove."
+    },
+    {
+      "id": "DQ-05",
+      "dimension": "ownership",
+      "asks": "Is each child's role the one that would actually do this work, and does any child have two owners?",
+      "looks_like_a_problem_when": [
+        "A child is assigned to a role because that role owns the parent, not because it owns the work.",
+        "A child needs two roles to complete, which means it is two children.",
+        "A coupled surface has been split across children -- the structural rule catches this one, and the review is where the reason it was attempted gets found."
+      ],
+      "why_it_matters": "The structural check confirms the role exists and can write the artifact. It cannot tell whether that role is the right one, and an assignment made from the parent's ownership rather than the work's is how a stage ends up reviewed by nobody who understands it."
+    },
+    {
+      "id": "DQ-06",
+      "dimension": "handoff_cost",
+      "asks": "What has to be explained between children, and to whom?",
+      "looks_like_a_problem_when": [
+        "A child's first act is to re-derive what a sibling already decided.",
+        "The split crosses a role boundary in the middle of one line of reasoning.",
+        "The rationale explains the split in terms of who does the work rather than what the work is."
+      ],
+      "why_it_matters": "Every boundary between children is a briefing somebody has to give and somebody has to receive. Agents do not complain about this, which is exactly why nobody notices when it becomes most of the cost."
+    },
+    {
+      "id": "DQ-07",
+      "dimension": "integration_cost",
+      "asks": "What has to happen after all the children are done, and who owns it?",
+      "looks_like_a_problem_when": [
+        "Nobody owns the integration, because the parent is a checkpoint rather than a worker.",
+        "The children produce pieces that have never been assembled together until the last one lands.",
+        "Two children write the same file and the merge was not planned -- see policies/execution-policy.json's integration rules."
+      ],
+      "why_it_matters": "The parent becomes the checkpoint by rule TS-07, and a checkpoint is not an integrator. A decomposition whose pieces nobody assembles is a stage that looks finished and is not."
+    }
+  ],
+  "verdicts": {
+    "sound": "The split holds. Recorded and grafted.",
+    "sound-with-findings": "Grafted, and the findings are recorded on the proposal. Use this rather than blocking on a decomposition that is workable and imperfect.",
+    "resplit": "Do not graft. The findings name what is wrong, and the proposer produces another proposal.",
+    "do-not-split": "The stage is one task. Reject the decomposition entirely, which is a real and under-used answer."
+  },
+  "who_reviews": {
+    "rule": "Not the proposer.",
+    "why": "A role reviewing its own split will find it sound, for the same reason an author reviewing its own design does. This is the same separation policies/review-routing.json applies everywhere else, and it is the only part of this that a machine can check.",
+    "default": "The stage's own agent gate reviewer where the stage has one; otherwise the proposer's lead, and where the proposer is the lead, the department head.",
+    "note": "Three roles can synthesize: development-lead, qa-lead and solution-architect. All three are leads, so the fallback matters more here than it looks."
+  },
+  "when_it_is_required": {
+    "always": "A decomposition of a task at HIGH or CRITICAL risk, or one whose parent holds a coupled surface.",
+    "otherwise": "Recommended and not required. A three-way split of a LOW-risk documentation stage does not need a second reader, and requiring one would make synthesis expensive enough that stages stop being decomposed at all -- which is worse than an imperfect split.",
+    "enforced_by": "scripts/synthesize_tasks.py, which refuses to graft an unreviewed proposal where the review is required."
+  },
+  "not_enforceable": [
+    "Whether the answers are any good. A reviewer can write 'cohesion: fine' on every dimension and the checker will accept it. What the checker refuses is a blank, and what refuses a lazy answer is the person reading the review.",
+    "Whether the reviewer actually looked at the graph. Nothing correlates a review with the artifacts it claims to have read.",
+    "Anything about a decomposition nobody proposed. A stage that should have been split and was not produces no proposal, so there is nothing to review -- this catches bad splits, never missing ones."
+  ]
+}

@@ -55,6 +55,16 @@ technology neutrality.
 **No graph database for traceability.** Identifiers and file conventions first;
 a tool once the convention demonstrably holds.
 
+**No score for a decomposition.** Seven review dimensions exist and none of them
+is a number. A cohesion metric on a set of engineering tasks would be a heuristic
+wearing a decimal point, and a split that scored well would stop being read. What
+`synthesize_tasks.py` checks is that the review happened, that every dimension was
+answered rather than left blank, and that the reviewer was not the proposer —
+provenance and completeness, never quality. A reviewer can write "cohesion: fine"
+on every dimension and the checker will accept it; what refuses a lazy answer is
+the person reading the review. And a stage that should have been decomposed and
+was not produces no proposal, so this catches bad splits and never missing ones.
+
 **No guard on agent memory.** Five reviewer roles hold persistent project-scope
 memory. The platform writes it, not the `Write` tool, so `guard_write` never fires
 and `policies/write-scope.json` does not apply to it. What makes it safe is that

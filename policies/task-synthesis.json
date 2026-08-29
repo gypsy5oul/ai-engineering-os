@@ -72,7 +72,7 @@
   "max_children": 8,
   "max_depth": 1,
   "not_enforceable": [
-    "Whether the decomposition is any good. The rules below reject a decomposition that is incoherent with the graph; they cannot reject one that is merely poor. That is what the reviewer on the stage is for."
+    "Whether the decomposition is any good. The rules below reject a decomposition that is incoherent with the graph; they cannot reject one that is merely poor. That is policies/decomposition-review.json, which is a review rather than a rule -- there is no metric for cohesion on a set of engineering tasks and there will not be one. This line used to say 'that is what the reviewer on the stage is for', and it was not true: every stage gate reviews the stage's artifact, not the split, and the stages most likely to synthesize have no reviewer at all."
   ],
   "dependency_inference": {
     "runs": "after every graft, from synthesize_tasks.py",

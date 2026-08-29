@@ -6,7 +6,7 @@
     "Both mistakes were cheap to make because each belief lived in prose, in a different file, established at a different time, with no record of how it was checked. A capability the code depends on should say how it was verified and when.",
     "It also recorded PermissionRequest as unavailable on the strength of a probe that only covered the two modes which short-circuit before the hook runs. An absence has to be checked the way a presence is, or it becomes the most confident kind of wrong entry."
   ],
-  "tested_against": "2.1.250",
+  "tested_against": "2.1.251",
   "evidence_levels": {
     "contract": "Declared in the CLI's own schema. The strongest evidence short of running it.",
     "empirical": "Observed on the wire in this environment.",
@@ -133,7 +133,7 @@
       "note": "Exit 2 does not warn: the CLI's own help text says 'show stderr to model and prevent task creation', and executeTaskCreatedHooks collects blockingError, deletes the just-created task and strips its id from every other task's edges before throwing. TaskCreated is in the same blocking set as Stop, TeammateIdle and TaskCompleted. There is no hookSpecificOutput variant, so it cannot inject or rewrite -- the binding it establishes has to be written to the graph and read back later.",
       "used_by": "hooks/scripts/bind_task.py",
       "load_bearing": true,
-      "re_verified": "2026-08-28 against 2.1.250, by reading the binary."
+      "re_verified": "2026-08-28 against 2.1.250 and again against 2.1.251, by reading the binary. The upgrade renamed the variable holding the blocking set from `aen` to `_in`, which failed the drift belief on a capability that was entirely intact -- the belief now matches the array literal rather than the name holding it."
     },
     "agent.memory.project_scope": {
       "available": true,

@@ -75,12 +75,28 @@ BELIEFS = [
     {
         "id": "task-created-blocks",
         "what": "TaskCreated is in the set of events exit 2 can block",
-        "find": rb'aen=\[([^\]]{0,120})\]',
+        # Anchored on the array literal, not on the variable holding it. The first
+        # version matched `aen=[...]`, and 2.1.251 renamed that to `_in` -- so a
+        # load-bearing belief reported FAIL on a capability that was entirely
+        # intact. A minified name is the least stable thing in the file and the
+        # last thing a belief should depend on.
+        "find": rb'\[("Stop","TeammateIdle","TaskCreated","TaskCompleted")\]',
         "must_contain": ["TaskCreated", "TaskCompleted"],
         "load_bearing": True,
         "why": "bind_task.py refuses a task whose dependencies are unmet or whose id was invented. "
                "If TaskCreated leaves the blocking set those refusals become stderr nobody acts "
                "on, and the earliest gate in the lifecycle silently stops being a gate.",
+    },
+    {
+        "id": "task-created-blocks-by-deleting",
+        "what": "exit 2 on TaskCreated prevents the task rather than warning about it",
+        "find": rb"Exit code 2 - show stderr to model and (prevent task creation)",
+        "must_contain": ["prevent task creation"],
+        "load_bearing": True,
+        "why": "bind_task.py's refusals are narrow because this is destructive rather than "
+               "advisory: the CLI deletes the created task. If exit 2 became a warning the "
+               "refusals would be safe to widen, and if this sentence disappears entirely the "
+               "gate has stopped being a gate. The CLI's own help text is the statement.",
     },
     {
         "id": "teammate-idle-payload",
