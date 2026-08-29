@@ -59,6 +59,19 @@ MODEL_ALIASES = _model_aliases()
 # frontmatter and "Model policy" was addressed to whoever spawns the agent, stored
 # where only the agent itself would read it -- and a running subagent cannot change
 # its own model. Both are in policies/agent-registry.json and the docs.
+def _policy_json(name):
+    """One policy file, or an empty mapping if it will not load.
+
+    Checks read policies rather than restating them; a checker holding its own
+    copy of a rule agrees with the policy right up until somebody edits one.
+    """
+    try:
+        with open(os.path.join(ROOT, "policies", name), encoding="utf-8") as fh:
+            return json.load(fh)
+    except Exception:
+        return {}
+
+
 def _registry_json():
     try:
         with open(os.path.join(ROOT, "policies", "agent-registry.json"), encoding="utf-8") as fh:
@@ -1194,6 +1207,74 @@ def check_schema_vocabularies_are_documented():
                     % (rel, entry["id"], ", ".join(missing), entry["why"]))
 
 
+def check_a_gate_reviewer_can_record_its_verdict():
+    """A stage that demands a verdict from a role that cannot write one is
+    unsatisfiable by anybody.
+
+    `agent_verdict(role, pass)` is evaluated by scanning artifacts for a matching
+    entry in their `reviewers` list, and the only place a reviewer may put one is
+    its own review record under `docs/reviews/**`. A role whose write scope reaches
+    no such location can never satisfy a gate that names it -- not because it did
+    the work badly, but because there is nowhere to record having done it.
+
+    This is the v0.22.1 defect a second time. That one gave the dedicated reviewers
+    an empty allow-list; this one left the *leads* who gate a stage -- qa-lead on
+    REQ, STORY and ASSEMBLE, product-manager on UX, engineering-director on RCA --
+    with allow-lists that never included the review record. Five gates across three
+    workflows were impossible, and it took a live run to notice: REQ was refused
+    three times and escalated, which reads exactly like an agent failing at its job.
+
+    The second half of the check is independence. A reviewer that owns one of the
+    artifacts the stage produces is reviewing its own work, and granting it the
+    review scope would make a self-review recordable rather than impossible.
+    """
+    scope = _policy_json("write-scope.json").get("roles") or {}
+    types = {a.get("code"): a
+             for a in _policy_json("artifact-model.json").get("artifact_types") or []
+             if isinstance(a, dict)}
+
+    base = os.path.join(ROOT, "sdlc", "workflows")
+    for name in sorted(os.listdir(base)):
+        if not name.endswith((".yaml", ".yml")):
+            continue
+        try:
+            wf = parse_file(os.path.join(base, name))
+        except Exception:
+            continue
+        for stage in wf["stages"]:
+            for predicate in stage.get("definition_of_done") or []:
+                m = re.match(r"agent_verdict\(([^,)]+)", predicate.strip())
+                if not m:
+                    continue
+                role = m.group(1).strip()
+                entry = scope.get(role)
+                # No entry at all means the role is unscoped, so it can write the
+                # review record. That is its own question and not this one.
+                if entry is not None and entry.get("mode") == "allow":
+                    allow = entry.get("allow") or []
+                    if not any(a.startswith("docs/reviews/") for a in allow):
+                        err("%s/%s requires agent_verdict(%s, ...) and %s may write only "
+                            "to %s -- none of which is a review record. The gate cannot be "
+                            "satisfied by anyone: the predicate reads verdicts and the role "
+                            "it names has nowhere to put one."
+                            % (wf["id"], stage["id"], role, role,
+                               ", ".join(allow) or "nothing"))
+
+                # The review record itself does not count. A REVIEW artifact is
+                # the reviewer's own verdict, stored under docs/reviews/, and its
+                # owner_role is naturally the reviewer -- authoring that is the
+                # whole job. What independence forbids is owning the artifact
+                # *under* review.
+                owned = [p for p in (stage.get("produces") or [])
+                         if (types.get(p) or {}).get("owner_role") == role
+                         and not str((types.get(p) or {}).get("storage") or "")
+                         .startswith("docs/reviews/")]
+                if owned:
+                    err("%s/%s requires a verdict from %s, which owns %s -- the artifact "
+                        "the stage produces. A reviewer must not author what it reviews."
+                        % (wf["id"], stage["id"], role, ", ".join(owned)))
+
+
 def check_team_stages_carry_their_skills():
     """A teammate does not get its agent definition's `skills:` frontmatter.
 
@@ -2205,6 +2286,7 @@ def main():
     check_control_loop_policy_is_live()
     check_schema_vocabularies_are_documented()
     check_team_stages_carry_their_skills()
+    check_a_gate_reviewer_can_record_its_verdict()
     check_work_item_id_patterns_agree()
     check_documented_vocabularies()
     check_every_workflow_is_reachable()

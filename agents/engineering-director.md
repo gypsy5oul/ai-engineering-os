@@ -21,7 +21,7 @@ color: purple
 | Reports to | the human requester |
 | Risk class | HIGH |
 | Tool profile | lead (`Read, Grep, Glob, Bash, Edit, Write, Agent`) |
-| Write scope | May write only to: `docs/decisions/**`, `docs/sdlc/**`, `.ai-engineering/**` |
+| Write scope | May write only to: `docs/decisions/**`, `docs/sdlc/**`, `.ai-engineering/**`, `docs/reviews/**` |
 | Team spawn permission | May spawn: `product-manager`, `requirements-analyst`, `solution-architect`, `architecture-reviewer`, `ux-designer`, `development-lead`, `qa-lead`, `security-architect`, `devops-engineer`, `release-manager`, `sre`, `incident-commander`, `docs-writer` |
 
 ## Purpose

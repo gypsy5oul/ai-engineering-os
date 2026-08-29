@@ -43,6 +43,8 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
 
 import check_dod  # noqa: E402
+from minyaml import parse_file  # noqa: E402
+import briefing  # noqa: E402
 import workitem as W  # noqa: E402
 
 GOLDEN = os.path.join(ROOT, "golden")
@@ -437,6 +439,12 @@ def _p_binding(ctx):
                   % ", ".join(sorted(set(kinds))))
 
 
+# Who the human is, when a run has one. Not an agent, and not a default: an
+# approval attributed to nobody in particular is the thing the gate exists to
+# refuse.
+OPERATOR = ["certification-operator", "release-authority"]
+
+
 def _control(project, wid, *args):
     """Run the organization's own control loop, and let it answer.
 
@@ -451,7 +459,223 @@ def _control(project, wid, *args):
     return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
 
 
-def drive_lifecycle(project, wid, model, budget=14, timeout=1800):
+# Who can satisfy a predicate. Read from the artifact model and the department
+# cycles rather than declared here, because the organization already says all of
+# this and a second copy is the one that goes stale.
+#
+# This is the whole of the multi-role walk. There is no new participant table: a
+# stage's definition of done already names the roles it needs -- an owner for the
+# artifact, a reviewer for the verdict, a lead for the rollup, a human for the
+# approval -- and the failing predicates say which of them have not acted yet.
+_VERDICT_RE = re.compile(r"^agent_verdict\(([^,)]+)")
+_OWNED_RE = re.compile(r"^artifact_owned_by\(([^,)]+),\s*([^)]+)\)")
+_CYCLE_RE = re.compile(r"^(?:cycle_accepted|cycle_rollup_reported|no_open_rework)\(([^)]+)\)")
+_HUMAN_RE = re.compile(r"^(?:human_approval_recorded|human_identity_recorded)\(([^)]+)\)")
+_ARTIFACT_RE = re.compile(r"^(?:artifact_exists|artifact_status|required_fields_present|"
+                          r"field_quantified|no_open_blocking_decisions_for|every_linked)"
+                          r"\(([^,)]+)")
+
+
+def _artifact_owners():
+    try:
+        with open(os.path.join(ROOT, "policies", "artifact-model.json"), encoding="utf-8") as fh:
+            types = json.load(fh).get("artifact_types") or []
+    except (OSError, ValueError):
+        return {}
+    return {a.get("code"): a.get("owner_role") for a in types if isinstance(a, dict)}
+
+
+def _cycle_leads():
+    out = {}
+    base = os.path.join(ROOT, "sdlc", "cycles")
+    if not os.path.isdir(base):
+        return out
+    for name in sorted(os.listdir(base)):
+        if not name.endswith((".yaml", ".yml")):
+            continue
+        try:
+            cycle = parse_file(os.path.join(base, name))
+        except Exception:
+            continue
+        pos = cycle.get("positions") or {}
+        lead = pos.get("lead")
+        out[cycle.get("id")] = lead.get("role") if isinstance(lead, dict) else lead
+    return out
+
+
+def who_can_satisfy(predicate):
+    """`(kind, actor)` for one unmet predicate, or `(None, None)`.
+
+    `kind` is `role` for something an agent can do and `human` for something no
+    agent may do. The second is not a gap to be worked around: an approval signed
+    by an agent is refused by `human_identity_recorded`, which is the OS being
+    right.
+    """
+    entry = predicate.split(" -- ")[0].strip()
+
+    m = _HUMAN_RE.match(entry)
+    if m:
+        return "human", m.group(1).strip()
+
+    m = _VERDICT_RE.match(entry)
+    if m:
+        return "role", m.group(1).strip()
+
+    m = _OWNED_RE.match(entry)
+    if m:
+        return "role", m.group(2).strip()
+
+    m = _CYCLE_RE.match(entry)
+    if m:
+        return "role", _cycle_leads().get(m.group(1).strip())
+
+    m = _ARTIFACT_RE.match(entry)
+    if m:
+        return "role", _artifact_owners().get(m.group(1).strip())
+
+    return None, None
+
+
+def record_operator_approval(project, wid, policy_ref, operator, role):
+    """Record a human approval the person running certification actually gave.
+
+    No agent may do this. `human_identity_recorded` refuses an approval whose
+    approver_role is a registered agent, which is the OS being right: an approval
+    an agent can sign is not an approval. So the only honest way a certification
+    run crosses a human gate is for a human to cross it, and this records that
+    they did -- with their identity, on the artifact, in the history.
+
+    It is opt-in per approval (`--approve AP-12`) and off by default, because a
+    harness that granted its own approvals would be manufacturing exactly the
+    evidence the gate exists to demand. What happens without it is that the walk
+    stops and reports `awaiting-human`, which is the true state.
+    """
+    artifacts = check_dod.load_artifacts(project)
+    scoped = [a for a in artifacts if str(a.get("change") or "") == wid]
+    target = None
+    for a in scoped or artifacts:
+        if a.get("_path", "").startswith("docs/"):
+            target = a
+            break
+    if target is None:
+        return None, "no artifact exists yet to carry the approval"
+
+    path = os.path.join(project, target["_path"])
+    with open(path, encoding="utf-8") as fh:
+        body = fh.read()
+    entry = ("  - policy_ref: %s\n    approver_id: %s\n    approver_role: %s\n"
+             "    recorded_in: certification-run\n    recorded_at: %s\n"
+             % (policy_ref, operator, role, now()))
+    if re.search(r"^approvals:\s*$", body, re.M):
+        body = re.sub(r"^approvals:\s*$", "approvals:\n" + entry.rstrip("\n"), body,
+                      count=1, flags=re.M)
+    elif re.search(r"^approvals:\s*\[\s*\]\s*$", body, re.M):
+        body = re.sub(r"^approvals:\s*\[\s*\]\s*$", "approvals:\n" + entry.rstrip("\n"),
+                      body, count=1, flags=re.M)
+    else:
+        end = body.find("\n---", 3)
+        if end == -1:
+            return None, "%s has no frontmatter to record an approval in" % target["_path"]
+        body = body[:end] + "\napprovals:\n" + entry.rstrip("\n") + body[end:]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(body)
+    W.record(project, wid, "human_approval_recorded", artifact=target["id"],
+             policy_ref=policy_ref, approver_id=operator, approver_role=role,
+             why="granted explicitly by the operator running certification with "
+                 "--approve; no agent may sign this")
+    return target["id"], None
+
+
+def _owed_line(predicate):
+    """One unmet predicate, with where its evidence has to land.
+
+    The same text the briefing gives a stage owner. A convened participant that
+    is told only the predicate name is in exactly the position the product-manager
+    was in when it was asked three times for a rollup it could not locate.
+    """
+    entry = predicate.split(" -- ")[0].strip()
+    name = entry.split("(")[0].strip()
+    gloss = briefing._glossary().get(name)
+    if not gloss:
+        return "- %s" % predicate
+    meaning, evidence = gloss
+    line = "- %s — %s" % (predicate, meaning)
+    if evidence:
+        line += "\n  Satisfied by: %s" % evidence
+    return line
+
+
+def convene(project, wid, task, model, timeout, granted=()):
+    """Call in the participants the unmet predicates name, until nothing moves.
+
+    The harness decides nothing about whether the work is done. It re-asks the
+    organization after every participant, and the next participant is whoever the
+    remaining failures name. When the only thing left is a human approval, the
+    walk stops and says so rather than signing it.
+    """
+    acts, seen = [], set()
+    for _ in range(8):
+        result = check_dod.acceptance(project, task, change=wid)
+        unmet = list(result.get("failing") or []) + list(result.get("unverifiable") or [])
+        if not unmet:
+            break
+
+        # Group the remaining work by who has to do it, so a role is called in
+        # once with everything it owes rather than once per predicate.
+        owed, human_waits = {}, []
+        for predicate in unmet:
+            kind, actor = who_can_satisfy(predicate)
+            if kind == "human":
+                human_waits.append((actor, predicate))
+            elif kind == "role" and actor:
+                owed.setdefault(actor, []).append(predicate)
+
+        nxt = [(role, preds) for role, preds in sorted(owed.items())
+               if (task["id"], role) not in seen]
+        if not nxt:
+            granted_now = False
+            for policy_ref, _pred in human_waits:
+                if policy_ref in granted:
+                    aid, why = record_operator_approval(
+                        project, wid, policy_ref, OPERATOR[0], OPERATOR[1])
+                    acts.append({"task": task["id"], "stage": task.get("stage"),
+                                 "role": "%s (human)" % OPERATOR[1],
+                                 "owed": [policy_ref],
+                                 "session": "recorded on %s" % aid if aid else "not recorded: %s" % why})
+                    granted_now = granted_now or bool(aid)
+            if granted_now:
+                continue
+            break
+
+        role, preds = nxt[0]
+        seen.add((task["id"], role))
+        step = {"task": task["id"], "stage": task.get("stage"), "role": role,
+                "owed": [p.split(" -- ")[0] for p in preds], "session": None}
+        try:
+            proc = _run_session(project, PARTICIPANT_PROMPT % {
+                "item": wid, "role": role, "task": task["id"],
+                "title": task.get("title") or task["id"],
+                "owed": "\n".join(_owed_line(p) for p in preds)}, model, timeout=timeout)
+            step["session"] = "completed" if proc.returncode == 0 else (
+                "exited %d" % proc.returncode)
+        except subprocess.TimeoutExpired:
+            step["session"] = "timed out after %ds" % timeout
+            acts.append(step)
+            break
+        except Exception as exc:
+            step["session"] = "did not complete: %r" % exc
+            acts.append(step)
+            break
+        acts.append(step)
+
+    result = check_dod.acceptance(project, task, change=wid)
+    waiting = [p.split(" -- ")[0] for p in
+               (list(result.get("failing") or []) + list(result.get("unverifiable") or []))
+               if who_can_satisfy(p)[0] == "human"]
+    return acts, waiting
+
+
+def drive_lifecycle(project, wid, model, budget=14, timeout=1800, granted=()):
     """Walk the graph with real sessions until it stops moving.
 
     One session per runnable task, delegated to the role that owns it. After each
@@ -515,6 +739,18 @@ def drive_lifecycle(project, wid, model, budget=14, timeout=1800):
         # that the evidence was gone. A harness that narrates over what it is
         # measuring is measuring itself.
         rc, out = _control(project, wid, "observe", "--task", tid, "--outcome", "accepted")
+        if rc != 0:
+            # The owner alone did not finish it, which for most stages is correct
+            # rather than a failure: a definition of done that requires a
+            # reviewer's verdict and a department rollup is describing an
+            # organization, not a soloist. Call in whoever the unmet predicates
+            # name and ask again.
+            graph = W.load_graph(project, wid) or {}
+            fresh = W.task(graph, tid) or target
+            step["convened"], step["awaiting_human"] = convene(
+                project, wid, fresh, model, timeout, granted)
+            rc, out = _control(project, wid, "observe", "--task", tid,
+                               "--outcome", "accepted")
         if rc == 0:
             step["accepted"] = True
         else:
@@ -836,7 +1072,7 @@ def build_verdict(units, probes, mode):
 
 # ---------------------------------------------------------------- main
 
-def run(mode, model, keep, stages=14, timeout=1800):
+def run(mode, model, keep, stages=14, timeout=1800, granted=()):
     tmp = tempfile.mkdtemp(prefix="aieos-golden-")
     project = os.path.join(tmp, "retention-window-service")
     data_dir = os.path.join(tmp, "plugin-data")
@@ -894,7 +1130,8 @@ def run(mode, model, keep, stages=14, timeout=1800):
                     else:
                         try:
                             record["lifecycle"] = drive_lifecycle(
-                                project, wid, model, budget=stages, timeout=timeout)
+                                project, wid, model, budget=stages, timeout=timeout,
+                                granted=granted)
                             record["mechanisms"] = drive_mechanisms(project, wid, model)
                         except Exception as exc:
                             record["notes"] = ("the delegation session did not complete: %r"
@@ -953,6 +1190,20 @@ LIVE_PROMPT = (
 )
 
 
+PARTICIPANT_PROMPT = (
+    "This project runs on the AI Engineering OS. Work item %(item)s is open and task "
+    "%(task)s (%(title)s) is being completed.\n\n"
+    "You are needed as the `%(role)s` role. The organization has evaluated the task's "
+    "definition of done and these predicates are not satisfied:\n\n%(owed)s\n\n"
+    "Delegate to the `%(role)s` agent with the Agent tool, exactly once, and have it do "
+    "the part of this that is genuinely its own -- write the artifact it owns, or record "
+    "its review verdict, or produce the department rollup. Write real content in the "
+    "project's own conventions; do not invent an approval and do not sign anything as a "
+    "human. If the role cannot satisfy something, say so plainly rather than working "
+    "around it."
+)
+
+
 DELEGATION_PROMPT = (
     "This project runs on the AI Engineering OS. Work item %(item)s is open and planned, "
     "and task %(task)s (%(title)s) is ready for the `%(role)s` role.\n"
@@ -978,6 +1229,13 @@ def report(record):
             print("    %-6s %-10s %-22s session %s -> %s"
                   % (step.get("task"), step.get("stage") or "-", step.get("role") or "-",
                      step.get("session"), verdict))
+            for act in step.get("convened") or []:
+                print("           convened %-22s %-34s %s"
+                      % (act.get("role"), ", ".join(act.get("owed") or [])[:34],
+                         act.get("session")))
+            if step.get("awaiting_human"):
+                print("           awaiting a human for: %s"
+                      % ", ".join(step["awaiting_human"]))
             if step.get("decision"):
                 print("           the loop decided: %s"
                       % step["decision"].splitlines()[0][:100])
@@ -1030,10 +1288,18 @@ def main():
                     help="how many real sessions the lifecycle walk may spend")
     ap.add_argument("--session-timeout", type=int, default=1800,
                     help="seconds one stage's session may take before the walk stops")
+    ap.add_argument("--approve", default="",
+                    help="comma-separated approval ids the human running this run grants "
+                         "(e.g. AP-12). Off by default: without it the walk stops at the "
+                         "human gate and reports awaiting-human, which is the true state.")
+    ap.add_argument("--operator", default="certification-operator",
+                    help="the human granting --approve; recorded as the approver")
     args = ap.parse_args()
 
+    OPERATOR[0] = args.operator
+    granted = tuple(a.strip() for a in args.approve.split(",") if a.strip())
     record = run("live" if args.live else "synthetic", args.model, args.keep,
-                 args.stages, args.session_timeout)
+                 args.stages, args.session_timeout, granted)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(record, fh, indent=2)

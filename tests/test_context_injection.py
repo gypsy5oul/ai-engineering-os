@@ -183,16 +183,41 @@ class TestTheDefinitionOfDoneArrivesMeaningful(unittest.TestCase):
     def test_every_predicate_the_model_defines_can_be_glossed(self):
         gloss = briefing._glossary()
         self.assertGreaterEqual(len(gloss), 25)
-        for name, text in gloss.items():
+        for name, (meaning, _evidence) in gloss.items():
             with self.subTest(predicate=name):
-                self.assertTrue(text.endswith("."), name)
+                self.assertTrue(meaning.endswith("."), name)
 
     def test_only_the_first_sentence_travels(self):
         """`means` carries the definition and then the history of why the
         predicate is shaped that way. The agent doing the work needs the first."""
-        gloss = briefing._glossary()
-        self.assertEqual(gloss["every_skip_recorded"],
+        meaning, _evidence = briefing._glossary()["every_skip_recorded"]
+        self.assertEqual(meaning,
                          "Every stage this change skips carries a written reason.")
+
+    def test_every_predicate_says_where_its_evidence_lives(self):
+        """The half that was missing. Told what `cycle_rollup_reported` means, a
+        real product-manager was called in three times and produced no rollup,
+        because nothing said a rollup is a frontmatter mapping rather than a
+        document. A predicate an agent cannot locate is one no agent can satisfy."""
+        gloss = briefing._glossary()
+        for name, (_meaning, evidence) in gloss.items():
+            with self.subTest(predicate=name):
+                self.assertTrue(evidence, "%s says what it means and not where to put it"
+                                % name)
+
+    def test_the_rollup_predicate_names_the_field_and_not_a_document(self):
+        _meaning, evidence = briefing._glossary()["cycle_rollup_reported"]
+        self.assertIn("rollup:", evidence)
+        self.assertIn("produced_by", evidence)
+
+    def test_the_briefing_renders_the_evidence(self):
+        out = self.render(["cycle_rollup_reported(CYCLE-PROD)"])
+        self.assertIn("Satisfied by:", out)
+        self.assertIn("produced_by", out)
+
+    def test_a_human_only_predicate_says_no_agent_may_satisfy_it(self):
+        _meaning, evidence = briefing._glossary()["human_approval_recorded"]
+        self.assertIn("No agent may create one", evidence)
 
 
 class TestSubagentObservation(Hooked):

@@ -61,22 +61,38 @@ def _glossary():
     registry = walk(model) or {}
     for name, spec in registry.items():
         means = (spec or {}).get("means") or ""
-        if means:
-            # The first sentence is the definition. What follows is usually the
-            # history of why the predicate is shaped the way it is, which the
-            # evaluator's reader needs and the agent doing the work does not.
-            _GLOSS[name] = re.split(r"(?<=[.])\s+", means.strip())[0]
+        if not means:
+            continue
+        # The first sentence is the definition. What follows is usually the
+        # history of why the predicate is shaped the way it is, which the
+        # evaluator's reader needs and the agent doing the work does not.
+        _GLOSS[name] = (re.split(r"(?<=[.])\s+", means.strip())[0],
+                        (spec or {}).get("evidence") or "")
     return _GLOSS
 
 
 def _dod_lines(predicates):
-    """Each predicate as written, with what it means where that is known."""
+    """Each predicate as written, what it means, and where the evidence lives.
+
+    The second half was the missing one. Told `cycle_rollup_reported(CYCLE-PROD)`
+    and its meaning -- "the lead produced the rollup for the head" -- a real
+    product-manager was called in three times and never produced one, because
+    nothing said a rollup is a `rollup:` mapping in an artifact's frontmatter
+    rather than a document to write. A predicate an agent cannot locate is a
+    predicate no agent can satisfy.
+    """
     gloss = _glossary()
     out = ["- Definition of done:"]
     for pred in predicates:
         name = pred.split("(")[0].strip()
-        meaning = gloss.get(name)
-        out.append("  - `%s`%s" % (pred, " — %s" % meaning if meaning else ""))
+        entry = gloss.get(name)
+        if not entry:
+            out.append("  - `%s`" % pred)
+            continue
+        meaning, evidence = entry
+        out.append("  - `%s` — %s" % (pred, meaning))
+        if evidence:
+            out.append("    Satisfied by: %s" % evidence)
     return out
 
 

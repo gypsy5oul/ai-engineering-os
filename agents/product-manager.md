@@ -20,7 +20,7 @@ color: blue
 | Reports to | engineering-director |
 | Risk class | MEDIUM |
 | Tool profile | delegating-author (`Read, Grep, Glob, Edit, Write, Agent`) |
-| Write scope | May write only to: `docs/requirements/**`, `docs/stories/**`, `docs/product/**`, `.ai-engineering/**`, `docs/change-requests/**`, `docs/decisions/**` |
+| Write scope | May write only to: `docs/requirements/**`, `docs/stories/**`, `docs/product/**`, `.ai-engineering/**`, `docs/change-requests/**`, `docs/decisions/**`, `docs/reviews/**` |
 | Team spawn permission | May spawn: `requirements-analyst`, `ux-designer` |
 
 ## Purpose
