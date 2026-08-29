@@ -164,6 +164,18 @@
       "evidence": "empirical",
       "note": "A `claude -p` session is not given any tool that creates a native task. Asked to list its own tools, a headless session against 2.1.251 returned Agent, Bash, Edit, ListAgents, Read, ReportFindings, ScheduleWakeup, Skill, ToolSearch, Workflow, Write, the Cron tools, DesignSync, EnterWorktree, ExitWorktree, Monitor, NotebookEdit, PushNotification, RemoteTrigger, SendMessage, TaskOutput, TaskStop, WebFetch, WebSearch and the MCP tools -- and nothing that creates a task. TaskOutput and TaskStop read and stop tasks; neither makes one. Consequence for certification: TaskCreated and TaskCompleted cannot be exercised from an unattended `-p` run, so the probes that ask about them stay `not-run` however many sessions the harness spends. Closing them needs an interactive session or a teammate-driven one. The correct response is to leave the run uncertified, not to drop the probes -- the hooks are registered and the mechanism is real, it is this harness that cannot reach it.",
       "re_verified": "2026-08-29 against 2.1.251, by asking a headless session for its own tool list."
+    },
+    "execution.background.cli": {
+      "available": true,
+      "evidence": "empirical",
+      "note": "`claude --bg \"<task>\"` dispatches a session that outlives the invoking process and prints a short id. Verified against 2.1.251: a dispatched job wrote its file and `claude agents --json` then reported it as {id, pid, cwd, kind: \"background\", sessionId, name, status: \"idle\", state: \"done\"}. `claude attach <id>` opens it, `logs <id>` prints its output, `stop`/`rm` end it. --bg refuses --print, because -p never starts the interactive session that attach connects to -- so background is reachable from the CLI but not from a headless -p session. This is the primitive the OS's `background` execution mode should resolve to, and the run listing the OS should read rather than reimplement.",
+      "re_verified": "2026-08-29 against 2.1.251, by dispatching a job and reading `claude agents --json`."
+    },
+    "execution.team.cli": {
+      "available": false,
+      "evidence": "absent",
+      "note": "There is no way to start a team from the command line. The word \"team\" does not appear anywhere in `claude --help` for 2.1.251 -- 270 lines, checked -- and there is no team subcommand, flag or dispatch option. Teams remain real inside a session (the TeammateIdle hook is registered and TaskCreated carries teammate_name), but nothing the harness can invoke creates one: a `-p` session asked to start a team produces subagents instead, which is what the previous certification observed and must not be read as team support. Consequence: `a-team-stage-carried-its-skills` cannot be closed by any CLI-driven run, and the stages declaring `execution: team` are unexercised. Alternative reachable mode: an interactive session, which this harness does not drive.",
+      "re_verified": "2026-08-29 against 2.1.251, by reading the full CLI help."
     }
   },
   "refresh": "When the tested_against version moves, re-verify every capability marked load_bearing before anything else. Those are the ones whose failure is silent.",

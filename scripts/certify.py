@@ -36,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -221,6 +222,22 @@ def _run_session(project, prompt, model, timeout=600):
     with open(os.devnull) as devnull:
         return subprocess.run(cmd, cwd=project, capture_output=True, text=True,
                               env=env, stdin=devnull, timeout=timeout)
+
+
+def _session_outcome(proc):
+    """What happened to a session, including why when it failed.
+
+    `exited 1` on its own is unusable evidence. A whole traversal came back with
+    every session exited 1 and no way to tell a refused prompt from an expired
+    credential from a usage limit -- and the same sessions run by hand worked, so
+    the harness had recorded the one fact that could not distinguish them. The
+    message the CLI printed is the evidence; discarding it was the defect.
+    """
+    if proc.returncode == 0:
+        return "completed"
+    detail = ((proc.stderr or "").strip() or (proc.stdout or "").strip())
+    detail = " ".join(detail.split())[-300:]
+    return "exited %d: %s" % (proc.returncode, detail or "no output")
 
 
 def _audit(data_dir):
@@ -656,8 +673,7 @@ def convene(project, wid, task, model, timeout, granted=()):
                 "item": wid, "role": role, "task": task["id"],
                 "title": task.get("title") or task["id"],
                 "owed": "\n".join(_owed_line(p) for p in preds)}, model, timeout=timeout)
-            step["session"] = "completed" if proc.returncode == 0 else (
-                "exited %d" % proc.returncode)
+            step["session"] = _session_outcome(proc)
         except subprocess.TimeoutExpired:
             step["session"] = "timed out after %ds" % timeout
             acts.append(step)
@@ -711,8 +727,7 @@ def drive_lifecycle(project, wid, model, budget=14, timeout=1800, granted=()):
             proc = _run_session(project, DELEGATION_PROMPT % {
                 "item": wid, "role": target["role"], "task": tid,
                 "title": target.get("title") or tid}, model, timeout=timeout)
-            step["session"] = "completed" if proc.returncode == 0 else (
-                "exited %d" % proc.returncode)
+            step["session"] = _session_outcome(proc)
         except subprocess.TimeoutExpired:
             # Recorded as its own outcome rather than an exception string. The
             # first walk spent 600s on REQ and stopped there, and "the session
@@ -788,6 +803,60 @@ MECHANISM_PROMPTS = [
 ]
 
 
+def exercise_background(project):
+    """Dispatch a real background session and read the platform's own run listing.
+
+    `background` was an execution mode the resolver could name and nothing had
+    ever run. It turns out to be reachable, just not the way the rest of this
+    harness works: `--bg` refuses `--print`, because a headless session never
+    starts the interactive session that `claude attach` connects to. So this is
+    the one place the harness does not use `claude -p`.
+
+    Evidence is the platform's listing, not the file: `claude agents --json`
+    reports the job's id, kind and state, and a job that never ran is not in it.
+    """
+    marker = "background-proof.txt"
+    out = {"mechanism": "background", "dispatched": None, "id": None,
+           "listing": None, "produced": False}
+    try:
+        proc = subprocess.run(
+            ["claude", "--bg",
+             "Write a file called %s in the current directory whose only contents are "
+             "the word BACKGROUND. Then stop." % marker],
+            cwd=project, capture_output=True, text=True, timeout=180)
+    except Exception as exc:
+        out["dispatched"] = "did not dispatch: %r" % exc
+        return out
+    out["dispatched"] = "exit %d" % proc.returncode
+    m = re.search(r"claude attach ([0-9a-f]{6,})", proc.stdout or "")
+    if not m:
+        out["dispatched"] = "dispatched but printed no id"
+        return out
+    out["id"] = m.group(1)
+
+    path = os.path.join(project, marker)
+    for _ in range(48):
+        if os.path.exists(path):
+            out["produced"] = True
+            break
+        time.sleep(5)
+
+    try:
+        listing = subprocess.run(
+            ["claude", "agents", "--json", "--all", "--cwd", project],
+            capture_output=True, text=True, timeout=120)
+        jobs = json.loads(listing.stdout or "[]")
+        mine = [j for j in jobs if j.get("id") == out["id"]]
+        if mine:
+            job = mine[0]
+            out["listing"] = {"kind": job.get("kind"), "state": job.get("state"),
+                              "status": job.get("status"),
+                              "session_id": job.get("sessionId")}
+    except Exception as exc:
+        out["listing"] = "could not be read: %r" % exc
+    return out
+
+
 def drive_mechanisms(project, wid, model):
     """Attempt the execution and isolation mechanisms the lifecycle walk does not reach.
 
@@ -806,14 +875,14 @@ def drive_mechanisms(project, wid, model):
         step = {"mechanism": name}
         try:
             proc = _run_session(project, prompt % {"item": wid}, model, timeout=timeout)
-            step["session"] = "completed" if proc.returncode == 0 else (
-                "exited %d" % proc.returncode)
+            step["session"] = _session_outcome(proc)
             step["said"] = (proc.stdout or "").strip()[-300:]
         except subprocess.TimeoutExpired:
             step["session"] = "timed out after %ds" % timeout
         except Exception as exc:
             step["session"] = "did not complete: %r" % exc
         out.append(step)
+    out.append(exercise_background(project))
     return out
 
 
@@ -856,6 +925,33 @@ def _modes_seen(project, wid):
         if actual:
             seen.setdefault(actual, []).append(task["id"])
     return seen
+
+
+@probe("background-execution-was-actually-dispatched",
+       "Does a real background session run, outlive its caller, and appear in the "
+       "platform's own run listing?",
+       "`claude agents --json`, which lists the job the harness dispatched")
+def _p_background(ctx):
+    """The mode the resolver could name and nothing had run.
+
+    Evidence is the platform's listing rather than the file the job wrote: a file
+    proves something wrote it, and the listing proves the *background session*
+    existed, with the id, kind and state the platform assigned it.
+    """
+    for m in ctx.get("mechanisms") or []:
+        if m.get("mechanism") != "background":
+            continue
+        listing = m.get("listing")
+        if isinstance(listing, dict) and listing.get("kind") == "background":
+            return True, ("job %s: kind %s, state %s%s"
+                          % (m.get("id"), listing.get("kind"), listing.get("state"),
+                             "; wrote its artifact" if m.get("produced") else
+                             "; produced no artifact"))
+        if m.get("id"):
+            return False, ("job %s was dispatched and the run listing does not describe "
+                           "it: %r" % (m.get("id"), listing))
+        return None, "no background session was dispatched: %s" % m.get("dispatched")
+    return None, "the background mechanism was not attempted"
 
 
 @probe("execution-modes-were-exercised-not-just-named",
@@ -1133,6 +1229,7 @@ def run(mode, model, keep, stages=14, timeout=1800, granted=()):
                                 project, wid, model, budget=stages, timeout=timeout,
                                 granted=granted)
                             record["mechanisms"] = drive_mechanisms(project, wid, model)
+                            ctx["mechanisms"] = record["mechanisms"]
                         except Exception as exc:
                             record["notes"] = ("the delegation session did not complete: %r"
                                                % exc)
