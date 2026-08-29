@@ -45,8 +45,15 @@ PERMISSION_REFUSAL = re.compile(
     r"only (?:list|search|read) files in|not allowed", re.I)
 
 # Looking for the rules rather than doing the work.
-DOC_LOOKUP = re.compile(r"/(?:policies|schemas|sdlc|skills|agents|docs)/|"
-                        r"ai-engineering-plugin", re.I)
+#
+# Only outside the project. The first version matched any path under `docs/`,
+# which counted a product manager writing `docs/requirements/GOLD-REQ-001.md`
+# as friction -- that is the REQ stage's actual work, and the metric reported
+# 59% of a run as overhead when much of it was the deliverable. What is friction
+# is reading the *organization's own rules* to find out what is being asked, and
+# those live outside the project tree.
+DOC_LOOKUP = re.compile(r"/(?:policies|schemas|sdlc|skills|agents)/|"
+                        r"ai-engineering-plugin|CLAUDE\.md", re.I)
 
 DISCOVERY = re.compile(r"^\s*(find|ls|tree|grep|rg)\b")
 
@@ -83,7 +90,17 @@ def _call_key(block):
     return (block.get("name"), json.dumps(payload, sort_keys=True))
 
 
-def analyse_transcript(path):
+def _outside(target, project):
+    """Is this path outside the project being worked on?"""
+    if not project or not target:
+        return True
+    try:
+        return not os.path.abspath(str(target)).startswith(os.path.abspath(project) + os.sep)
+    except (TypeError, ValueError):
+        return True
+
+
+def analyse_transcript(path, project=None):
     """Countable friction in one agent's run."""
     entries = _messages(path)
     if not entries:
@@ -127,7 +144,12 @@ def analyse_transcript(path):
                       or payload.get("pattern") or payload.get("path") or "")
             if b.get("name") == "Bash" and DISCOVERY.search(target):
                 stats["discovery_calls"] += 1
-            if DOC_LOOKUP.search(str(target)):
+            # A Bash command names many paths; a Read names one. Either way the
+            # question is whether the agent went outside the project to find out
+            # what the organization wanted.
+            probe_path = payload.get("file_path") or payload.get("path") or ""
+            if DOC_LOOKUP.search(str(target)) and (
+                    not probe_path or _outside(probe_path, project)):
                 stats["documentation_lookups"] += 1
 
             res = results.get(b.get("id")) or {}
@@ -171,7 +193,7 @@ def measure(project, wid=None):
 
     per_agent, totals = [], {}
     for t in transcripts:
-        stats = analyse_transcript(t)
+        stats = analyse_transcript(t, project)
         if stats is None:
             per_agent.append({"transcript": t, "measured": False,
                               "why": "the transcript named by the hook is not readable"})

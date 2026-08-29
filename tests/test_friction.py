@@ -130,6 +130,26 @@ class TestItCountsWhatHappened(Transcript):
         self.assertEqual(stats["documentation_lookups"], 1)
         self.assertEqual(stats["discovery_calls"], 1)
 
+    def test_writing_the_project_s_own_documents_is_the_work_not_friction(self):
+        """The first version matched any path under `docs/`, so a product manager
+        writing the requirement it was asked for was counted as overhead. That
+        reported 59% of a real run as friction when much of it was the
+        deliverable."""
+        stats = M.analyse_transcript(self.write([
+            assistant(call("a", name="Read",
+                           file_path="/proj/docs/requirements/GOLD-REQ-001.md")),
+            result("a"),
+        ]), project="/proj")
+        self.assertEqual(stats["documentation_lookups"], 0)
+
+    def test_reading_the_organization_s_rules_from_inside_a_project_still_counts(self):
+        stats = M.analyse_transcript(self.write([
+            assistant(call("a", name="Read",
+                           file_path="/opt/ai-engineering-plugin/policies/x.json")),
+            result("a"),
+        ]), project="/proj")
+        self.assertEqual(stats["documentation_lookups"], 1)
+
     def test_an_unreadable_transcript_measures_nothing_rather_than_zero(self):
         self.assertIsNone(M.analyse_transcript("/nonexistent/agent.jsonl"))
 

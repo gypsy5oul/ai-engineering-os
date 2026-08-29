@@ -528,6 +528,55 @@ def drive_lifecycle(project, wid, model, budget=14, timeout=1800):
     return attempted
 
 
+MECHANISM_PROMPTS = [
+    ("native-task", 900,
+     "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
+     "Create a native Claude Code task for the work still outstanding on %(item)s, "
+     "using the task tools rather than doing the work inline. Give the task a subject "
+     "that names the work item identifier %(item)s. Then complete it. Report the task "
+     "identifier you created."),
+    ("worktree", 900,
+     "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
+     "Create a git worktree for isolated work on %(item)s, make one small change inside "
+     "it, and integrate that change back into the main checkout. Report the worktree "
+     "path, what you changed, and how the integration went."),
+    ("team", 1200,
+     "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
+     "Start a team to work on %(item)s and give at least one teammate a task. Tell each "
+     "teammate to report which skills it was given. Report the team name, the teammates "
+     "you created, and the skills each one reported."),
+]
+
+
+def drive_mechanisms(project, wid, model):
+    """Attempt the execution and isolation mechanisms the lifecycle walk does not reach.
+
+    A stage walk exercises `subagent` and nothing else, because that is what
+    delegating a task does. Native tasks, worktrees and teams are separate
+    capabilities, and a certification that never tries them is certifying that
+    the resolver can spell them.
+
+    Each attempt is recorded whatever happens. If the platform will not do one of
+    these in `-p`, the probe that asks about it stays `not-run` with a reason,
+    the run does not certify, and that is the correct outcome -- not a thing to
+    route around.
+    """
+    out = []
+    for name, timeout, prompt in MECHANISM_PROMPTS:
+        step = {"mechanism": name}
+        try:
+            proc = _run_session(project, prompt % {"item": wid}, model, timeout=timeout)
+            step["session"] = "completed" if proc.returncode == 0 else (
+                "exited %d" % proc.returncode)
+            step["said"] = (proc.stdout or "").strip()[-300:]
+        except subprocess.TimeoutExpired:
+            step["session"] = "timed out after %ds" % timeout
+        except Exception as exc:
+            step["session"] = "did not complete: %r" % exc
+        out.append(step)
+    return out
+
+
 @probe("task-completion-is-gated",
        "When a native task completes, does the completion gate actually run?",
        "the work item's own history.jsonl")
@@ -800,6 +849,7 @@ def run(mode, model, keep, stages=14, timeout=1800):
         "probes": [],
         "verdict": {},
         "lifecycle": [],
+        "mechanisms": [],
         "notes": None,
     }
 
@@ -839,6 +889,7 @@ def run(mode, model, keep, stages=14, timeout=1800):
                         try:
                             record["lifecycle"] = drive_lifecycle(
                                 project, wid, model, budget=stages, timeout=timeout)
+                            record["mechanisms"] = drive_mechanisms(project, wid, model)
                         except Exception as exc:
                             record["notes"] = ("the delegation session did not complete: %r"
                                                % exc)
@@ -924,6 +975,13 @@ def report(record):
             if step.get("decision"):
                 print("           the loop decided: %s"
                       % step["decision"].splitlines()[0][:100])
+        print()
+
+    mech = record.get("mechanisms") or []
+    if mech:
+        print("  mechanism attempts:")
+        for m in mech:
+            print("    %-12s %s" % (m["mechanism"], m.get("session")))
         print()
 
     syn = [u for u in record["units"] if u["evidence"] == "synthetic"]
