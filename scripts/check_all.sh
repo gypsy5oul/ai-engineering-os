@@ -29,6 +29,10 @@ python3 scripts/check_links.py
 step "Secret scan"
 python3 scripts/secret_scan.py .
 
+step "Committed agent memory"
+python3 scripts/lint_memory.py --project .
+python3 scripts/lint_memory.py --project golden
+
 step "Tests"
 python3 -m unittest discover -s tests -q
 

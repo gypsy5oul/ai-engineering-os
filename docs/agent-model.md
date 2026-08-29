@@ -162,16 +162,32 @@ imperative, and the next session applies both as though they were policy. So eve
 holder's contract forbids exactly that: record what you observed and where, never
 a justification you were not given, never in the imperative.
 
-### What is not enforced
+### What is checked, and when
 
 **No hook sees a memory write.** The platform writes it, not the `Write` tool, so
-`guard_write` never fires and `policies/write-scope.json` does not apply. What
-makes project-scope memory safe is that it lands in the repository and is
-reviewed, not that anything intercepts it.
+`guard_write` never fires and `policies/write-scope.json` does not apply. Nothing
+validates an entry *before* it is stored — it is written by the same model whose
+reasoning it will later shape.
 
-Nothing detects a stale memory, and nothing validates an entry before it is
-stored — it is written by the same model whose reasoning it will later shape.
-`policies/agent-memory.json` says all of this in its own `not_enforceable`.
+What makes project-scope memory safe is that it lands in the repository, and a
+committed thing can be linted. `scripts/lint_memory.py` reads every entry under
+`.claude/agent-memory/**` in CI and refuses the five ways memory stops being a
+record: an invented justification, a fact rewritten as a rule, a stored
+requirement or target, a stored verdict or approval, a named person. Missing
+provenance — no pointer, no date, unindexed, a reference that resolves to
+nothing — is a warning, because an entry that is merely thin is repairable and a
+build that fails over provenance teaches people to delete memories rather than
+fix them. The rules live in `policies/agent-memory.json` and the linter reads
+them from there; a second copy of a rule is how the first one stops being the one
+anybody follows.
+
+It is a repository check and deliberately not a runtime gate. Blocking the write
+is impossible at this layer, and would be the wrong layer if it were not.
+
+Still not enforced: nothing detects a stale memory, and nothing decides whether an
+observation is *true*. A perfectly well-formed entry can be entirely wrong, and
+what catches that is the role's review. `policies/agent-memory.json` says all of
+this in its own `not_enforceable`.
 
 ## Ownership and lifecycle
 
