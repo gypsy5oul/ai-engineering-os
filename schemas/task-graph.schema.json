@@ -77,16 +77,14 @@
             ]
           },
           "execution": {
-            "description": "How this task runs. Three values, because they answer three different questions: `declared` is what the workflow author asked for before the situation existed, `resolved` is what the resolver decided at claim time, and `actual` is what the runtime reports having done. Recording only one of them means the organization cannot tell the difference between a policy it chose, a degradation it accepted, and a spawn that ignored both. `worktree` is not here: where a task runs is `isolation`, a separate dimension, because a team that needs its own checkout is still a team and resolving it to 'worktree' threw that away.",
+            "description": "How this task runs, organizationally. Three values, because they answer three different questions: `declared` is what the workflow author asked for before the situation existed, `resolved` is what the resolver decided at claim time, and `actual` is what the runtime reports having done. Recording only one of them means the organization cannot tell the difference between a policy it chose, a degradation it accepted, and a spawn that ignored both.\n\nThree modes, matching sdlc-workflow.schema.json and policies/execution-policy.json. This enum used to carry five -- `background` and `dynamic-workflow` as well -- while the workflow schema allowed only three, so a stage author could not declare either and the resolver carried a rule for `declared == \"background\"` that could never fire. Whether a subagent runs in the foreground or the background is a property of the runtime, not a different kind of organizational execution, and it is recorded in `runtime` below. A dynamic workflow is an orchestration mechanism, not a fourth thing a role can be.\n\n`worktree` is not here either: where a task runs is `isolation`, a separate dimension, because a team that needs its own checkout is still a team.",
             "oneOf": [
               {
                 "type": "string",
                 "enum": [
                   "inline",
                   "subagent",
-                  "background",
-                  "team",
-                  "dynamic-workflow"
+                  "team"
                 ],
                 "description": "Shorthand for declared, before anything has been resolved."
               },
@@ -102,9 +100,7 @@
                     "enum": [
                       "inline",
                       "subagent",
-                      "background",
-                      "team",
-                      "dynamic-workflow"
+                      "team"
                     ]
                   },
                   "resolved": {
@@ -112,9 +108,7 @@
                     "enum": [
                       "inline",
                       "subagent",
-                      "background",
-                      "team",
-                      "dynamic-workflow"
+                      "team"
                     ]
                   },
                   "actual": {
@@ -122,9 +116,7 @@
                     "enum": [
                       "inline",
                       "subagent",
-                      "background",
-                      "team",
-                      "dynamic-workflow"
+                      "team"
                     ]
                   },
                   "resolution_reason": {
@@ -144,6 +136,25 @@
                   "actual_undetermined": {
                     "type": "string",
                     "description": "Why the runtime evidence could not name the mode. SubagentStart carries only agent_id and agent_type -- no teammate marker, no isolation flag -- so where teams are enabled a spawn could be either and this says so instead of guessing."
+                  },
+                  "runtime": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "What the platform did with the execution, as distinct from what the organization asked for. Claude Code already decides foreground or background for a subagent based on whether the result is needed immediately, and `claude --bg` dispatches a session that outlives its caller. Neither changes the role, the accountability or the definition of done, so neither is an execution mode.",
+                    "properties": {
+                      "background": {
+                        "type": "boolean",
+                        "description": "The work ran detached from the session that asked for it."
+                      },
+                      "session_id": {
+                        "type": "string",
+                        "description": "The platform's own id for the run, where it has one -- what `claude agents` lists and `attach` takes."
+                      },
+                      "provider": {
+                        "type": "string",
+                        "description": "Which execution engine ran it. Claude Code today; the field exists so the organization does not silently assume there is only ever one."
+                      }
+                    }
                   }
                 }
               }

@@ -169,9 +169,17 @@ def resolve_execution(project, graph, task, declared, running):
                             "worktree and the lead owns the integration."
                             % overlapping_paths(task, siblings))
 
-    if declared == "background" and risk == "CRITICAL":
-        return "subagent", ("declared background, resolved to subagent: CRITICAL work is not "
-                            "sent where nobody is watching.")
+    # There is no `background` rule here any more, and there was one for two
+    # releases. It read `declared == "background"`, and no stage could declare
+    # that: sdlc-workflow.schema.json has always allowed only inline, subagent and
+    # team, so the branch could never fire. It existed because the task-graph
+    # schema carried a five-value enum the workflow schema did not.
+    #
+    # Whether a subagent runs detached is a runtime property, recorded in
+    # `execution.runtime.background`, not a different kind of organizational
+    # execution. The rule the branch was reaching for -- CRITICAL work is not sent
+    # where nobody is watching -- belongs where the runtime is chosen, and is kept
+    # below as a constraint on the mode rather than a translation between modes.
 
     return declared, None
 

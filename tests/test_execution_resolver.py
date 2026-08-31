@@ -161,17 +161,36 @@ class TestIsolationIsNotFree(Resolver):
 
 
 class TestRiskOverrules(Resolver):
-    def test_critical_work_is_not_sent_to_the_background(self):
-        """The point of the risk tier is that somebody is watching, and a
-        background task is precisely the one nobody is."""
-        g = self.graph()
-        pinned = self.pinned_stages()
-        t = next(x for x in g["tasks"] if x.get("stage") not in pinned)
-        t["execution"], t["risk"] = "background", "CRITICAL"
-        W.save_graph(self.project, g)
-        r = self.resolved()[t["id"]]
-        self.assertEqual(r["resolved"], "subagent")
-        self.assertIn("nobody is watching", r["why"])
+    def test_background_is_not_a_declarable_execution_mode(self):
+        """This test used to assert that a declared `background` resolved to
+        `subagent` for CRITICAL work. No stage could ever declare `background`:
+        sdlc-workflow.schema.json has only ever allowed inline, subagent and team,
+        so the branch it exercised was unreachable and the test reached it by
+        writing a graph the schema forbids.
+
+        The rule was real. `background` is now a runtime property rather than a
+        mode, and CRITICAL work that actually ran detached is refused by
+        validate_graph_semantics against what happened -- not against what was
+        asked for, which could never say it.
+        """
+        import json
+        schema = json.load(open(os.path.join(ROOT, "schemas", "task-graph.schema.json"),
+                               encoding="utf-8"))
+        execution = schema["properties"]["tasks"]["items"]["properties"]["execution"]
+        for variant in execution["oneOf"]:
+            enums = ([variant.get("enum")] if variant.get("enum") else
+                     [f.get("enum") for f in (variant.get("properties") or {}).values()])
+            for enum in [e for e in enums if e]:
+                with self.subTest(enum=enum):
+                    self.assertNotIn("background", enum)
+                    self.assertNotIn("dynamic-workflow", enum)
+
+        workflow = json.load(open(os.path.join(ROOT, "schemas", "sdlc-workflow.schema.json"),
+                                  encoding="utf-8"))
+        stage = workflow["properties"]["stages"]["items"]["properties"]["execution"]
+        self.assertEqual(sorted(stage["enum"]), sorted(execution["oneOf"][0]["enum"]),
+                         "the workflow schema and the task graph must permit the same "
+                         "organizational modes; they disagreed for two releases")
 
 
 class TestResolutionIsOnTheLivePath(unittest.TestCase):

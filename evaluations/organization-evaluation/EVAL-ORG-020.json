@@ -55,8 +55,8 @@
     {
       "type": "file_contains",
       "file": "docs/sdlc.md",
-      "pattern": "dynamic-workflow",
-      "description": "The stage contract names every execution mode the schema permits."
+      "pattern": "execution.runtime.background",
+      "description": "The stage contract names every execution mode the schema permits, and says where detachment is recorded instead. This check used to require `dynamic-workflow` in the prose: the task-graph enum carried five modes while sdlc-workflow.schema.json allowed three, so two of them could never be declared by any stage and the documentation was being held to a vocabulary the workflow author could not use."
     },
     {
       "type": "file_contains",

@@ -175,6 +175,24 @@ def contractual(project, item_id, graph):
                     "%s is accepted %s-risk work with %d predicate(s) nothing can answer: %s"
                     % (t["id"], t.get("risk"), len(result["unsupported"]),
                        "; ".join(result["unsupported"][:2])))
+
+    # CRITICAL work is not sent where nobody is watching. This used to live in
+    # resolve_execution as `declared == "background" -> subagent`, a branch that
+    # could never fire: no stage may declare `background`, because the workflow
+    # schema has only ever allowed inline, subagent and team. The rule was real
+    # and its implementation was unreachable, so it moved here -- to the runtime
+    # property that actually records detachment, checked against what happened
+    # rather than against what was asked for.
+    for t in tasks.values():
+        execution = t.get("execution")
+        runtime = (execution or {}).get("runtime") if isinstance(execution, dict) else None
+        if not isinstance(runtime, dict):
+            continue
+        if runtime.get("background") and str(t.get("risk", "")).upper() == "CRITICAL":
+            bad("critical_work_is_watched",
+                "%s is CRITICAL and its runtime records background execution. Detaching "
+                "CRITICAL work sends it where nobody is watching; the risk class is the "
+                "reason, and the mode it declared is not." % t["id"])
     return out
 
 
