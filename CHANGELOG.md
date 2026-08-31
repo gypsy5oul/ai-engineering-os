@@ -3,6 +3,94 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.44.0] — The organization knew, and the agent was not told
+
+Three defects, one shape, all found by running real Claude Code agents against
+the Golden Project and none visible without doing that.
+
+**Five stage gates were unsatisfiable by anybody.** `agent_verdict(qa-lead, pass)`
+is satisfied by an entry in an artifact's `reviewers` list; the only place a
+reviewer may write one is its own record under `docs/reviews/**`; and qa-lead's
+write scope was `docs/test-plans/**`, `docs/qa/**` and `docs/ai/evaluation/**`.
+There was nowhere to put the verdict. Five gates across three workflows had it —
+qa-lead on REQ, STORY and ASSEMBLE, product-manager on UX, engineering-director
+on RCA — and REQ being refused three times and escalated read exactly like an
+agent failing at its job.
+
+This is the 0.22.1 defect a second time. That one gave the dedicated reviewers an
+empty allow-list; this one left the *leads* who gate a stage without the review
+record. `check_a_gate_reviewer_can_record_its_verdict` now refuses both halves: a
+named reviewer with no path to a review record, and a reviewer that owns what it
+reviews. Verified live — qa-lead wrote GOLD-REVIEW-001 and the gate passed.
+
+**Predicates said what they meant and never where the evidence goes.** Told *"the
+lead produced the rollup for the head"*, a real product-manager was called in three
+times and produced no rollup, because nothing said a rollup is a `rollup:` mapping
+in an artifact's frontmatter rather than a document to write. All 31 predicates
+gained an `evidence` line naming the field the evaluator reads, rendered by the
+briefing from the same policy. `cycle_rollup_reported(CYCLE-PROD)` then passed for
+the first time.
+
+**A retry read exactly like a first attempt.** A refused REQ re-ran and wrote a
+second artifact beside the first — different owner, fewer fields — and the stage
+went backwards. The briefing now names the artifacts of the produced types that
+already exist for this change, scoped so another change's artifacts are not
+offered and genuinely new subject matter is not discouraged.
+
+### The walk convenes
+
+A definition of done requiring a reviewer's verdict, an artifact owner and a
+department rollup is describing an organization, not a soloist, and the harness
+treated every stage as one delegated session. It now re-asks the organization
+after the owner runs and calls in whoever the unmet predicates name — owner,
+reviewer, cycle lead, human — until nothing moves. There is no new participant
+table: the definition of done already names them.
+
+Human approvals stay human. `--approve` lets the person running the certification
+grant a named approval under their own identity; without it the walk stops and
+reports `awaiting-human`, which is the true state. The OS already refuses an
+agent-signed approval and that is left alone.
+
+### Platform, verified rather than assumed
+
+`background` was reachable all along. `claude --bg` dispatches a session that
+outlives its caller; `claude agents --json` then reports it with a durable id,
+`kind: background` and `state: done`. The harness dispatches one and a probe reads
+that listing — the listing is the evidence, because a file proves something wrote
+it while the listing proves the session existed. That is also the run history and
+the resumability primitive, and the OS should read it rather than build a second.
+
+Teams are absent. The word *team* does not appear anywhere in `claude --help` for
+2.1.251 — 270 lines, checked. A `-p` session asked to start a team produces
+subagents, which must not be read as team support. Recorded as a boundary with the
+reachable alternative named.
+
+### Certification got stricter, twice
+
+An unrun probe now blocks certification: `not-run` was a quiet `pass`, and an
+unmeasured mechanism is the one that breaks in a pilot. And a background dispatch
+no longer counts as an execution — the probe had passed once on a job the platform
+listed as `blocked` that produced nothing.
+
+`CERTIFIED` remains **no**. Two of seven required stages, five probes without
+evidence. What changed is that REQ now fails for ordinary reasons rather than
+impossible ones.
+
+### Also
+
+- A failed session records why, so a rate limit is distinguishable from a refused
+  prompt. A whole traversal had come back `exited 1` with no way to tell them apart.
+- The harness stopped writing its own words over the agent's: `observe --detail`
+  overwrites `task["result"]`, which is the only evidence one probe reads.
+- `measure_friction.py` counts what an execution cost, from transcripts rather than
+  from a session's account of itself. Nothing is fabricated — a metric with no
+  evidence reports `not-measured` with the reason, never zero — and nothing is
+  judged. Human approvals are counted as governance and kept out of the friction
+  numbers.
+- `scripts/lint_memory.py` lints committed project-scope agent memory in CI: nine
+  rules read from `policies/agent-memory.json`, five of them errors, none of them a
+  runtime gate.
+
 ## [0.43.0] — Seven agents held a write tool and were told not to write anything
 
 An external review found one reviewer whose instructions contradicted its tools.
