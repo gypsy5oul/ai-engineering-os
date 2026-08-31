@@ -14,8 +14,11 @@ dimensions are separate now, and the resolver answers them independently.
 
 | | Values |
 | --- | --- |
-| **Execution** | `inline`, `subagent`, `background`, `team`, `dynamic-workflow` |
+| **Execution** | `inline`, `subagent`, `team` |
 | **Isolation** | `shared-checkout`, `worktree`, `remote` |
+| **Runtime** | `background` true or false, plus the platform's own session id and provider |
+
+Three execution modes, not five. `background` and `dynamic-workflow` were in the task-graph enum for two releases while `sdlc-workflow.schema.json` allowed only three, so no stage could declare either and the resolver carried a rule for `declared == "background"` that could never fire. Whether a subagent runs detached is a property of the runtime — Claude Code already chooses foreground or background by whether the result is needed immediately, and `claude --bg` dispatches a session that outlives its caller. None of that changes the role, the accountability or the definition of done, so none of it is a different kind of organizational execution. It is recorded in `execution.runtime`.
 
 Every combination is real:
 

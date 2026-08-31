@@ -408,11 +408,25 @@ COUNTED_NOUNS = {
     "definition-of-done predicates": "dod_predicates", "DoD predicates": "dod_predicates",
     "command rules": "command_rules", "evaluation cases": "evaluation_cases",
     "approval categories": "approval_categories",
+    # Added after an audit found `23 of 68 cases` in docs/limitations.md two
+    # paragraphs below a correct `28 LLM-judged evaluations` in the same file,
+    # and `60 deterministic` in a README line whose own total said 90. Both are
+    # derived numbers that nobody had told the checker about.
+    "deterministic checks": "deterministic_cases",
+    "deterministic cases": "deterministic_cases",
+    "llm-judged cases": "llm_judged_cases",
+    "LLM-judged evaluations": "llm_judged_cases",
+    "tool profiles": "tool_profiles",
+    "profiles": "tool_profiles",
+    "hook events": "hook_events",
+    "cases": "evaluation_cases",
 }
 COUNT_CLAIM = re.compile(r"\b(\d+)\s+(%s)\b"
                          % "|".join(sorted(COUNTED_NOUNS, key=len, reverse=True)))
 VERSION_CLAIM = re.compile(r"\bVersion (\d+\.\d+\.\d+)\b")
 AGENT_SET_CLAIM = re.compile(r"agent set is fixed at (\d+)")
+# "…, as at v0.7.0" marks a number as a record of the past.
+DATED_CLAIM = re.compile(r"\bas at v\d+\.\d+", re.I)
 
 
 def check_stated_counts():
@@ -445,6 +459,12 @@ def check_stated_counts():
             stated, noun = int(match.group(1)), match.group(2)
             # A count inside backticks is quoted output, not a claim about this repository.
             if text[:match.start()].count("`") % 2:
+                continue
+            # A claim the author dated is a historical statement, not a live one.
+            # docs/production-readiness.md is an explicit frozen snapshot of what
+            # was true at v0.7.0, and forcing its numbers to track the present
+            # would make the record of what happened wrong instead of stale.
+            if DATED_CLAIM.search(text[match.end():match.end() + 60]):
                 continue
             if stated != actual[noun]:
                 err("%s: claims %d %s; the repository has %d"
@@ -1205,6 +1225,164 @@ def check_schema_vocabularies_are_documented():
             if missing:
                 err("%s describes the %s vocabulary and omits %s. %s"
                     % (rel, entry["id"], ", ".join(missing), entry["why"]))
+
+
+def check_no_role_is_told_not_to_use_the_tool_it_holds():
+    """A role holding a write tool may not be told, flatly, not to write.
+
+    v0.43.0 fixed seven reviewers whose Forbidden actions said *"Editing any file,
+    including the design under review"* while they held `Write` and `Edit` for
+    exactly one purpose. The same sentence was still in two authoring leads:
+    engineering-director, required to record a decision for every arbitration and
+    every skipped stage, was told not to edit documents; development-lead, which
+    owns stories and the debt register, was told the same.
+
+    Both readings are defensible alone and cannot both be followed, and the safest
+    resolution -- write nothing -- is exactly the failure the write scope exists to
+    prevent. Nothing errors when a model resolves it that way, which is what makes
+    this class worth a checker rather than a review.
+
+    The rule is narrow on purpose: it fires only when the role can actually write
+    documents and is told not to edit documents, without naming a boundary. A
+    contract that says *outside your write scope*, or names what it may author, is
+    the correct shape and passes.
+    """
+    scope = (_policy_json("write-scope.json") or {}).get("roles") or {}
+    profiles = (_policy_json("tool-permissions.json") or {}).get("profiles") or {}
+    registry = (_registry_json() or {}).get("agents") or []
+
+    blunt = re.compile(r"^- Editing\b[^\n]*\bdocuments?\b[^\n]*$", re.M | re.I)
+    qualified = re.compile(r"outside your write scope|another role owns|under review",
+                           re.I)
+
+    for agent in registry:
+        name = agent.get("name")
+        tools = (profiles.get(agent.get("tool_profile")) or {}).get("tools") or []
+        if not ({"Write", "Edit"} & set(tools)):
+            continue
+        allow = (scope.get(name) or {}).get("allow") or []
+        if not [a for a in allow if a.startswith("docs/")]:
+            continue
+        path = os.path.join(ROOT, "agents", "%s.md" % name)
+        if not os.path.exists(path):
+            continue
+        _fm, body = read_fm(path)
+        if "## Forbidden actions" not in body:
+            continue
+        forbidden = body.split("## Forbidden actions")[1].split("## ")[0]
+        for line in blunt.findall(forbidden):
+            if qualified.search(line):
+                continue
+            err("agents/%s.md holds a write tool and may write %s, and its Forbidden "
+                "actions say %r. Both cannot be followed, and the safe reading -- write "
+                "nothing -- is the failure the write scope exists to prevent. Name the "
+                "boundary (an artifact another role owns, or anything outside the write "
+                "scope) rather than forbidding documents."
+                % (name, ", ".join(a for a in allow if a.startswith("docs/")), line.strip()))
+
+
+def check_certification_doc_matches_the_run():
+    """docs/certification.md may not describe a run other than the one on disk.
+
+    It claimed six passing probes on 2.1.250 while `golden/certification-run.json`
+    recorded nine on 2.1.251, cited audit counts an order of magnitude out, and
+    said real agents drove one stage where the record said two. This is the
+    repository's trust document: someone deciding whether to believe the
+    certification reads it, and it was describing a different run.
+
+    Only the load-bearing numbers are checked -- probe totals, the versions and
+    the stage coverage. Prose stays prose.
+    """
+    run = load_json("golden/certification-run.json")
+    if not run:
+        err("golden/certification-run.json is missing, so no certification claim can "
+            "be checked")
+        return
+    path = os.path.join(ROOT, "docs", "certification.md")
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+
+    verdict = run.get("verdict") or {}
+    counts = verdict.get("probes") or {}
+    expected = [
+        ("%d of %d probes passed" % (counts.get("passed", -1), counts.get("total", -1)),
+         "the probe tally"),
+        ("Claude Code %s" % run.get("claude_code_version"), "the platform version"),
+        ("plugin %s" % run.get("plugin_version"), "the plugin version"),
+        ("%d probes never ran" % counts.get("not_run", -1), "the unrun probe count"),
+    ]
+    for needle, what in expected:
+        if needle not in text:
+            err("docs/certification.md does not state %s from the run record "
+                "(expected %r). The trust document is describing a different run."
+                % (what, needle))
+
+    for stage in (verdict.get("coverage") or {}).get("real_agent") or []:
+        if stage not in text:
+            err("docs/certification.md does not mention %s, which the run record says a "
+                "real agent drove" % stage)
+
+    if verdict.get("certified") is False and "certified: false" not in text.lower():
+        err("golden/certification-run.json is not certified and docs/certification.md "
+            "does not say so")
+
+
+def check_teams_are_not_enabled_behind_the_organizations_back():
+    """A template may not enable agent teams while telling the OS they are off.
+
+    `templates/project/settings.json` set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+    while `templates/project/project.yaml` said `ai.agent_teams_available: false`.
+    A project adopting the template therefore got a Claude Code session with teams
+    enabled and an organization that had been told teams were unavailable.
+
+    That is not a documentation mismatch. Enabling teams changes how the session
+    behaves -- not only the stages declaring `execution: team` -- and the OS's
+    resolver runs inside that session, so it cannot undo it. The resolver would go
+    on degrading `team` to `subagent` for a reason that was no longer true.
+
+    The two must agree in both directions: teams enabled in the environment and
+    declared unavailable is the dangerous case, and teams declared available with
+    nothing enabling them is a stage that will silently degrade for the wrong
+    reason.
+    """
+    import glob
+    for settings_path in sorted(glob.glob(os.path.join(ROOT, "templates", "*", "settings.json"))):
+        family = os.path.basename(os.path.dirname(settings_path))
+        try:
+            with open(settings_path, encoding="utf-8") as fh:
+                settings = json.load(fh)
+        except Exception:
+            continue
+        env_value = (settings.get("env") or {}).get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS")
+        enabled_in_env = str(env_value) == "1"
+
+        config_path = os.path.join(os.path.dirname(settings_path), "project.yaml")
+        if not os.path.exists(config_path):
+            if enabled_in_env:
+                err("templates/%s/settings.json enables agent teams and there is no "
+                    "project.yaml beside it saying the organization expects them."
+                    % family)
+            continue
+        try:
+            cfg = parse_file(config_path)
+        except Exception:
+            continue
+        declared = (cfg.get("ai") or {}).get("agent_teams_available")
+
+        if enabled_in_env and declared is False:
+            err("templates/%s/settings.json sets CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 "
+                "while templates/%s/project.yaml says ai.agent_teams_available: false. "
+                "Enabling teams changes the whole session, and the resolver runs inside "
+                "that session -- it cannot undo it. A project taking this template gets "
+                "teams enabled and an organization told they are off."
+                % (family, family))
+        if declared is True and not enabled_in_env:
+            err("templates/%s/project.yaml says ai.agent_teams_available: true and "
+                "templates/%s/settings.json does not enable them, so every team stage "
+                "degrades to subagent for a reason that is not the real one."
+                % (family, family))
 
 
 def check_a_gate_reviewer_can_record_its_verdict():
@@ -2287,6 +2465,9 @@ def main():
     check_schema_vocabularies_are_documented()
     check_team_stages_carry_their_skills()
     check_a_gate_reviewer_can_record_its_verdict()
+    check_teams_are_not_enabled_behind_the_organizations_back()
+    check_certification_doc_matches_the_run()
+    check_no_role_is_told_not_to_use_the_tool_it_holds()
     check_work_item_id_patterns_agree()
     check_documented_vocabularies()
     check_every_workflow_is_reachable()

@@ -17,7 +17,8 @@
     "`worktree` is added back to the execution enum.",
     "An isolation rule is implemented inside the execution resolver, so isolating a task changes how it runs.",
     "A resolution rule carries no dimension, so it can be implemented on the wrong axis unnoticed.",
-    "The isolation default stops being shared-checkout, making every worker pay for a checkout."
+    "The isolation default stops being shared-checkout, making every worker pay for a checkout.",
+    "A declared team whose members overlap on files resolves to team + worktree, which reads as isolation and provides none."
   ],
   "checks": [
     {
@@ -60,8 +61,8 @@
     {
       "type": "file_contains",
       "file": "scripts/resolve_execution.py",
-      "pattern": "The task stays a team",
-      "description": "The case the split exists for."
+      "pattern": "cannot be isolated from itself",
+      "description": "The case the split exists for, corrected. This check used to require 'The task stays a team' -- the resolver's own words for returning `worktree` on a team collision, which isolates nothing: teammates share one checkout, so the worktree holds the whole team. The dimensions are still separate; what changed is that a colliding team is answered on the execution axis by degrading to subagent, not on the isolation axis by a checkout that protects no one from anyone."
     },
     {
       "type": "file_contains",
@@ -74,6 +75,12 @@
       "file": "scripts/lib/workitem.py",
       "pattern": "LEGACY_EXECUTION = \\{\"worktree\"",
       "description": "A graph written before the split still reads: worktree becomes subagent in its own checkout rather than a value the enum no longer has."
+    },
+    {
+      "type": "file_not_contains",
+      "file": "policies/execution-policy.json",
+      "pattern": "The task stays a team; only its checkout changes",
+      "description": "The claim that a worktree isolates a team is gone from the policy too."
     }
   ],
   "notes": "The behavioural half is in tests/test_execution_resolver.py, which drives the resolver with teams genuinely available and asserts that an overlapping team resolves to team+worktree. Its old name was test_an_overlapping_team_becomes_a_worktree -- the conflation written down as a requirement."

@@ -151,9 +151,35 @@ def resolve_execution(project, graph, task, declared, running):
                                 "lifecycle may depend on an experimental, interactive-only "
                                 "feature." % why)
 
-    if declared == "background" and risk == "CRITICAL":
-        return "subagent", ("declared background, resolved to subagent: CRITICAL work is not "
-                            "sent where nobody is watching.")
+    siblings = [t for t in graph.get("tasks", []) if t["id"] != task["id"]]
+    if declared == "team" and overlapping_paths(task, siblings):
+        # A worktree around a team isolates nothing. Teammates are separate Claude
+        # instances sharing one checkout and one task list; putting the task in a
+        # worktree moves all of them into that worktree together, so two teammates
+        # editing one file still overwrite each other -- in a different directory.
+        # The isolation resolver used to answer this with `worktree`, and its own
+        # comment said teammates are not worktree-isolated while it did so.
+        #
+        # A collision means the work was not partitioned, and the honest answer is
+        # that it is not team-shaped: subagents can each hold their own worktree,
+        # which is real isolation, and the lead owns the merge.
+        return "subagent", ("declared team, resolved to subagent: %s. Teammates share one "
+                            "checkout, so a team cannot be isolated from itself -- a worktree "
+                            "would hold the whole team. Subagents can each take their own "
+                            "worktree and the lead owns the integration."
+                            % overlapping_paths(task, siblings))
+
+    # There is no `background` rule here any more, and there was one for two
+    # releases. It read `declared == "background"`, and no stage could declare
+    # that: sdlc-workflow.schema.json has always allowed only inline, subagent and
+    # team, so the branch could never fire. It existed because the task-graph
+    # schema carried a five-value enum the workflow schema did not.
+    #
+    # Whether a subagent runs detached is a runtime property, recorded in
+    # `execution.runtime.background`, not a different kind of organizational
+    # execution. The rule the branch was reaching for -- CRITICAL work is not sent
+    # where nobody is watching -- belongs where the runtime is chosen, and is kept
+    # below as a constraint on the mode rather than a translation between modes.
 
     return declared, None
 
@@ -180,15 +206,13 @@ def resolve_isolation(project, graph, task, execution, declared_iso, running):
                                    "isolate." % role)
 
     if execution == "team":
-        # Teammates are not worktree-isolated -- the documentation is explicit
-        # that two of them editing one file overwrite each other, and that the
-        # only remedy is partitioning the work by file. Where the pieces have
-        # said which files they own, that can be checked rather than trusted.
-        clash = overlapping_paths(task, siblings)
-        if clash:
-            return "worktree", ("%s. Teammates share one checkout, so two of them editing one "
-                                "file overwrite each other. The task stays a team; only its "
-                                "checkout changes." % clash)
+        # Nothing to decide. Teammates are not worktree-isolated: they are separate
+        # instances sharing one checkout, so any worktree here would contain the
+        # whole team and isolate none of them from each other. A team whose members
+        # collide is handled where it belongs -- resolve_mode degrades it to
+        # subagent, and the subagent rules below can then give each worker a real
+        # worktree.
+        return declared_iso, None
 
     if surface_clash:
         return "worktree", ("a sibling holds the %s surface (%s), so this is isolated rather "

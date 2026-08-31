@@ -161,17 +161,36 @@ class TestIsolationIsNotFree(Resolver):
 
 
 class TestRiskOverrules(Resolver):
-    def test_critical_work_is_not_sent_to_the_background(self):
-        """The point of the risk tier is that somebody is watching, and a
-        background task is precisely the one nobody is."""
-        g = self.graph()
-        pinned = self.pinned_stages()
-        t = next(x for x in g["tasks"] if x.get("stage") not in pinned)
-        t["execution"], t["risk"] = "background", "CRITICAL"
-        W.save_graph(self.project, g)
-        r = self.resolved()[t["id"]]
-        self.assertEqual(r["resolved"], "subagent")
-        self.assertIn("nobody is watching", r["why"])
+    def test_background_is_not_a_declarable_execution_mode(self):
+        """This test used to assert that a declared `background` resolved to
+        `subagent` for CRITICAL work. No stage could ever declare `background`:
+        sdlc-workflow.schema.json has only ever allowed inline, subagent and team,
+        so the branch it exercised was unreachable and the test reached it by
+        writing a graph the schema forbids.
+
+        The rule was real. `background` is now a runtime property rather than a
+        mode, and CRITICAL work that actually ran detached is refused by
+        validate_graph_semantics against what happened -- not against what was
+        asked for, which could never say it.
+        """
+        import json
+        schema = json.load(open(os.path.join(ROOT, "schemas", "task-graph.schema.json"),
+                               encoding="utf-8"))
+        execution = schema["properties"]["tasks"]["items"]["properties"]["execution"]
+        for variant in execution["oneOf"]:
+            enums = ([variant.get("enum")] if variant.get("enum") else
+                     [f.get("enum") for f in (variant.get("properties") or {}).values()])
+            for enum in [e for e in enums if e]:
+                with self.subTest(enum=enum):
+                    self.assertNotIn("background", enum)
+                    self.assertNotIn("dynamic-workflow", enum)
+
+        workflow = json.load(open(os.path.join(ROOT, "schemas", "sdlc-workflow.schema.json"),
+                                  encoding="utf-8"))
+        stage = workflow["properties"]["stages"]["items"]["properties"]["execution"]
+        self.assertEqual(sorted(stage["enum"]), sorted(execution["oneOf"][0]["enum"]),
+                         "the workflow schema and the task graph must permit the same "
+                         "organizational modes; they disagreed for two releases")
 
 
 class TestResolutionIsOnTheLivePath(unittest.TestCase):
@@ -408,20 +427,40 @@ class TestTheTeamBranchActuallyUsesTheOverlapCheck(unittest.TestCase):
              "execution": "team", "risk": "HIGH", "owns_paths": list(mine)},
         ]}
 
-    def test_an_overlapping_team_stays_a_team_and_gets_its_own_checkout(self):
-        """The case the split exists for.
+    def test_an_overlapping_team_is_not_a_team(self):
+        """A worktree around a team isolates nothing, and this test used to say it did.
 
-        The old name for this test was `test_an_overlapping_team_becomes_a_worktree`,
-        which is the conflation written down as a requirement. `worktree` was an
-        execution mode, so the only way to isolate a team was to stop calling it
-        one — and everything downstream then read a subagent where a team was
-        running.
+        Two earlier versions of this assertion were both wrong in different ways.
+        The first, `test_an_overlapping_team_becomes_a_worktree`, conflated the two
+        dimensions — `worktree` was an execution mode, so isolating a team meant it
+        stopped being called one. The split fixed that, and the replacement then
+        asserted `team` + `worktree`, which is the deeper error: teammates are
+        separate instances sharing one checkout and one task list, so a worktree
+        holds the *whole team*. Two teammates editing one file still overwrite each
+        other, in a different directory.
+
+        A collision means the work was never partitioned, and the honest answer is
+        that it is not team-shaped. Subagents can each hold their own worktree,
+        which is real isolation, and the lead owns the merge.
         """
         graph = self.graph_with(["src/api/handler.py"], ["src/api/handler.py"])
         mode, isolation, why = self.R.resolve(self.project, graph, graph["tasks"][1])
-        self.assertEqual(mode, "team", "isolating a team must not stop it being a team")
-        self.assertEqual(isolation, "worktree")
-        self.assertIn("overwrite", why)
+        self.assertEqual(mode, "subagent",
+                         "a team whose members collide cannot be isolated from itself")
+        self.assertIn("cannot be isolated from itself", why)
+        self.assertNotEqual((mode, isolation), ("team", "worktree"),
+                            "a worktree around a team isolates none of its members")
+
+    def test_no_collision_ever_produces_an_isolated_team(self):
+        """The combination that must not exist, asserted directly rather than
+        inferred from one case."""
+        for mine, theirs, state in ((["src/a.py"], ["src/a.py"], "working"),
+                                    (["src/a.py"], ["src/a.py"], "review"),
+                                    (["src/a.py", "src/b.py"], ["src/b.py"], "working")):
+            graph = self.graph_with(mine, theirs, sibling_state=state)
+            mode, isolation, _ = self.R.resolve(self.project, graph, graph["tasks"][1])
+            with self.subTest(mine=mine, theirs=theirs, state=state):
+                self.assertNotEqual((mode, isolation), ("team", "worktree"))
 
     def test_a_disjoint_team_stays_a_team_in_the_shared_checkout(self):
         graph = self.graph_with(["src/a.py"], ["src/b.py"], sibling_state="queued")
@@ -440,7 +479,10 @@ class TestTheTeamBranchActuallyUsesTheOverlapCheck(unittest.TestCase):
                 graph["tasks"][1]["execution"] = declared
                 mode, isolation, _ = self.R.resolve(self.project, graph, graph["tasks"][1])
                 seen.add((mode, isolation))
-        self.assertIn(("team", "worktree"), seen)
+        self.assertIn(("team", "shared-checkout"), seen)
+        self.assertIn(("subagent", "worktree"), seen)
+        self.assertNotIn(("team", "worktree"), seen,
+                         "a worktree cannot isolate a team from itself")
         self.assertIn(("team", "shared-checkout"), seen)
         self.assertIn(("subagent", "shared-checkout"), seen)
         self.assertTrue(any(iso == "worktree" and mode != "team" for mode, iso in seen),

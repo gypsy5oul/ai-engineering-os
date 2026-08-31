@@ -96,6 +96,11 @@ def stats():
         "evaluation_cases": sum(evals.values()),
         "deterministic_cases": modes.get("deterministic", 0),
         "llm_judged_cases": modes.get("llm-judged", 0),
+        # The agent model documents a table of tool profiles and a count of them.
+        # Both were 15 releases stale -- the table omitted the two profiles that
+        # carry the reviewers' write scope, which is exactly the claim a reader
+        # would act on. Derived here so the count cannot drift again.
+        "tool_profiles": len((_json("policies/tool-permissions.json").get("profiles") or {})),
         "evaluation_suites": len(evals),
         "faults": faults,
         "scenarios": scenarios,

@@ -139,6 +139,15 @@ class TestASchemaVocabularyReachesTheDocs(unittest.TestCase):
             with self.subTest(mode=mode):
                 self.assertIn(mode, body)
 
+    def test_the_two_schemas_permit_the_same_execution_modes(self):
+        """They disagreed for two releases: five in the task graph, three in the
+        workflow. A stage could not declare `background`, and the resolver carried
+        a rule for a value nothing could produce."""
+        workflow = load("schemas/sdlc-workflow.schema.json")
+        stage = workflow["properties"]["stages"]["items"]["properties"]["execution"]
+        self.assertEqual(sorted(stage["enum"]), sorted(self.enum(
+            "properties", "tasks", "items", "properties", "execution", "oneOf", 0, "enum")))
+
     def test_the_stage_contract_says_isolation_is_a_separate_field(self):
         with open(os.path.join(ROOT, "docs", "sdlc.md"), encoding="utf-8") as fh:
             body = fh.read()
@@ -216,13 +225,33 @@ class TestTheCheckersActuallyFail(unittest.TestCase):
             fh.write(body.replace(old, new, 1))
 
     def test_a_doc_omitting_an_execution_mode_is_an_error(self):
-        """The exact drift: `docs/sdlc.md` naming three of five modes."""
-        proc = self.sandboxed(lambda d: self.edit(
-            d, "docs/sdlc.md",
-            "`inline`, `subagent`, `background`, `team` or `dynamic-workflow`",
-            "`inline`, `subagent` or `team`"))
+        """The original drift was `docs/sdlc.md` naming three of five modes.
+
+        There are three now: `background` and `dynamic-workflow` were in the
+        task-graph enum while the workflow schema allowed only three, and the
+        narrower set was the correct one. So the mutation is a doc that omits
+        `team` -- a mode that genuinely exists and that a stage can genuinely
+        declare.
+        """
+        def mutate(dst):
+            # From the schema side, which is the direction that actually exercises
+            # the checker. Removing a mode from one sentence in a document does not
+            # trip it -- the check is a whole-file substring test and the word
+            # survives elsewhere -- so a schema that grows a value the documents
+            # have never heard of is the honest mutation, and it is also the real
+            # sequence: the enum changes first and the prose lags.
+            import json as _json
+            path = os.path.join(dst, "schemas", "task-graph.schema.json")
+            with open(path, encoding="utf-8") as fh:
+                schema = _json.load(fh)
+            execution = schema["properties"]["tasks"]["items"]["properties"]["execution"]
+            execution["oneOf"][0]["enum"].append("carrier-pigeon")
+            with open(path, "w", encoding="utf-8") as fh:
+                _json.dump(schema, fh, indent=2)
+
+        proc = self.sandboxed(mutate)
         self.assertNotEqual(proc.returncode, 0)
-        self.assertIn("omits background", proc.stdout)
+        self.assertIn("omits carrier-pigeon", proc.stdout)
 
     def test_a_team_stage_with_no_skills_is_an_error(self):
         def mutate(d):
