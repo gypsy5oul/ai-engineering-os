@@ -252,7 +252,7 @@ class TestARetryIsNotAFreshStart(unittest.TestCase):
     def test_an_existing_artifact_is_named(self):
         out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
         self.assertIn("GOLD-REQ-001", out)
-        self.assertIn("amend rather than replace", out)
+        self.assertIn("amend it", out)
 
     def test_its_owner_is_named_too(self):
         """The duplicate had a different owner, which is what failed
@@ -260,9 +260,16 @@ class TestARetryIsNotAFreshStart(unittest.TestCase):
         out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
         self.assertIn("requirements-analyst", out)
 
-    def test_the_briefing_says_a_second_one_does_not_supersede(self):
+    def test_the_briefing_says_a_rewrite_does_not_supersede(self):
         out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
-        self.assertIn("does not supersede the first", out)
+        self.assertIn("does not supersede the old one", out)
+
+    def test_it_does_not_forbid_a_genuinely_new_artifact(self):
+        """A REQ stage producing three distinct requirements is decomposition, not
+        duplication -- observed in the same run that produced the duplicate. The
+        briefing must not turn one finding into a rule against the other."""
+        out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
+        self.assertIn("separate artifact", out)
 
     def test_nothing_is_claimed_when_no_artifact_exists_yet(self):
         out = self.render(self.project([]))

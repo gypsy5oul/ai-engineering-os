@@ -433,6 +433,52 @@
           },
           "timed_out": {
             "type": "boolean"
+          },
+          "convened": {
+            "type": "array",
+            "description": "The participants the organization's own unmet predicates called for, in the order they were called. A stage whose definition of done requires a reviewer's verdict and a department rollup is describing an organization, not a soloist.",
+            "items": {
+              "type": "object",
+              "required": [
+                "role"
+              ],
+              "properties": {
+                "task": {
+                  "type": "string"
+                },
+                "stage": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "role": {
+                  "type": "string",
+                  "description": "the role called in, or '<role> (human)' for an approval the operator granted under their own name"
+                },
+                "owed": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "the predicates this participant was asked to satisfy"
+                },
+                "session": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "awaiting_human": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Predicates no agent may satisfy, still unmet. The OS refuses an agent-signed approval, so this is the true state of the stage rather than a gap to route around."
           }
         },
         "additionalProperties": false
@@ -462,6 +508,31 @@
               "null"
             ],
             "description": "the tail of what the session reported. Context for a reader, never evidence: the probes read the hooks' own records instead."
+          },
+          "dispatched": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "how a non-session mechanism was started"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "the platform's own id for the dispatched job"
+          },
+          "produced": {
+            "type": "boolean"
+          },
+          "listing": {
+            "type": [
+              "object",
+              "string",
+              "null"
+            ],
+            "description": "what the platform's run listing said about the job. This is the evidence: a file proves something wrote it, the listing proves the session existed."
           }
         },
         "additionalProperties": false

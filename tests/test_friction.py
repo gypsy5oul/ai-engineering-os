@@ -260,6 +260,23 @@ class TestADetectorIsNotAFailure(unittest.TestCase):
         self.assertIsNone(data["rates"]["workflow_recovery_rate"])
         self.assertEqual(data["detections_recorded"], 1)
 
+    def test_an_approval_is_governance_and_not_friction(self):
+        """The brief's line, held mechanically. A human approving what the
+        organization requires a human to approve is the process working; counting
+        it as an intervention would make a correct run look expensive."""
+        data = M.measure(self.project([
+            {"kind": "human_approval_recorded", "policy_ref": "AP-12",
+             "approver_id": "a.person", "approver_role": "release-authority"}]))
+        self.assertEqual(data["human_approvals_recorded"], 1)
+        self.assertIsNone(data["rates"]["human_intervention_rate"])
+        self.assertIn("governance rather than friction",
+                      data["not_measured"]["human_intervention_rate"])
+
+    def test_an_approval_does_not_count_as_a_drift_detection(self):
+        data = M.measure(self.project([
+            {"kind": "human_approval_recorded", "policy_ref": "AP-12"}]))
+        self.assertEqual(data["detections_recorded"], 0)
+
     def test_a_real_block_does_enter_the_denominator(self):
         data = M.measure(self.project([{"kind": "task_completion_blocked", "task": "T-001"}]))
         self.assertEqual(data["rates"]["workflow_recovery_rate"], 0.0)

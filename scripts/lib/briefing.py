@@ -170,14 +170,15 @@ def render(item, task=None, graph=None, project=None):
                             (ex.get("resolution_reason") or "")[:120]))
         existing = _existing(project, item, task)
         if existing:
-            lines.append("- Already produced for this change, and yours to amend rather "
-                         "than replace:")
+            lines.append("- Already produced for this change:")
             for aid, path, owner in existing:
                 lines.append("  - `%s` at `%s`%s"
                              % (aid, path, " (owner: %s)" % owner if owner else ""))
-            lines.append("  A second artifact of the same type does not supersede the "
-                         "first; both are then evaluated, and the weaker one fails the "
-                         "stage.")
+            lines.append("  If you are redoing work one of these already covers, amend it. "
+                         "A rewrite filed under a new id does not supersede the old one -- "
+                         "both are evaluated, and the weaker one fails the stage. Genuinely "
+                         "separate subject matter is a separate artifact and belongs in a "
+                         "new one.")
         attempts = task.get("attempts", 0)
         if attempts:
             lines.append("- Attempt %d of %d. Previously: %s"

@@ -222,6 +222,11 @@ def measure(project, wid=None):
     # in which nothing had failed.
     detections = divergences + [h for h in entries
                                 if "unattributed" in (h.get("kind") or "")]
+    # Governance, counted and kept out of the friction numbers. A human approving
+    # an architecture or a release is the organization working, not the
+    # organization costing something -- the brief's line, and the reason
+    # human_intervention_rate stays unmeasured even on a run where a human acted.
+    approvals = [h for h in entries if h.get("kind") == "human_approval_recorded"]
     needed_recovery = [h for h in entries
                        if any(k in (h.get("kind") or "")
                               for k in ("blocked", "failed"))]
@@ -238,6 +243,11 @@ def measure(project, wid=None):
         "agents_measured": len([a for a in per_agent if a.get("measured")]),
         "execution_divergences": len(divergences),
         "detections_recorded": len(detections),
+        "human_approvals_recorded": len(approvals),
+        "approvals": [{"policy_ref": a.get("policy_ref"),
+                       "approver_id": a.get("approver_id"),
+                       "approver_role": a.get("approver_role")}
+                      for a in approvals],
         "totals": totals,
         "per_agent": per_agent,
         "rates": {
@@ -271,8 +281,13 @@ def measure(project, wid=None):
                 None if totals.get("failed_tool_calls") else
                 "nothing failed, so there is no share of failures to attribute",
             "human_intervention_rate":
-                "unattended run: no human was present, so zero interventions is an "
-                "artefact of the harness and not a property of the organization",
+                ("unattended run: no human was present, so zero interventions is an "
+                 "artefact of the harness and not a property of the organization"
+                 if not approvals else
+                 "the %d human act(s) in this run were approvals the organization "
+                 "requires, which is governance rather than friction; nothing was a "
+                 "human repairing what an agent should have done"
+                 % len(approvals)),
             "first_pass_acceptance_rate":
                 None if verdicted else
                 "no task reached a verdict, so there is no first pass to measure",
@@ -303,6 +318,11 @@ def report(data):
                                  t.get("clarification_requests", 0)))
     print("  execution divergences detected and recorded: %d"
           % data.get("execution_divergences", 0))
+    if data.get("human_approvals_recorded"):
+        print("  human approvals recorded: %d (governance, not friction) — %s"
+              % (data["human_approvals_recorded"],
+                 ", ".join("%s by %s" % (a["policy_ref"], a["approver_id"])
+                           for a in data.get("approvals") or [])))
     print()
     for name, value in sorted(data["rates"].items()):
         if value is None:

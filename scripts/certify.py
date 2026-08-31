@@ -952,10 +952,19 @@ def _p_background(ctx):
             continue
         listing = m.get("listing")
         if isinstance(listing, dict) and listing.get("kind") == "background":
-            return True, ("job %s: kind %s, state %s%s"
-                          % (m.get("id"), listing.get("kind"), listing.get("state"),
-                             "; wrote its artifact" if m.get("produced") else
-                             "; produced no artifact"))
+            state = listing.get("state")
+            # `kind: background` alone says a job was created, not that it ran.
+            # One run passed this probe on a job the platform reported as
+            # `blocked` which produced nothing -- a dispatch is not an execution,
+            # and accepting one is the same overclaim as reading the resolver's
+            # vocabulary as coverage.
+            if state == "done" and m.get("produced"):
+                return True, ("job %s ran to completion: kind %s, state %s, and it wrote "
+                              "its artifact" % (m.get("id"), listing.get("kind"), state))
+            return False, ("job %s was dispatched but did not run to completion: state %s, "
+                           "%s" % (m.get("id"), state,
+                                   "wrote its artifact" if m.get("produced")
+                                   else "produced no artifact"))
         if m.get("id"):
             return False, ("job %s was dispatched and the run listing does not describe "
                            "it: %r" % (m.get("id"), listing))
@@ -1396,7 +1405,17 @@ def report(record):
     if mech:
         print("  mechanism attempts:")
         for m in mech:
-            print("    %-12s %s" % (m["mechanism"], m.get("session")))
+            # The background attempt is not a `claude -p` session and carries no
+            # `session` key; it reports how it was dispatched and what the
+            # platform's run listing said about it.
+            if m.get("mechanism") == "background":
+                listing = m.get("listing")
+                detail = ("%s, listed as %s/%s" % (m.get("dispatched"),
+                                                   listing.get("kind"), listing.get("state"))
+                          if isinstance(listing, dict) else str(m.get("dispatched")))
+                print("    %-12s %s" % (m["mechanism"], detail))
+            else:
+                print("    %-12s %s" % (m["mechanism"], m.get("session")))
         print()
 
     syn = [u for u in record["units"] if u["evidence"] == "synthetic"]
