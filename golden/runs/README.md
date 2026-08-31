@@ -1,0 +1,35 @@
+# Certification run history
+
+One file per run, named for the plugin version it ran against. Runs are kept
+rather than overwritten: what the organization used to be able to prove is
+evidence about how it matured, and a record that is edited to stay current is no
+longer a record.
+
+`golden/certification-run.json` at the repository root is the **canonical** run —
+the one `docs/certification.md` describes and
+`check_certification_doc_matches_the_run` holds that page to. A run is promoted
+to canonical only when it is clean: one plugin version, one platform version, no
+edits to the working tree while it ran.
+
+## What each record must carry
+
+The schema is `schemas/certification-run.schema.json`. Beyond the mechanics, a
+run that was disturbed says so in `notes` — an environment limit, a version that
+changed underneath it, a probe rule that has since been tightened. A reader who
+cannot tell a defect in the organization from a limit of the machine it ran on
+will draw the wrong conclusion from a perfectly accurate file.
+
+## What a run cannot be edited into
+
+A record is never rewritten to agree with a later probe rule. `v0.44.0.json`
+reports `real_agent: fail` on a background job the platform never started; the
+probe now calls that `not-run`, because a mechanism that did not run is
+unexercised rather than broken. The note says so and the verdict stands as it was
+produced. Certification was refused either way, which is the only thing the
+distinction could have changed.
+
+## The runs
+
+| File | Plugin | Claude Code | Certified | What it is good for |
+| --- | --- | --- | --- | --- |
+| `v0.44.0.json` | 0.44.0 | 2.1.251 | no | The first multi-role walk: the organization convened a reviewer, an artifact owner, a department lead and a human for one stage. Straddles the v0.45.0 bump and hit the account's session limit, so it is history rather than a certification. |

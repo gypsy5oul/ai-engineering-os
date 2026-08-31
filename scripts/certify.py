@@ -961,10 +961,18 @@ def _p_background(ctx):
             if state == "done" and m.get("produced"):
                 return True, ("job %s ran to completion: kind %s, state %s, and it wrote "
                               "its artifact" % (m.get("id"), listing.get("kind"), state))
-            return False, ("job %s was dispatched but did not run to completion: state %s, "
-                           "%s" % (m.get("id"), state,
-                                   "wrote its artifact" if m.get("produced")
-                                   else "produced no artifact"))
+            if state == "done":
+                return False, ("job %s ran to completion and produced no artifact, so "
+                               "background execution ran and did not do the work"
+                               % m.get("id"))
+            # Anything else means the platform never ran it -- `blocked` on a
+            # detached session that cannot be answered, or a job stopped before it
+            # started. That is the mechanism going unexercised, not the mechanism
+            # being broken, and the two are different findings. Both refuse
+            # certification; only one of them is a defect in this organization.
+            return None, ("job %s was dispatched and the platform never ran it: state %s. "
+                          "A detached session has nobody to answer a prompt, and this run "
+                          "also hit the account's session limit." % (m.get("id"), state))
         if m.get("id"):
             return False, ("job %s was dispatched and the run listing does not describe "
                            "it: %r" % (m.get("id"), listing))
