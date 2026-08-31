@@ -120,12 +120,35 @@ class TestIsolationPolicy(unittest.TestCase):
         self.assertTrue(re.search(r"no hook can force", blob),
                         "not_enforceable must say plainly that no hook can force a worktree")
 
-    def test_the_old_absolutism_is_gone_from_the_team_mode(self):
+    def test_the_same_files_rule_distinguishes_a_team_from_a_subagent(self):
+        """Two corrections live in this one rule.
+
+        It first said only "do not use a team when the work touches the same
+        files", which is a rule that can only say no. It was then softened to point
+        at worktree isolation for everybody -- and that is wrong for a team.
+        Teammates are separate instances sharing one checkout, so a worktree holds
+        the whole team and isolates none of them from each other.
+
+        So the rule now forks by mode: a fork for subagents, a stop for a team.
+        """
         team = load_json(POLICY)["modes"]["team"]
         same_files = [r for r in team["do_not_use_when"] if "same files" in r]
         self.assertEqual(len(same_files), 1)
-        self.assertIn("isolation", same_files[0],
-                      "the same-files rule still just says no; it must point at worktree isolation")
+        rule = same_files[0]
+        self.assertIn("worktree", rule,
+                      "the rule must still offer subagents the isolation answer")
+        self.assertIn("subagent", rule,
+                      "a colliding team is not team-shaped; the rule must say what it becomes")
+
+    def test_the_policy_says_a_worktree_cannot_isolate_a_team_from_itself(self):
+        """The architectural correction, stated where the rule lives. The resolver
+        used to return `worktree` for a colliding team while its own comment said
+        teammates are not worktree-isolated, and two tests asserted it."""
+        pol = load_json(POLICY)
+        team_iso = pol.get("team_isolation") or {}
+        self.assertIn("cannot isolate a team from itself", team_iso.get("statement", ""))
+        self.assertIn("one checkout", team_iso.get("why", ""))
+        self.assertIn("subagent", team_iso.get("so", ""))
 
     def test_the_baseref_trap_is_recorded(self):
         """Default baseRef is 'fresh', so an isolated worker does not see the branch you are on.

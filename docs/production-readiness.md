@@ -94,7 +94,7 @@ things that live in GitLab and in the project's own test run. They report
 
 - **Behaviour.** The simulation proves the process can be completed. It does not
   prove an agent will follow it. That is what the evaluation suites test, and 23
-  of 68 cases still need a model run.
+  of 68 cases still needed a model run, as at v0.7.0.
 - **Real projects.** Every scenario runs against a synthetic project built from
   the shipped template.
 - **Guard coverage under adversarial use.** The guards have their own tests; the

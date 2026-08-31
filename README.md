@@ -90,7 +90,7 @@ And one principle runs through all of them:
 | **7 department cycles** | Level 2: human owner → agent head → lead → worker → peer review → rework → accept → rollup. A macro stage cannot advance until its department's internal loop reaches ACCEPTED. |
 | **10 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
 | **33 policies** | Model routing, risk, approvals and **approval authority**, artifact model, execution and isolation, **workflow intensity**, **simplicity**, **AI evaluation**, **agent memory**, **decomposition review**, system of record, branching, review routing, write scoping, spawn hierarchy, lifecycle, MCP. |
-| **90 evaluation cases** | 60 deterministic checks that run in CI, plus 28 behavioural cases with rubrics that are never auto-passed. |
+| **90 evaluation cases** | 62 deterministic checks that run in CI, plus 28 behavioural cases with rubrics that are never auto-passed. |
 | **31 artifact types** | Full contracts: who creates, modifies, reviews and approves each, where it is stored, what it depends on. Plus 31 definition-of-done predicates. |
 | **Zero runtime dependencies** | Everything runs on Python 3.8+ with no `pip install`. |
 

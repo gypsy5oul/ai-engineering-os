@@ -455,7 +455,7 @@ The rules. Execution first, then isolation; neither overrules the other:
 | execution | CRITICAL risk, declared background | `subagent` | The point of the tier is that somebody is watching; background is where nobody is |
 | execution | Nothing overruled it | the declared mode | |
 | isolation | Role writes nothing a worktree would protect | `shared-checkout` | A reviewer holds a write tool so it can record its verdict, and its scope is `docs/reviews/**` alone, which no other role writes to |
-| isolation | A team whose paths overlap a sibling's | `worktree` | Teammates share one checkout, so two of them editing one file overwrite each other. The task stays a team |
+| execution | A team whose paths overlap a sibling's | `subagent` | A worktree cannot isolate a team from itself: teammates share one checkout, so it would hold the whole team. Subagents each take a real worktree and the lead owns the merge |
 | isolation | A sibling holds the same coupled surface | `worktree` | The parallelism survives and integration becomes an explicit step |
 | isolation | Writes files, siblings running | `worktree` | Parallel writers in one checkout produce a build output nobody owns |
 | isolation | Nothing would collide | `shared-checkout` | Isolation is not free and is not a default virtue |
@@ -516,7 +516,7 @@ Verified empirically against the installed CLI before either was built:
   was made and on what evidence, and a refusal that happens before the work rather
   than after it.
 
-  It also refuses. Exit 2 on this event does not warn: verified against 2.1.250,
+  It also refuses. Exit 2 on this event does not warn: verified against 2.1.251,
   the CLI deletes the task and strips its id out of every other task's edges. So
   the refusals are narrower than the completion gate's, and each is a case where
   the organization can say the task is **wrong** rather than unproven — an id no

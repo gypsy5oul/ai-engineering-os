@@ -31,7 +31,7 @@
         "investigation benefits from competing hypotheses"
       ],
       "do_not_use_when": [
-        "the work touches the same files AND the workers share one checkout, because parallel edits overwrite. This is now a fork, not a stop: see 'isolation'. Give the workers separate worktrees and a declared merge step, or run them sequentially.",
+        "the work touches the same files AND the workers share one checkout, because parallel edits overwrite. For subagents this is a fork rather than a stop: give each worker its own worktree and a declared merge step. For a team it is a stop. Teammates are separate instances sharing one checkout, so a worktree holds the whole team and isolates none of them from each other -- a team whose members collide is not team-shaped, and resolve_execution degrades it to subagent so the workers can take real worktrees and the lead owns the integration.",
         "the pieces have dense dependencies",
         "the task is sequential",
         "the session is non-interactive"
@@ -186,10 +186,10 @@
         "why": "A role that writes nothing another role touches is protected from nobody. Giving it a worktree costs setup, disk and the injected briefing an isolated spawn does not receive. This used to resolve to `subagent`, which meant declining to isolate a reviewer and demoting a reviewer's spawn were the same event."
       },
       {
-        "dimension": "isolation",
+        "dimension": "execution",
         "when": "team_with_overlapping_paths",
-        "resolve_to": "worktree",
-        "why": "Teammates share one checkout, so two of them editing one file overwrite each other. The task stays a team; only its checkout changes."
+        "resolve_to": "subagent",
+        "why": "A worktree cannot isolate a team from itself. Teammates are separate instances sharing one checkout, so a worktree holds the whole team and two of them editing one file still overwrite each other. A collision means the work was never partitioned and it is not team-shaped: as subagents each worker can take its own worktree, which is real isolation, and the lead owns the merge. This rule used to be filed under isolation and resolve to `worktree`, and the resolver's own comment said teammates are not worktree-isolated while it did so."
       },
       {
         "dimension": "isolation",
@@ -268,5 +268,11 @@
       }
     ],
     "rule": "Isolating a task never changes how it runs, and changing how it runs never decides where. A resolver that returns one value for both is expressing a preference about which question matters."
+  },
+  "team_isolation": {
+    "statement": "A worktree cannot isolate a team from itself.",
+    "why": "Teammates are separate Claude instances sharing one checkout and one task list. Putting the task in a worktree moves the whole team into it, so two teammates editing one file still overwrite each other -- in a different directory. Worktree isolation is a per-session mechanism and a team is not one session.",
+    "so": "A declared team whose members overlap on files resolves to `subagent`. Each subagent can then take its own worktree, which is real isolation, and the lead owns the merge. The alternative answers are to sequence the work or to partition it properly; what is not available is a team that has been made safe by a checkout.",
+    "found": "The resolver returned `worktree` for exactly this case, and its own comment said teammates are not worktree-isolated while it did so. Two tests asserted the behaviour."
   }
 }

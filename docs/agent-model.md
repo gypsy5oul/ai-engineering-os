@@ -95,8 +95,12 @@ Tool profiles in `policies/tool-permissions.json`:
 | `delegating-researcher` | author plus Agent, WebFetch, WebSearch | A department lead that authors, delegates, and must verify facts outside the repository |
 | `lead` | orchestrator plus Edit, Write | Coordination that also authors planning artifacts |
 
-Ten profiles, two of which no role currently holds: `orchestrator` and
-`operator-readonly`. Every coordinating role turned out to author something as
+Twelve profiles, two of which no role currently holds: `orchestrator` and
+`operator-readonly`. Two more carry a reviewer's `docs/reviews/**` write scope —
+`reviewing-author` and `analysing-author`, added in v0.29.0 when a reviewer with
+findings turned out to have nowhere to record them. This table did not list them
+until v0.45.0, so the page described reviewers that could not write a verdict
+while the agents themselves could. Every coordinating role turned out to author something as
 well, so they hold `lead`, `delegating-author` or `delegating-researcher`
 instead; and the roles that investigate production also write or run diffs, so
 they hold `implementer` or `review-readonly`. A profile nobody holds grants
@@ -115,8 +119,12 @@ Two design consequences worth stating:
 
 - **`release-manager` has no `Bash`.** Release authority must not imply execution
   authority. It plans, assembles evidence and asks a human; it cannot deploy.
-- **Reviewers have no `Write`.** Independence that depends on the model choosing
-  not to edit is not independence.
+- **Reviewers may write their own verdict and nothing else.** They hold `Write`
+  and `Edit` with a write scope of `docs/reviews/**`. v0.22.1 gave them an empty
+  allow-list, which reads like the stronger version of the same principle and is a
+  different rule: a real review then had a verdict, a predicate that reads
+  verdicts, and nowhere to put one. Independence rests on the write scope — a
+  reviewer must not author what it reviews — not on withholding the tool.
 
 ## Memory
 

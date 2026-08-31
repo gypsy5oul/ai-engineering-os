@@ -1,9 +1,6 @@
 {
   "_comment": "Template for the PROJECT's own .claude/settings.json. This does not belong at the ai-engineering-os plugin root: a plugin-root settings.json supports only 'agent' and 'subagentStatusLine', and anything else there is silently ignored. Delete the _comment keys before use.",
-  "_env_comment": "Agent teams are experimental and off by default. Set this only if the project actually uses team patterns; see docs/agent-teams.md for the limitations.",
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-  },
+  "_env_comment": "No `env` block, deliberately. Agent teams are experimental and off by default in Claude Code, and enabling them changes how the whole session behaves -- not only the stages that declare `execution: team`. This template used to set CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 while the project template's own project.yaml said `ai.agent_teams_available: false`, so a project got a session with teams enabled and an organization that had been told teams were unavailable. The OS resolver cannot undo a session-wide platform behaviour. If a project genuinely uses teams, a human sets `ai.agent_teams_available: true` in project.yaml and adds the env var here at the same time -- one decision, recorded in both places.",
   "_permissions_comment": "Pre-approving the project's ordinary read-only commands keeps the guards' escalations meaningful. If everything prompts, nothing is noticed. Replace these with your project's real commands. Deny rules for file writes must be written as Edit(...), not Write(...): Claude Code matches file permissions on Edit rules only, and an Edit rule covers every file-editing tool. A Write(...) deny rule reads as protection and blocks nothing.",
   "permissions": {
     "allow": [

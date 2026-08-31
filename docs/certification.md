@@ -91,34 +91,51 @@ missing rather than rounding up.
 ## What the last live run actually found
 
 `golden/certification-run.json` is a real run, kept in the repository so the
-claims here can be checked rather than believed.
+claims here can be checked rather than believed. The numbers below are the run
+record's own, and `check_certification_doc_matches_the_run` fails the build when
+this page and that file disagree.
 
-Six probes passed against a live session on Claude Code 2.1.250:
+9 of 14 probes passed against a live session on Claude Code 2.1.251, plugin 0.43.0:
 
 | Probe | Evidence |
 | --- | --- |
-| `session-start-self-test` | 11 audit records written by the hooks, 6 denies from the startup self-test |
-| `context-injection-reaches-the-model` | The session wrote a file naming context only the hook supplies |
-| `write-guard-refuses-out-of-scope` | 2 write-guard refusals recorded — a live session's write to `/etc/` was refused |
-| `subagent-is-briefed-on-its-own-task` | `T-001` claimed by `engineering-director`, evidence `SubagentStart fired for a1d9c437…` |
-| `subagent-result-is-attributed` | 1 subagent stop, 1 attributed to a task |
-| `execution-actual-is-observed-not-assumed` | `T-001` declared `inline`, resolved `inline`, **actual `subagent`** |
-| `the-agent-knew-what-was-not-in-its-prompt` | The agent reported the work item id and its intent, neither of which was in its prompt |
+| `session-start-self-test` | 114 audit record(s), 54 deny |
+| `context-injection-reaches-the-model` | session wrote injected.txt |
+| `write-guard-refuses-out-of-scope` | 19 write-guard refusal(s) recorded |
+| `subagent-is-briefed-on-its-own-task` | T-001 claimed by engineering-director; evidence: SubagentStart fired for a8f1013bcdf982bfd |
+| `subagent-result-is-attributed` | 14 subagent stop(s), 7 attributed to a task |
+| `execution-actual-is-observed-not-assumed` | T-001 declared inline, resolved inline, actual subagent (SubagentStart fired for a8f1013bcdf982bfd) |
+| `the-agent-knew-what-was-not-in-its-prompt` | the agent reported GOLD-FEAT-001 and its intent, neither of which was in the prompt beyond the id |
+| `background-execution-was-actually-dispatched` | job 4475730d: kind background, state blocked; produced no artifact |
+| `execution-modes-were-exercised-not-just-named` | subagent (T-001, T-002) |
+
+5 probes never ran, and `not-run` is not a quiet `pass` — each names a mechanism
+this harness cannot reach, so certification is refused:
+
+| Probe | Why it did not run |
+| --- | --- |
+| `task-binding-recorded` | no native task was created, so TaskCreated never fired |
+| `task-completion-is-gated` | no native task completed, so TaskCompleted never fired |
+| `worktree-isolation-was-actually-used` | no worktree was created, so isolation stayed at shared-checkout and the WorktreeCreate hook never fired |
+| `worktree-work-was-integrated-not-just-isolated` | no worktree was created, so there is nothing to integrate |
+| `a-team-stage-carried-its-skills` | no stage ran as a team, so teammate skill propagation is unmeasured |
 
 The execution one is the load-bearing result. `actual` is only worth recording if
 it can disagree with `resolved` — a run where the two always match is consistent
 with `actual` being copied from `resolved` and never observed at all. Here they
 disagreed, from platform evidence, and the divergence was recorded.
 
-The most interesting result is not a probe. The agent that held `T-001` **refused
-to close it**: it reported that neither of its gates closed cleanly, did not mark
-the task done, and did not dispatch the next one. The task's state stayed
-`queued`. That is the organization working, observed rather than asserted.
+The most interesting results are not probes. The organization **refused its own
+work**: acceptance was refused on REQ, the control loop decided `REWORK` twice and
+then `ESCALATE`, and the task never reached `accepted`. And the walk **convened**
+— when the stage owner could not satisfy the definition of done alone, the roles
+its unmet predicates named were called in: the artifact's owner, the gate
+reviewer, the department lead, and a human for the approval no agent may sign.
 
 ## What is still not certified
 
-`certified: false`, and the run says why: real agents drove one stage, not the
-six that certification requires. Specifically still unproven by a real session:
+`certified: false`, and the run says why: real agents drove IDEA and REQ — not the 6 stages
+certification requires.
 
 - **REQ, ARCH, QADESIGN, DEV, REVIEW, CI** driven end to end by real agents.
 - **The task gates.** `TaskCreated` and `TaskCompleted` need the native task

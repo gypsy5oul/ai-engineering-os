@@ -46,7 +46,7 @@ State, in this order:
 1. **Workflow and stage** — id and name.
 2. **Owner** — the agent that owns the stage.
 3. **Missing inputs** — what the stage needs that does not exist yet.
-4. **Gate** — `approval_gate.type`. If `human`, name the approval and its policy reference from `${CLAUDE_PLUGIN_ROOT}/policies/approval-policy.json`.
+4. **Gate** — the stage's `agent_gate` and `human_gate` are separate fields and mean different things. An `agent_gate` is a reviewer's verdict and is never an approval; a `human_gate` names the approval and its policy reference from `${CLAUDE_PLUGIN_ROOT}/policies/approval-policy.json`. Report both where both exist. (`approval_gate` has not existed since the two were split.)
 5. **Skipped stages** — which stages this change does not need, each with a reason. Skipping is normal; skipping silently is not.
 6. **Next action** — one sentence. If the change is not yet tracked, that action
    is to open a work item: point at the `work-item` skill, which is the control
