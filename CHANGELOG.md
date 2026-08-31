@@ -3,6 +3,105 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.45.0] — Two contradictions the runtime could not resolve
+
+Both P0s were cases where the organization said one thing and the platform
+did another, and the OS had no way to win the argument from inside.
+
+**The project template enabled agent teams while telling the OS they were
+off.** `templates/project/settings.json` set
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1; `templates/project/project.yaml`
+said `ai.agent_teams_available: false`. A project adopting the template
+got a session with teams enabled and an organization that had been told
+they were unavailable — and enabling teams changes the whole session, not
+only the stages declaring `execution: team`. The resolver runs inside that
+session and cannot undo it, so it would have gone on degrading `team` to
+`subagent` for a reason that was no longer true. The env block is gone.
+A project that wants teams sets both in one decision, and
+`check_teams_are_not_enabled_behind_the_organizations_back` refuses the
+disagreement in either direction.
+
+**A worktree cannot isolate a team from itself.** The resolver returned
+`worktree` for a team whose members overlapped on files, and its own
+comment said teammates are not worktree-isolated while it did so.
+Teammates are separate instances sharing one checkout, so the worktree
+holds the whole team: two of them editing one file still overwrite each
+other, in a different directory. A collision means the work was never
+partitioned and it is not team-shaped. It now degrades to `subagent` on
+the execution axis, where each worker takes a real worktree and the lead
+owns the merge. Two tests and an evaluation case asserted the old
+behaviour and now assert the correction.
+
+### Two execution modes no stage could ever declare
+
+The task graph's enum carried `background` and `dynamic-workflow` while
+`sdlc-workflow.schema.json` has only ever allowed three modes, so no
+workflow author could declare either and `resolve_execution` carried a
+rule reading `declared == "background"` that could never fire. Three
+vocabularies disagreed.
+
+The narrower set was right. Whether a subagent runs detached is a property
+of the runtime — Claude Code already chooses foreground or background by
+whether the result is needed immediately — and it is now
+`execution.runtime`, carrying `background`, the platform's session id and
+the provider. The rule the dead branch was reaching for was real: CRITICAL
+work is not sent where nobody is watching, and `validate_graph_semantics`
+now refuses a CRITICAL task whose runtime records background execution,
+checked against what happened rather than what was asked for.
+
+### The same contradiction as v0.43.0, in two authoring leads
+
+`engineering-director` is required to record a decision for every
+arbitration and every skipped stage, and its Forbidden actions said
+*"Editing source, tests, configuration or documents."* `development-lead`
+owns stories and the debt register and was told the same. Both now name
+the real boundary — an artifact another role owns, or anything outside the
+write scope — and
+`check_no_role_is_told_not_to_use_the_tool_it_holds` refuses the blunt
+form for any role that holds a write tool and may write `docs/**`.
+
+### Documentation became an artifact with a lifecycle
+
+`skills/sdlc-navigator/SKILL.md` told an agent to read
+`approval_gate.type`, which has not existed since the gate split — that
+one is executable instruction, not prose. `docs/agent-model.md` said
+reviewers have no `Write` fifteen releases after they got one, and its
+profile table omitted the two profiles that carry the scope.
+`docs/certification.md` described six passing probes on 2.1.250 where the
+run record on disk had nine on 2.1.251.
+
+Rather than hand-maintaining those numbers, they are now derived and
+checked: `check_certification_doc_matches_the_run` fails the build when
+the trust document and the run record disagree, and the stated-count
+checker learned the nouns it had been missing. A count marked *as at
+v0.7.0* is a record of the past and is left alone.
+
+### Performance: 19.4 minutes to 7.3
+
+`minyaml.parse_file` used PyYAML's pure-Python loader with no cache, and
+nearly every script imports it. One run of `simulate_sdlc.py --all` parsed
+eighteen distinct files 1021 times and spent 94% of its runtime there.
+
+The C loader when libyaml is present, plus a cache keyed on path, mtime
+and size. The cache returns a deepcopy: forty-six call sites take the
+result and some edit it, so sharing one object would leak one caller's
+edit into another script silently, and a deepcopy costs a twelfth of a C
+parse. The mtime key matters because the mutation tests rewrite files on a
+copied tree mid-process.
+
+    validate_plugin.py      14.1s -> 1.2s
+    simulate_sdlc.py --all  63.8s -> 6.8s
+    inject_faults.py        23.0s -> 5.2s
+    run_evaluations.py      28.1s -> 11.7s
+    check_all.sh            1166s -> 440s
+
+Nothing is tested less. The mutation lists are untouched, the
+`hook_decision` checks still spawn a real subprocess each because that is
+the invocation contract they exist to test, and six new tests hold the
+cache to returning a copy and to noticing a rewritten file.
+
+`CERTIFIED` remains **no**.
+
 ## [0.44.0] — The organization knew, and the agent was not told
 
 Three defects, one shape, all found by running real Claude Code agents against
