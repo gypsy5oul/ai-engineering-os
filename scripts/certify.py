@@ -36,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,6 +44,8 @@ sys.path.insert(0, os.path.join(ROOT, "scripts"))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
 
 import check_dod  # noqa: E402
+from minyaml import parse_file  # noqa: E402
+import briefing  # noqa: E402
 import workitem as W  # noqa: E402
 
 GOLDEN = os.path.join(ROOT, "golden")
@@ -219,6 +222,22 @@ def _run_session(project, prompt, model, timeout=600):
     with open(os.devnull) as devnull:
         return subprocess.run(cmd, cwd=project, capture_output=True, text=True,
                               env=env, stdin=devnull, timeout=timeout)
+
+
+def _session_outcome(proc):
+    """What happened to a session, including why when it failed.
+
+    `exited 1` on its own is unusable evidence. A whole traversal came back with
+    every session exited 1 and no way to tell a refused prompt from an expired
+    credential from a usage limit -- and the same sessions run by hand worked, so
+    the harness had recorded the one fact that could not distinguish them. The
+    message the CLI printed is the evidence; discarding it was the defect.
+    """
+    if proc.returncode == 0:
+        return "completed"
+    detail = ((proc.stderr or "").strip() or (proc.stdout or "").strip())
+    detail = " ".join(detail.split())[-300:]
+    return "exited %d: %s" % (proc.returncode, detail or "no output")
 
 
 def _audit(data_dir):
@@ -429,8 +448,629 @@ def _p_binding(ctx):
         return True, "TaskCreated bound a native task; history: %s" % ", ".join(sorted(set(kinds)))
     if "task_creation_blocked" in kinds:
         return False, "the hook refused every task it saw: %s" % ", ".join(sorted(set(kinds)))
-    return None, ("the session created no native task, so TaskCreated never fired. "
-                  "History: %s" % ", ".join(sorted(set(kinds))))
+    return None, ("no native task was created, so TaskCreated never fired. A `claude -p` "
+                  "session is given no tool that creates one -- recorded as "
+                  "headless.native_task_tools in platform-capabilities.json and verified "
+                  "against 2.1.251 -- so an unattended run cannot close this probe "
+                  "however many sessions it spends. History: %s"
+                  % ", ".join(sorted(set(kinds))))
+
+
+# Who the human is, when a run has one. Not an agent, and not a default: an
+# approval attributed to nobody in particular is the thing the gate exists to
+# refuse.
+OPERATOR = ["certification-operator", "release-authority"]
+
+
+def _control(project, wid, *args):
+    """Run the organization's own control loop, and let it answer.
+
+    The harness does not decide whether a task is done. It asks, and
+    `refuse_unearned_acceptance` refuses when the definition of done is not met.
+    A certification harness that marked its own tasks accepted would be
+    certifying itself.
+    """
+    cmd = [sys.executable, os.path.join(ROOT, "scripts", "control_loop.py"),
+           args[0], "--project", project, "--item", wid] + list(args[1:])
+    proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
+# Who can satisfy a predicate. Read from the artifact model and the department
+# cycles rather than declared here, because the organization already says all of
+# this and a second copy is the one that goes stale.
+#
+# This is the whole of the multi-role walk. There is no new participant table: a
+# stage's definition of done already names the roles it needs -- an owner for the
+# artifact, a reviewer for the verdict, a lead for the rollup, a human for the
+# approval -- and the failing predicates say which of them have not acted yet.
+_VERDICT_RE = re.compile(r"^agent_verdict\(([^,)]+)")
+_OWNED_RE = re.compile(r"^artifact_owned_by\(([^,)]+),\s*([^)]+)\)")
+_CYCLE_RE = re.compile(r"^(?:cycle_accepted|cycle_rollup_reported|no_open_rework)\(([^)]+)\)")
+_HUMAN_RE = re.compile(r"^(?:human_approval_recorded|human_identity_recorded)\(([^)]+)\)")
+_ARTIFACT_RE = re.compile(r"^(?:artifact_exists|artifact_status|required_fields_present|"
+                          r"field_quantified|no_open_blocking_decisions_for|every_linked)"
+                          r"\(([^,)]+)")
+
+
+def _artifact_owners():
+    try:
+        with open(os.path.join(ROOT, "policies", "artifact-model.json"), encoding="utf-8") as fh:
+            types = json.load(fh).get("artifact_types") or []
+    except (OSError, ValueError):
+        return {}
+    return {a.get("code"): a.get("owner_role") for a in types if isinstance(a, dict)}
+
+
+def _cycle_leads():
+    out = {}
+    base = os.path.join(ROOT, "sdlc", "cycles")
+    if not os.path.isdir(base):
+        return out
+    for name in sorted(os.listdir(base)):
+        if not name.endswith((".yaml", ".yml")):
+            continue
+        try:
+            cycle = parse_file(os.path.join(base, name))
+        except Exception:
+            continue
+        pos = cycle.get("positions") or {}
+        lead = pos.get("lead")
+        out[cycle.get("id")] = lead.get("role") if isinstance(lead, dict) else lead
+    return out
+
+
+def who_can_satisfy(predicate):
+    """`(kind, actor)` for one unmet predicate, or `(None, None)`.
+
+    `kind` is `role` for something an agent can do and `human` for something no
+    agent may do. The second is not a gap to be worked around: an approval signed
+    by an agent is refused by `human_identity_recorded`, which is the OS being
+    right.
+    """
+    entry = predicate.split(" -- ")[0].strip()
+
+    m = _HUMAN_RE.match(entry)
+    if m:
+        return "human", m.group(1).strip()
+
+    m = _VERDICT_RE.match(entry)
+    if m:
+        return "role", m.group(1).strip()
+
+    m = _OWNED_RE.match(entry)
+    if m:
+        return "role", m.group(2).strip()
+
+    m = _CYCLE_RE.match(entry)
+    if m:
+        return "role", _cycle_leads().get(m.group(1).strip())
+
+    m = _ARTIFACT_RE.match(entry)
+    if m:
+        return "role", _artifact_owners().get(m.group(1).strip())
+
+    return None, None
+
+
+def record_operator_approval(project, wid, policy_ref, operator, role):
+    """Record a human approval the person running certification actually gave.
+
+    No agent may do this. `human_identity_recorded` refuses an approval whose
+    approver_role is a registered agent, which is the OS being right: an approval
+    an agent can sign is not an approval. So the only honest way a certification
+    run crosses a human gate is for a human to cross it, and this records that
+    they did -- with their identity, on the artifact, in the history.
+
+    It is opt-in per approval (`--approve AP-12`) and off by default, because a
+    harness that granted its own approvals would be manufacturing exactly the
+    evidence the gate exists to demand. What happens without it is that the walk
+    stops and reports `awaiting-human`, which is the true state.
+    """
+    artifacts = check_dod.load_artifacts(project)
+    scoped = [a for a in artifacts if str(a.get("change") or "") == wid]
+    target = None
+    for a in scoped or artifacts:
+        if a.get("_path", "").startswith("docs/"):
+            target = a
+            break
+    if target is None:
+        return None, "no artifact exists yet to carry the approval"
+
+    path = os.path.join(project, target["_path"])
+    with open(path, encoding="utf-8") as fh:
+        body = fh.read()
+    entry = ("  - policy_ref: %s\n    approver_id: %s\n    approver_role: %s\n"
+             "    recorded_in: certification-run\n    recorded_at: %s\n"
+             % (policy_ref, operator, role, now()))
+    if re.search(r"^approvals:\s*$", body, re.M):
+        body = re.sub(r"^approvals:\s*$", "approvals:\n" + entry.rstrip("\n"), body,
+                      count=1, flags=re.M)
+    elif re.search(r"^approvals:\s*\[\s*\]\s*$", body, re.M):
+        body = re.sub(r"^approvals:\s*\[\s*\]\s*$", "approvals:\n" + entry.rstrip("\n"),
+                      body, count=1, flags=re.M)
+    else:
+        end = body.find("\n---", 3)
+        if end == -1:
+            return None, "%s has no frontmatter to record an approval in" % target["_path"]
+        body = body[:end] + "\napprovals:\n" + entry.rstrip("\n") + body[end:]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(body)
+    W.record(project, wid, "human_approval_recorded", artifact=target["id"],
+             policy_ref=policy_ref, approver_id=operator, approver_role=role,
+             why="granted explicitly by the operator running certification with "
+                 "--approve; no agent may sign this")
+    return target["id"], None
+
+
+def _owed_line(predicate):
+    """One unmet predicate, with where its evidence has to land.
+
+    The same text the briefing gives a stage owner. A convened participant that
+    is told only the predicate name is in exactly the position the product-manager
+    was in when it was asked three times for a rollup it could not locate.
+    """
+    entry = predicate.split(" -- ")[0].strip()
+    name = entry.split("(")[0].strip()
+    gloss = briefing._glossary().get(name)
+    if not gloss:
+        return "- %s" % predicate
+    meaning, evidence = gloss
+    line = "- %s — %s" % (predicate, meaning)
+    if evidence:
+        line += "\n  Satisfied by: %s" % evidence
+    return line
+
+
+def convene(project, wid, task, model, timeout, granted=()):
+    """Call in the participants the unmet predicates name, until nothing moves.
+
+    The harness decides nothing about whether the work is done. It re-asks the
+    organization after every participant, and the next participant is whoever the
+    remaining failures name. When the only thing left is a human approval, the
+    walk stops and says so rather than signing it.
+    """
+    acts, seen = [], set()
+    for _ in range(8):
+        result = check_dod.acceptance(project, task, change=wid)
+        unmet = list(result.get("failing") or []) + list(result.get("unverifiable") or [])
+        if not unmet:
+            break
+
+        # Group the remaining work by who has to do it, so a role is called in
+        # once with everything it owes rather than once per predicate.
+        owed, human_waits = {}, []
+        for predicate in unmet:
+            kind, actor = who_can_satisfy(predicate)
+            if kind == "human":
+                human_waits.append((actor, predicate))
+            elif kind == "role" and actor:
+                owed.setdefault(actor, []).append(predicate)
+
+        nxt = [(role, preds) for role, preds in sorted(owed.items())
+               if (task["id"], role) not in seen]
+        if not nxt:
+            granted_now = False
+            for policy_ref, _pred in human_waits:
+                if policy_ref in granted:
+                    aid, why = record_operator_approval(
+                        project, wid, policy_ref, OPERATOR[0], OPERATOR[1])
+                    acts.append({"task": task["id"], "stage": task.get("stage"),
+                                 "role": "%s (human)" % OPERATOR[1],
+                                 "owed": [policy_ref],
+                                 "session": "recorded on %s" % aid if aid else "not recorded: %s" % why})
+                    granted_now = granted_now or bool(aid)
+            if granted_now:
+                continue
+            break
+
+        role, preds = nxt[0]
+        seen.add((task["id"], role))
+        step = {"task": task["id"], "stage": task.get("stage"), "role": role,
+                "owed": [p.split(" -- ")[0] for p in preds], "session": None}
+        try:
+            proc = _run_session(project, PARTICIPANT_PROMPT % {
+                "item": wid, "role": role, "task": task["id"],
+                "title": task.get("title") or task["id"],
+                "owed": "\n".join(_owed_line(p) for p in preds)}, model, timeout=timeout)
+            step["session"] = _session_outcome(proc)
+        except subprocess.TimeoutExpired:
+            step["session"] = "timed out after %ds" % timeout
+            acts.append(step)
+            break
+        except Exception as exc:
+            step["session"] = "did not complete: %r" % exc
+            acts.append(step)
+            break
+        acts.append(step)
+
+    result = check_dod.acceptance(project, task, change=wid)
+    waiting = [p.split(" -- ")[0] for p in
+               (list(result.get("failing") or []) + list(result.get("unverifiable") or []))
+               if who_can_satisfy(p)[0] == "human"]
+    return acts, waiting
+
+
+def drive_lifecycle(project, wid, model, budget=14, timeout=1800, granted=()):
+    """Walk the graph with real sessions until it stops moving.
+
+    One session per runnable task, delegated to the role that owns it. After each
+    one the organization is asked to accept, and when it refuses the loop asks it
+    what to do about that -- retry, rework, replan or escalate -- exactly as it
+    would for a task a person had run.
+
+    The loop stops when nothing is runnable, when the budget is spent, or when
+    the next runnable task is one that already stalled. It does not skip past a
+    stalled task to collect coverage from an independent branch: a stage reached
+    by stepping over its own dependency is not evidence that the lifecycle runs.
+    """
+    attempted, stalled, tries = [], set(), {}
+    for _ in range(budget):
+        target = _first_runnable(project, wid)
+        if target is None:
+            break
+        tid = target["id"]
+        if tid in stalled:
+            break
+        # The loop's own bound, not one invented here. A task the organization
+        # decided to retry or rework is a task it wants run again, and a walk
+        # that stopped at the first refusal would never exercise the retry path
+        # at all -- which is the path most worth watching.
+        tries[tid] = tries.get(tid, 0) + 1
+        if tries[tid] > int(target.get("max_attempts") or 3):
+            stalled.add(tid)
+            break
+
+        step = {"task": tid, "stage": target.get("stage"), "role": target.get("role"),
+                "session": None, "accepted": None, "decision": None}
+        try:
+            proc = _run_session(project, DELEGATION_PROMPT % {
+                "item": wid, "role": target["role"], "task": tid,
+                "title": target.get("title") or tid}, model, timeout=timeout)
+            step["session"] = _session_outcome(proc)
+        except subprocess.TimeoutExpired:
+            # Recorded as its own outcome rather than an exception string. The
+            # first walk spent 600s on REQ and stopped there, and "the session
+            # did not complete: TimeoutExpired(...)" reads like a defect in the
+            # organization when what ran out was the harness's own budget. A
+            # stage with eleven predicates is not a stage that finishes in ten
+            # minutes.
+            step["session"] = "timed out after %ds" % timeout
+            step["timed_out"] = True
+            attempted.append(step)
+            stalled.add(tid)
+            break
+        except Exception as exc:
+            step["session"] = "did not complete: %r" % exc
+            attempted.append(step)
+            stalled.add(tid)
+            break
+
+        # No `--detail`. `observe` writes it straight over `task["result"]`, and
+        # that field holds what the agent itself reported -- which is the only
+        # evidence `the-agent-knew-what-was-not-in-its-prompt` has to read. The
+        # first full walk passed a helpful-looking note here and overwrote the
+        # agent's own words with the harness's, and the probe correctly reported
+        # that the evidence was gone. A harness that narrates over what it is
+        # measuring is measuring itself.
+        rc, out = _control(project, wid, "observe", "--task", tid, "--outcome", "accepted")
+        if rc != 0:
+            # The owner alone did not finish it, which for most stages is correct
+            # rather than a failure: a definition of done that requires a
+            # reviewer's verdict and a department rollup is describing an
+            # organization, not a soloist. Call in whoever the unmet predicates
+            # name and ask again.
+            graph = W.load_graph(project, wid) or {}
+            fresh = W.task(graph, tid) or target
+            step["convened"], step["awaiting_human"] = convene(
+                project, wid, fresh, model, timeout, granted)
+            rc, out = _control(project, wid, "observe", "--task", tid,
+                               "--outcome", "accepted")
+        if rc == 0:
+            step["accepted"] = True
+        else:
+            step["accepted"] = False
+            step["why_refused"] = out.strip()[-400:]
+            _control(project, wid, "observe", "--task", tid, "--outcome", "failed")
+            _rc, decision = _control(project, wid, "decide", "--task", tid)
+            step["decision"] = decision.strip()[:400]
+            # RETRY and REWORK mean run it again. REPLAN and ESCALATE are the
+            # organization saying this task is not the problem, and walking on
+            # would be the harness overruling the decision it just asked for.
+            if not any(w in decision.upper() for w in ("RETRY", "REWORK")):
+                stalled.add(tid)
+        attempted.append(step)
+    return attempted
+
+
+MECHANISM_PROMPTS = [
+    ("native-task", 900,
+     "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
+     "Create a native Claude Code task for the work still outstanding on %(item)s, "
+     "using the task tools rather than doing the work inline. Give the task a subject "
+     "that names the work item identifier %(item)s. Then complete it. Report the task "
+     "identifier you created."),
+    ("worktree", 1500,
+     "This project runs on the AI Engineering OS and work item %(item)s is open.\n\n"
+     "Exercise the whole isolation lifecycle, using the EnterWorktree and ExitWorktree "
+     "tools rather than raw `git worktree` commands, because the organization's hooks "
+     "observe those:\n"
+     "1. Enter a new worktree for %(item)s.\n"
+     "2. Inside it, make one small real change to `src/retention/policy.py` -- a comment "
+     "or a docstring is enough, but it must be a genuine edit.\n"
+     "3. Run the project's tests inside the worktree and report the result.\n"
+     "4. Integrate the change back into the main checkout, so the edit is present there.\n"
+     "5. Leave the worktree and remove it.\n\n"
+     "Report the worktree path, the test result, whether the change reached the main "
+     "checkout, and whether the worktree was removed. A worktree that was created and "
+     "never integrated is a failure of this exercise, not a success."),
+    ("team", 1200,
+     "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
+     "Start a team to work on %(item)s and give at least one teammate a task. Tell each "
+     "teammate to report which skills it was given. Report the team name, the teammates "
+     "you created, and the skills each one reported."),
+]
+
+
+def exercise_background(project):
+    """Dispatch a real background session and read the platform's own run listing.
+
+    `background` was an execution mode the resolver could name and nothing had
+    ever run. It turns out to be reachable, just not the way the rest of this
+    harness works: `--bg` refuses `--print`, because a headless session never
+    starts the interactive session that `claude attach` connects to. So this is
+    the one place the harness does not use `claude -p`.
+
+    Evidence is the platform's listing, not the file: `claude agents --json`
+    reports the job's id, kind and state, and a job that never ran is not in it.
+    """
+    marker = "background-proof.txt"
+    out = {"mechanism": "background", "dispatched": None, "id": None,
+           "listing": None, "produced": False}
+    try:
+        proc = subprocess.run(
+            ["claude", "--bg",
+             "Write a file called %s in the current directory whose only contents are "
+             "the word BACKGROUND. Then stop." % marker],
+            cwd=project, capture_output=True, text=True, timeout=180)
+    except Exception as exc:
+        out["dispatched"] = "did not dispatch: %r" % exc
+        return out
+    out["dispatched"] = "exit %d" % proc.returncode
+    m = re.search(r"claude attach ([0-9a-f]{6,})", proc.stdout or "")
+    if not m:
+        out["dispatched"] = "dispatched but printed no id"
+        return out
+    out["id"] = m.group(1)
+
+    path = os.path.join(project, marker)
+    for _ in range(48):
+        if os.path.exists(path):
+            out["produced"] = True
+            break
+        time.sleep(5)
+
+    try:
+        listing = subprocess.run(
+            ["claude", "agents", "--json", "--all", "--cwd", project],
+            capture_output=True, text=True, timeout=120)
+        jobs = json.loads(listing.stdout or "[]")
+        mine = [j for j in jobs if j.get("id") == out["id"]]
+        if mine:
+            job = mine[0]
+            out["listing"] = {"kind": job.get("kind"), "state": job.get("state"),
+                              "status": job.get("status"),
+                              "session_id": job.get("sessionId")}
+    except Exception as exc:
+        out["listing"] = "could not be read: %r" % exc
+    return out
+
+
+def drive_mechanisms(project, wid, model):
+    """Attempt the execution and isolation mechanisms the lifecycle walk does not reach.
+
+    A stage walk exercises `subagent` and nothing else, because that is what
+    delegating a task does. Native tasks, worktrees and teams are separate
+    capabilities, and a certification that never tries them is certifying that
+    the resolver can spell them.
+
+    Each attempt is recorded whatever happens. If the platform will not do one of
+    these in `-p`, the probe that asks about it stays `not-run` with a reason,
+    the run does not certify, and that is the correct outcome -- not a thing to
+    route around.
+    """
+    out = []
+    for name, timeout, prompt in MECHANISM_PROMPTS:
+        step = {"mechanism": name}
+        try:
+            proc = _run_session(project, prompt % {"item": wid}, model, timeout=timeout)
+            step["session"] = _session_outcome(proc)
+            step["said"] = (proc.stdout or "").strip()[-300:]
+        except subprocess.TimeoutExpired:
+            step["session"] = "timed out after %ds" % timeout
+        except Exception as exc:
+            step["session"] = "did not complete: %r" % exc
+        out.append(step)
+    out.append(exercise_background(project))
+    return out
+
+
+@probe("task-completion-is-gated",
+       "When a native task completes, does the completion gate actually run?",
+       "the work item's own history.jsonl")
+def _p_completion_gate(ctx):
+    """The other half of the task lifecycle, and until v0.44.0 nothing asked for it.
+
+    `TaskCreated` had a probe from the release that added it. `TaskCompleted` had
+    a hook, a policy and a test, and no question anywhere that would notice if it
+    stopped firing in a real session.
+    """
+    if not ctx.get("work_item"):
+        return None, "no work item to read"
+    kinds = [h.get("kind") for h in _history(ctx["project"], ctx["work_item"])]
+    if "task_completion_allowed" in kinds or "task_completion_blocked" in kinds:
+        allowed = kinds.count("task_completion_allowed")
+        blocked = kinds.count("task_completion_blocked")
+        return True, "TaskCompleted fired: %d allowed, %d blocked" % (allowed, blocked)
+    return None, ("no native task completed, so TaskCompleted never fired. Nothing "
+                  "created one either: a headless session has no tool that does, per "
+                  "headless.native_task_tools in platform-capabilities.json. History: %s"
+                  % ", ".join(sorted(set(kinds))))
+
+
+def _modes_seen(project, wid):
+    """Execution modes a real agent was actually observed running in.
+
+    From the graph's `actual`, which the SubagentStart hook writes from the event
+    it received -- never from `declared`, which is what the plan hoped for, and
+    never from `resolved`, which is what the resolver decided. The whole point of
+    the three-field split is that the third one can disagree.
+    """
+    graph = W.load_graph(project, wid) or {}
+    seen = {}
+    for task in graph.get("tasks", []):
+        ex = _ex(task)
+        actual = ex.get("actual")
+        if actual:
+            seen.setdefault(actual, []).append(task["id"])
+    return seen
+
+
+@probe("background-execution-was-actually-dispatched",
+       "Does a real background session run, outlive its caller, and appear in the "
+       "platform's own run listing?",
+       "`claude agents --json`, which lists the job the harness dispatched")
+def _p_background(ctx):
+    """The mode the resolver could name and nothing had run.
+
+    Evidence is the platform's listing rather than the file the job wrote: a file
+    proves something wrote it, and the listing proves the *background session*
+    existed, with the id, kind and state the platform assigned it.
+    """
+    for m in ctx.get("mechanisms") or []:
+        if m.get("mechanism") != "background":
+            continue
+        listing = m.get("listing")
+        if isinstance(listing, dict) and listing.get("kind") == "background":
+            state = listing.get("state")
+            # `kind: background` alone says a job was created, not that it ran.
+            # One run passed this probe on a job the platform reported as
+            # `blocked` which produced nothing -- a dispatch is not an execution,
+            # and accepting one is the same overclaim as reading the resolver's
+            # vocabulary as coverage.
+            if state == "done" and m.get("produced"):
+                return True, ("job %s ran to completion: kind %s, state %s, and it wrote "
+                              "its artifact" % (m.get("id"), listing.get("kind"), state))
+            return False, ("job %s was dispatched but did not run to completion: state %s, "
+                           "%s" % (m.get("id"), state,
+                                   "wrote its artifact" if m.get("produced")
+                                   else "produced no artifact"))
+        if m.get("id"):
+            return False, ("job %s was dispatched and the run listing does not describe "
+                           "it: %r" % (m.get("id"), listing))
+        return None, "no background session was dispatched: %s" % m.get("dispatched")
+    return None, "the background mechanism was not attempted"
+
+
+@probe("execution-modes-were-exercised-not-just-named",
+       "Which execution modes did a real agent actually run in?",
+       "the graph's `execution.actual`, written by the hook from the event it received")
+def _p_modes(ctx):
+    """Deliberately reports what was exercised rather than passing on a subset.
+
+    The resolver can name `inline`, `subagent`, `background`, `team` and
+    `dynamic-workflow`. Naming one is not evidence that it works, and a
+    certification that treated the resolver's vocabulary as coverage would be
+    certifying a list of strings.
+    """
+    if not ctx.get("work_item"):
+        return None, "no work item to read"
+    seen = _modes_seen(ctx["project"], ctx["work_item"])
+    if not seen:
+        return None, "no task recorded an actual execution mode; nothing ran"
+    return True, "; ".join("%s (%s)" % (mode, ", ".join(tasks))
+                           for mode, tasks in sorted(seen.items()))
+
+
+@probe("worktree-isolation-was-actually-used",
+       "Did an isolated execution create a worktree, and is the isolation recorded?",
+       "worktree_created / worktree_removed in the work item history")
+def _p_worktree(ctx):
+    if not ctx.get("work_item"):
+        return None, "no work item to read"
+    entries = _history(ctx["project"], ctx["work_item"])
+    created = [h for h in entries if h.get("kind") == "worktree_created"]
+    removed = [h for h in entries if h.get("kind") == "worktree_removed"]
+    if not created:
+        return None, ("no worktree was created, so isolation stayed at shared-checkout "
+                      "and the WorktreeCreate hook never fired")
+    return True, "%d worktree(s) created, %d removed" % (len(created), len(removed))
+
+
+@probe("worktree-work-was-integrated-not-just-isolated",
+       "Did work done inside a worktree reach the main checkout, and was the worktree "
+       "then removed?",
+       "the main checkout's own contents, and worktree_removed in the history")
+def _p_worktree_integration(ctx):
+    """Creation is not the exercise.
+
+    Two runs recorded `worktree_created` and were read as isolation working. An
+    isolated branch nobody merged is a change that did not happen, and a worktree
+    nobody removed is state left behind -- so this asks for the two events that
+    make the lifecycle a lifecycle rather than a beginning.
+    """
+    project, wid = ctx.get("project"), ctx.get("work_item")
+    if not wid:
+        return None, "no work item to read"
+    entries = _history(project, wid)
+    if not [h for h in entries if h.get("kind") == "worktree_created"]:
+        return None, "no worktree was created, so there is nothing to integrate"
+
+    removed = [h for h in entries if h.get("kind") == "worktree_removed"]
+    # Integration can arrive two ways and both count: a commit that landed on the
+    # main checkout, or an uncommitted edit sitting in its working tree. What does
+    # not count is the change existing only inside the worktree.
+    marker = os.path.join("src", "retention", "policy.py")
+    integrated, how = False, "no commit and no working-tree change"
+    try:
+        log = subprocess.run(["git", "log", "--oneline", "-15", "--", marker],
+                             cwd=project, capture_output=True, text=True, timeout=60)
+        if len((log.stdout or "").strip().splitlines()) > 1:
+            integrated, how = True, "a new commit touches %s" % marker
+        else:
+            diff = subprocess.run(["git", "status", "--porcelain", "--", marker],
+                                  cwd=project, capture_output=True, text=True, timeout=60)
+            if (diff.stdout or "").strip():
+                integrated, how = True, "%s is modified in the main checkout" % marker
+    except Exception as exc:
+        return None, "the main checkout could not be inspected: %r" % exc
+
+    if integrated and removed:
+        return True, "%s, and %d worktree(s) were removed" % (how, len(removed))
+    return False, ("worktree created but %s%s"
+                   % (how if not integrated else how,
+                      "; no worktree_removed was recorded" if not removed else ""))
+
+
+@probe("a-team-stage-carried-its-skills",
+       "When a stage runs as a team, do the teammates get the skills the stage declares?",
+       "teammate events in the work item history and the stage's declared skills")
+def _p_team(ctx):
+    """A teammate does not inherit its agent definition's `skills:` frontmatter.
+    The stage declares them and the spawn prompt has to carry them, which is
+    checked structurally by validate_plugin and, until something runs a team, by
+    nothing at all.
+    """
+    if not ctx.get("work_item"):
+        return None, "no work item to read"
+    entries = _history(ctx["project"], ctx["work_item"])
+    teammate = [h for h in entries if "teammate" in (h.get("kind") or "")]
+    modes = _modes_seen(ctx["project"], ctx["work_item"])
+    if "team" not in modes and not teammate:
+        return None, ("no stage ran as a team, so teammate skill propagation is "
+                      "unmeasured")
+    return True, "team execution observed on %s; %d teammate event(s)" % (
+        ", ".join(modes.get("team", [])) or "an unnamed stage", len(teammate))
 
 
 def real_units(project, wid, model):
@@ -533,6 +1173,12 @@ def build_verdict(units, probes, mode):
 
     ran = [p for p in probes if p["result"] != "not-run"]
     failed = [p for p in probes if p["result"] == "fail"]
+    # A probe that never ran has produced no evidence, and a certification that
+    # ignores it is certifying the probes that happened to fire.
+    # `not-run` is not a quiet `pass`.
+    # The mechanism it asks about is simply unmeasured, and an unmeasured
+    # mechanism is exactly the one that breaks in the pilot.
+    unrun = [p for p in probes if p["result"] == "not-run"]
     covered = sorted({u["stage"] for u in real})
     missing = [s for s in REQUIRED_STAGES if s not in covered]
 
@@ -540,12 +1186,12 @@ def build_verdict(units, probes, mode):
         real_verdict = "not-run"
     elif failed:
         real_verdict = "fail"
-    elif missing:
+    elif missing or unrun:
         real_verdict = "partial"
     else:
         real_verdict = "pass"
 
-    certified = real_verdict == "pass" and not missing
+    certified = real_verdict == "pass" and not missing and not unrun
     if certified:
         why = ("Real Claude Code sessions drove every required stage and every probe "
                "passed on durable evidence.")
@@ -559,8 +1205,16 @@ def build_verdict(units, probes, mode):
         why = ("A probe failed against a real session: %s. Certification is refused."
                % ", ".join(p["id"] for p in failed))
     else:
-        why = ("Probes passed but real agents did not drive every required stage. "
-               "Missing: %s. Partial evidence is not certification." % ", ".join(missing))
+        reasons = []
+        if missing:
+            reasons.append("real agents did not drive every required stage (missing: %s)"
+                           % ", ".join(missing))
+        if unrun:
+            reasons.append("%d probe(s) never ran, so the mechanism each asks about is "
+                           "unmeasured: %s"
+                           % (len(unrun), ", ".join(p["id"] for p in unrun)))
+        why = ("Every probe that ran passed, but %s. Partial evidence is not "
+               "certification." % "; and ".join(reasons))
 
     return {
         "synthetic": syn,
@@ -569,12 +1223,15 @@ def build_verdict(units, probes, mode):
         "why": why,
         "coverage": {"required": REQUIRED_STAGES, "real_agent": covered,
                      "synthetic_only": missing},
+        "probes": {"total": len(probes), "passed": len(ran) - len(failed),
+                   "failed": len(failed), "not_run": len(unrun),
+                   "unmeasured": [p["id"] for p in unrun]},
     }
 
 
 # ---------------------------------------------------------------- main
 
-def run(mode, model, keep):
+def run(mode, model, keep, stages=14, timeout=1800, granted=()):
     tmp = tempfile.mkdtemp(prefix="aieos-golden-")
     project = os.path.join(tmp, "retention-window-service")
     data_dir = os.path.join(tmp, "plugin-data")
@@ -592,6 +1249,8 @@ def run(mode, model, keep):
         "units": [],
         "probes": [],
         "verdict": {},
+        "lifecycle": [],
+        "mechanisms": [],
         "notes": None,
     }
 
@@ -629,9 +1288,11 @@ def run(mode, model, keep):
                         record["notes"] = "no task was runnable, so delegation was not attempted"
                     else:
                         try:
-                            _run_session(project, DELEGATION_PROMPT % {
-                                "item": wid, "role": target["role"], "task": target["id"],
-                                "title": target.get("title") or target["id"]}, model)
+                            record["lifecycle"] = drive_lifecycle(
+                                project, wid, model, budget=stages, timeout=timeout,
+                                granted=granted)
+                            record["mechanisms"] = drive_mechanisms(project, wid, model)
+                            ctx["mechanisms"] = record["mechanisms"]
                         except Exception as exc:
                             record["notes"] = ("the delegation session did not complete: %r"
                                                % exc)
@@ -689,6 +1350,20 @@ LIVE_PROMPT = (
 )
 
 
+PARTICIPANT_PROMPT = (
+    "This project runs on the AI Engineering OS. Work item %(item)s is open and task "
+    "%(task)s (%(title)s) is being completed.\n\n"
+    "You are needed as the `%(role)s` role. The organization has evaluated the task's "
+    "definition of done and these predicates are not satisfied:\n\n%(owed)s\n\n"
+    "Delegate to the `%(role)s` agent with the Agent tool, exactly once, and have it do "
+    "the part of this that is genuinely its own -- write the artifact it owns, or record "
+    "its review verdict, or produce the department rollup. Write real content in the "
+    "project's own conventions; do not invent an approval and do not sign anything as a "
+    "human. If the role cannot satisfy something, say so plainly rather than working "
+    "around it."
+)
+
+
 DELEGATION_PROMPT = (
     "This project runs on the AI Engineering OS. Work item %(item)s is open and planned, "
     "and task %(task)s (%(title)s) is ready for the `%(role)s` role.\n"
@@ -705,6 +1380,44 @@ def report(record):
           % (record["plugin_version"], record["claude_code_version"] or "not present",
              record["mode"]))
     print()
+    walk = record.get("lifecycle") or []
+    if walk:
+        print("  lifecycle walk: %d real session(s)" % len(walk))
+        for step in walk:
+            verdict = ("accepted" if step.get("accepted") else
+                       "refused" if step.get("accepted") is False else "no verdict")
+            print("    %-6s %-10s %-22s session %s -> %s"
+                  % (step.get("task"), step.get("stage") or "-", step.get("role") or "-",
+                     step.get("session"), verdict))
+            for act in step.get("convened") or []:
+                print("           convened %-22s %-34s %s"
+                      % (act.get("role"), ", ".join(act.get("owed") or [])[:34],
+                         act.get("session")))
+            if step.get("awaiting_human"):
+                print("           awaiting a human for: %s"
+                      % ", ".join(step["awaiting_human"]))
+            if step.get("decision"):
+                print("           the loop decided: %s"
+                      % step["decision"].splitlines()[0][:100])
+        print()
+
+    mech = record.get("mechanisms") or []
+    if mech:
+        print("  mechanism attempts:")
+        for m in mech:
+            # The background attempt is not a `claude -p` session and carries no
+            # `session` key; it reports how it was dispatched and what the
+            # platform's run listing said about it.
+            if m.get("mechanism") == "background":
+                listing = m.get("listing")
+                detail = ("%s, listed as %s/%s" % (m.get("dispatched"),
+                                                   listing.get("kind"), listing.get("state"))
+                          if isinstance(listing, dict) else str(m.get("dispatched")))
+                print("    %-12s %s" % (m["mechanism"], detail))
+            else:
+                print("    %-12s %s" % (m["mechanism"], m.get("session")))
+        print()
+
     syn = [u for u in record["units"] if u["evidence"] == "synthetic"]
     real = [u for u in record["units"] if u["evidence"] == "real-agent"]
     print("  units: %d synthetic, %d real-agent" % (len(syn), len(real)))
@@ -741,9 +1454,22 @@ def main():
     ap.add_argument("--model", help="model for the live sessions")
     ap.add_argument("--out", help="write the run record here")
     ap.add_argument("--keep", action="store_true", help="keep the working copy")
+    ap.add_argument("--stages", type=int, default=14,
+                    help="how many real sessions the lifecycle walk may spend")
+    ap.add_argument("--session-timeout", type=int, default=1800,
+                    help="seconds one stage's session may take before the walk stops")
+    ap.add_argument("--approve", default="",
+                    help="comma-separated approval ids the human running this run grants "
+                         "(e.g. AP-12). Off by default: without it the walk stops at the "
+                         "human gate and reports awaiting-human, which is the true state.")
+    ap.add_argument("--operator", default="certification-operator",
+                    help="the human granting --approve; recorded as the approver")
     args = ap.parse_args()
 
-    record = run("live" if args.live else "synthetic", args.model, args.keep)
+    OPERATOR[0] = args.operator
+    granted = tuple(a.strip() for a in args.approve.split(",") if a.strip())
+    record = run("live" if args.live else "synthetic", args.model, args.keep,
+                 args.stages, args.session_timeout, granted)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(record, fh, indent=2)

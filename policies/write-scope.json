@@ -24,8 +24,10 @@
         "docs/product/**",
         ".ai-engineering/**",
         "docs/change-requests/**",
-        "docs/decisions/**"
-      ]
+        "docs/decisions/**",
+        "docs/reviews/**"
+      ],
+      "why": "Named as the `agent_verdict` reviewer on a stage gate, so it needs somewhere to put a verdict. This is the v0.22.1 defect again, in the roles that gate a stage while being leads rather than dedicated reviewers: the predicate reads verdicts, the stage demands one from this role, and the role's allow-list reached no location the predicate scans -- so the stage could not be satisfied by anybody. Found by a live run, where REQ was refused three times and escalated for this reason. Independence is untouched: this role owns none of the artifacts the stage it gates produces."
     },
     "requirements-analyst": {
       "mode": "allow",
@@ -56,8 +58,10 @@
       "allow": [
         "docs/test-plans/**",
         "docs/qa/**",
-        "docs/ai/evaluation/**"
-      ]
+        "docs/ai/evaluation/**",
+        "docs/reviews/**"
+      ],
+      "why": "Named as the `agent_verdict` reviewer on a stage gate, so it needs somewhere to put a verdict. This is the v0.22.1 defect again, in the roles that gate a stage while being leads rather than dedicated reviewers: the predicate reads verdicts, the stage demands one from this role, and the role's allow-list reached no location the predicate scans -- so the stage could not be satisfied by anybody. Found by a live run, where REQ was refused three times and escalated for this reason. Independence is untouched: this role owns none of the artifacts the stage it gates produces."
     },
     "qa-engineer": {
       "mode": "allow",
@@ -210,8 +214,10 @@
       "allow": [
         "docs/decisions/**",
         "docs/sdlc/**",
-        ".ai-engineering/**"
-      ]
+        ".ai-engineering/**",
+        "docs/reviews/**"
+      ],
+      "why": "Named as the `agent_verdict` reviewer on a stage gate, so it needs somewhere to put a verdict. This is the v0.22.1 defect again, in the roles that gate a stage while being leads rather than dedicated reviewers: the predicate reads verdicts, the stage demands one from this role, and the role's allow-list reached no location the predicate scans -- so the stage could not be satisfied by anybody. Found by a live run, where REQ was refused three times and escalated for this reason. Independence is untouched: this role owns none of the artifacts the stage it gates produces."
     },
     "development-lead": {
       "mode": "allow",

@@ -1873,7 +1873,8 @@
         "artifact_code"
       ],
       "checkable": "project",
-      "means": "An artifact of this type exists for the change."
+      "means": "An artifact of this type exists for the change.",
+      "evidence": "A markdown file under docs/ whose frontmatter `id` matches the project prefix, this code and a number (e.g. GOLD-REQ-001), and whose `type` is set."
     },
     "artifact_status": {
       "args": [
@@ -1881,7 +1882,8 @@
         "status"
       ],
       "checkable": "project",
-      "means": "The named artifact has reached this status."
+      "means": "The named artifact has reached this status.",
+      "evidence": "The artifact's frontmatter `status:` field."
     },
     "every_linked": {
       "args": [
@@ -1889,7 +1891,8 @@
         "to_code"
       ],
       "checkable": "project",
-      "means": "Every artifact of from_code links to at least one of to_code. This is how coverage gaps become visible."
+      "means": "Every artifact of from_code links to at least one of to_code. This is how coverage gaps become visible.",
+      "evidence": "The `links:` mapping in the source artifact's frontmatter."
     },
     "field_quantified": {
       "args": [
@@ -1897,7 +1900,8 @@
         "field"
       ],
       "checkable": "project",
-      "means": "The field holds a number or an explicit blocking open question, never a plausible default."
+      "means": "The field holds a number or an explicit blocking open question, never a plausible default.",
+      "evidence": "The named field in the artifact's frontmatter: a number, or an `open_question` marked blocking. A plausible default is what this refuses."
     },
     "agent_verdict": {
       "args": [
@@ -1905,76 +1909,88 @@
         "verdict"
       ],
       "checkable": "project",
-      "means": "The named AI reviewer recorded this verdict. Never satisfies a human_gate."
+      "means": "The named AI reviewer recorded this verdict. Never satisfies a human_gate.",
+      "evidence": "An entry in some artifact's `reviewers:` list with a matching `reviewer` and `verdict`. A reviewer records its own under docs/reviews/ in its REVIEW artifact; it must not write the artifact under review."
     },
     "human_approval_recorded": {
       "args": [
         "policy_ref"
       ],
       "checkable": "gitlab",
-      "means": "A named human recorded this approval outside the session."
+      "means": "A named human recorded this approval outside the session.",
+      "evidence": "An entry in an artifact's `approvals:` list whose `policy_ref` is this approval id. No agent may create one."
     },
     "no_unresolved_findings": {
       "args": [
         "severity"
       ],
       "checkable": "project",
-      "means": "No finding at or above this severity is open."
+      "means": "No finding at or above this severity is open.",
+      "evidence": "The `findings:` list on the artifacts in scope: none at or above this severity with an open `status`."
     },
     "pipeline_passed": {
       "args": [
         "pipeline"
       ],
       "checkable": "gitlab",
-      "means": "The named CI pipeline passed on the merge commit."
+      "means": "The named CI pipeline passed on the merge commit.",
+      "evidence": "Outside the repository. The named CI pipeline's result on the merge commit; a session cannot see it."
     },
     "tests_pass": {
       "args": [
         "level"
       ],
       "checkable": "project",
-      "means": "The named test level passed."
+      "means": "The named test level passed.",
+      "evidence": "Outside the repository. The named test level's result; a session cannot see it."
     },
     "reproduction_fails_before_fix": {
       "args": [],
       "checkable": "project",
-      "means": "The regression test was verified to fail against the unfixed code. Writing it first is the point."
+      "means": "The regression test was verified to fail against the unfixed code. Writing it first is the point.",
+      "evidence": "Outside the repository. The regression test verified failing against the unfixed code."
     },
     "rollback_plan_or_acknowledged": {
       "args": [],
       "checkable": "project",
-      "means": "A rollback plan exists, or irreversibility is acknowledged in writing by a human."
+      "means": "A rollback plan exists, or irreversibility is acknowledged in writing by a human.",
+      "evidence": "The artifact's rollback plan, or a written acknowledgement of irreversibility carrying a human's name."
     },
     "config_valid": {
       "args": [],
       "checkable": "repo",
-      "means": "The project configuration validates against schemas/project-config.schema.json."
+      "means": "The project configuration validates against schemas/project-config.schema.json.",
+      "evidence": "The project's .ai-engineering/project.yaml, validated against schemas/project-config.schema.json."
     },
     "no_blocking_open_decisions": {
       "args": [
         "area"
       ],
       "checkable": "project",
-      "means": "No open_decision with blocking true remains for this area."
+      "means": "No open_decision with blocking true remains for this area.",
+      "evidence": "DEC artifacts for this area with `blocking: true` and an open `status:`."
     },
     "decision_resolved": {
       "args": [
         "decision_id"
       ],
       "checkable": "project",
-      "means": "The named open decision is answered. An agent blocked by one names it by id and stops. Available vocabulary rather than currently used: no workflow names a specific decision today. Kept because the capability is real and the implementation is correct, and covered by a unit test so it is verified rather than merely present."
+      "means": "The named open decision is answered. An agent blocked by one names it by id and stops. Available vocabulary rather than currently used: no workflow names a specific decision today. Kept because the capability is real and the implementation is correct, and covered by a unit test so it is verified rather than merely present.",
+      "evidence": "The named DEC artifact's `status:` field."
     },
     "no_open_blocking_decisions_for": {
       "args": [
         "artifact_code"
       ],
       "checkable": "project",
-      "means": "No open DEC blocks the production of this artifact type."
+      "means": "No open DEC blocks the production of this artifact type.",
+      "evidence": "DEC artifacts whose `blocks:` names this artifact type and whose `status:` is still open."
     },
     "evidence_sealed": {
       "args": [],
       "checkable": "project",
-      "means": "An EVID record exists and is sealed, collected before any destructive remediation."
+      "means": "An EVID record exists and is sealed, collected before any destructive remediation.",
+      "evidence": "An EVID artifact with `status: sealed`."
     },
     "artifact_owned_by": {
       "args": [
@@ -1982,95 +1998,110 @@
         "role"
       ],
       "checkable": "project",
-      "means": "The artifact's owner field matches the role the contract assigns."
+      "means": "The artifact's owner field matches the role the contract assigns.",
+      "evidence": "The artifact's frontmatter `owner:` field."
     },
     "required_fields_present": {
       "args": [
         "artifact_code"
       ],
       "checkable": "project",
-      "means": "Every field the artifact contract requires is present and non-empty."
+      "means": "Every field the artifact contract requires is present and non-empty.",
+      "evidence": "Every field the artifact type's contract lists in `required_fields`, present and non-empty in the frontmatter."
     },
     "human_identity_recorded": {
       "args": [
         "policy_ref"
       ],
       "checkable": "project",
-      "means": "The approval carries an approver_id and an approver_role that is not an agent."
+      "means": "The approval carries an approver_id and an approver_role that is not an agent.",
+      "evidence": "That same `approvals:` entry, carrying `approver_id` and an `approver_role` that is not a registered agent."
     },
     "release_authorized": {
       "args": [],
       "checkable": "project",
-      "means": "The release reached the 'authorized' state: content approval and deployment authorization are separate acts."
+      "means": "The release reached the 'authorized' state: content approval and deployment authorization are separate acts.",
+      "evidence": "The REL artifact's `status:` field reading `authorized`."
     },
     "cycle_accepted": {
       "args": [
         "cycle_id"
       ],
       "checkable": "project",
-      "means": "The department's internal execution cycle reached ACCEPTED: every work item passed self validation, peer review and lead review, and no rework or escalation is open."
+      "means": "The department's internal execution cycle reached ACCEPTED: every work item passed self validation, peer review and lead review, and no rework or escalation is open.",
+      "evidence": "A `rollup:` mapping in some artifact's frontmatter whose `cycle` is this cycle id and whose `status` is ACCEPTED."
     },
     "cycle_rollup_reported": {
       "args": [
         "cycle_id"
       ],
       "checkable": "project",
-      "means": "The lead produced the rollup for the head. A department that completed without reporting has not finished; the head cannot see whether the department is healthy."
+      "means": "The lead produced the rollup for the head. A department that completed without reporting has not finished; the head cannot see whether the department is healthy.",
+      "evidence": "A `rollup:` mapping in some artifact's frontmatter, with `cycle` set to this cycle id and a `produced_by` naming the lead who produced it."
     },
     "no_open_rework": {
       "args": [
         "cycle_id"
       ],
       "checkable": "project",
-      "means": "No work item sits in CHANGES_REQUESTED or has exceeded the rework limit."
+      "means": "No work item sits in CHANGES_REQUESTED or has exceeded the rework limit.",
+      "evidence": "The same `rollup:` mapping; no work item in it sitting in CHANGES_REQUESTED or past the rework limit."
     },
     "corrective_actions_tracked": {
       "args": [
         "artifact_code"
       ],
       "checkable": "project",
-      "means": "Every artifact of this type links to at least one tracked corrective action: a defect, a debt item, a requirement or an architecture decision. every_linked(RCA, DEF) demanded a defect specifically, so an incident whose corrective actions were all monitoring or process improvements -- outcomes the stage itself lists as valid -- could only satisfy its own definition of done by inventing a defect."
+      "means": "Every artifact of this type links to at least one tracked corrective action: a defect, a debt item, a requirement or an architecture decision. every_linked(RCA, DEF) demanded a defect specifically, so an incident whose corrective actions were all monitoring or process improvements -- outcomes the stage itself lists as valid -- could only satisfy its own definition of done by inventing a defect.",
+      "evidence": "The `links:` on this artifact, pointing at a tracked corrective action -- a defect, a debt item or a change request."
     },
     "every_skip_recorded": {
       "args": [],
       "checkable": "project",
-      "means": "Every stage this change skips carries a written reason. The predicate used to name one stage, skip_recorded(UX), which demanded a skip reason for UX even when UX ran."
+      "means": "Every stage this change skips carries a written reason. The predicate used to name one stage, skip_recorded(UX), which demanded a skip reason for UX even when UX ran.",
+      "evidence": "The stage plan artifact: every stage the change skips carries a written reason."
     },
     "promoted_through": {
       "args": [
         "environment"
       ],
       "checkable": "project",
-      "means": "Every environment below this one in the project's deployment ladder has a promotion record, in order. A release that reached production without a staging record did not skip a test; it skipped the evidence that the test happened."
+      "means": "Every environment below this one in the project's deployment ladder has a promotion record, in order. A release that reached production without a staging record did not skip a test; it skipped the evidence that the test happened.",
+      "evidence": "A PROM artifact for every environment below this one in the project's deployment ladder."
     },
     "complexity_justified": {
       "args": [
         "artifact_code"
       ],
       "checkable": "project",
-      "means": "The artifact carries a complexity ledger: every item of complexity it introduces names the requirement, measurement or constraint that forces it, the simpler alternative that was considered, and why that alternative fails. An empty ledger is a valid answer and passes; an absent one fails, because it means the question was never asked. The predicate checks that the justification exists and is complete, never whether the judgement was right -- that is architecture-reviewer's finding and the human's decision under AP-02. See policies/simplicity-policy.json."
+      "means": "The artifact carries a complexity ledger: every item of complexity it introduces names the requirement, measurement or constraint that forces it, the simpler alternative that was considered, and why that alternative fails. An empty ledger is a valid answer and passes; an absent one fails, because it means the question was never asked. The predicate checks that the justification exists and is complete, never whether the judgement was right -- that is architecture-reviewer's finding and the human's decision under AP-02. See policies/simplicity-policy.json.",
+      "evidence": "The `complexity_ledger:` list on the artifact: one entry per component, boundary or dependency introduced, each naming the requirement that forces it and the simpler alternative it beats. A design that introduces none records an empty ledger."
     },
     "baseline_recorded": {
       "args": [],
       "checkable": "project",
-      "means": "An EVALRUN with role 'baseline' exists for the behaviour under change, naming its four versions. A change with no baseline has nothing to compare against, so its result is a number rather than a finding. Establishing it is a stage rather than a preparation."
+      "means": "An EVALRUN with role 'baseline' exists for the behaviour under change, naming its four versions. A change with no baseline has nothing to compare against, so its result is a number rather than a finding. Establishing it is a stage rather than a preparation.",
+      "evidence": "An EVALRUN artifact with `role: baseline` for the behaviour under change, naming its prompt, model, retrieval index and evaluation set versions."
     },
     "one_variable_changed": {
       "args": [],
       "checkable": "project",
-      "means": "The candidate EVALRUN differs from the baseline in at most one of prompt, model, retrieval index and dataset version. Two changed together produce a delta nobody can attribute, and the attribution is the entire value of the comparison."
+      "means": "The candidate EVALRUN differs from the baseline in at most one of prompt, model, retrieval index and dataset version. Two changed together produce a delta nobody can attribute, and the attribution is the entire value of the comparison.",
+      "evidence": "The candidate EVALRUN's four version fields compared with the baseline's: at most one may differ."
     },
     "no_unexplained_regression": {
       "args": [],
       "checkable": "project",
-      "means": "Every dimension in which the candidate scored worse than the baseline carries a written explanation. Not an absence of regression -- an accepted regression is a legitimate outcome -- but an absence of one nobody noticed. An improvement in the targeted dimension alongside a silent loss elsewhere is the normal shape of a bad AI change."
+      "means": "Every dimension in which the candidate scored worse than the baseline carries a written explanation. Not an absence of regression -- an accepted regression is a legitimate outcome -- but an absence of one nobody noticed. An improvement in the targeted dimension alongside a silent loss elsewhere is the normal shape of a bad AI change.",
+      "evidence": "The `regressions:` list on the candidate EVALRUN, each entry carrying a written explanation."
     },
     "metrics_have_evidence": {
       "args": [
         "artifact_code"
       ],
       "checkable": "project",
-      "means": "Every metric the artifact reports names the EVALRUN that produced it, and that run names its four versions. A metric with no run behind it is not evidence. This checks provenance, never accuracy: it cannot re-execute the run, and policies/ai-evaluation-model.json says so."
+      "means": "Every metric the artifact reports names the EVALRUN that produced it, and that run names its four versions. A metric with no run behind it is not evidence. This checks provenance, never accuracy: it cannot re-execute the run, and policies/ai-evaluation-model.json says so.",
+      "evidence": "Each metric on the artifact naming the EVALRUN that produced it, and that run naming its four versions."
     }
   },
   "checkability": {
@@ -2090,5 +2121,6 @@
     "immutable_after_creation": "True for evidence: appended to, never rewritten.",
     "append_only": "True where the artifact grows but is never rewritten: the incident record gains timeline entries during the incident and is never edited afterwards."
   },
-  "notes_change_field": "Every artifact produced by a workflow stage carries `change`: the id of the work item it belongs to. Without it, definition-of-done predicates match every artifact in the project, so a finished change vacuously satisfies a new one and two changes in flight starve each other. The field was declared and read for two releases before anything wrote it, which made check_dod's scoping guard unreachable and its all-green results partly meaningless."
+  "notes_change_field": "Every artifact produced by a workflow stage carries `change`: the id of the work item it belongs to. Without it, definition-of-done predicates match every artifact in the project, so a finished change vacuously satisfies a new one and two changes in flight starve each other. The field was declared and read for two releases before anything wrote it, which made check_dod's scoping guard unreachable and its all-green results partly meaningless.",
+  "notes_evidence_field": "`evidence` says where the evaluator looks. `means` says what the predicate is for, and a role told only that cannot always find the place -- watched live, the product-manager was called in three times to produce a CYCLE-PROD rollup and never did, because nothing said a rollup is a frontmatter mapping rather than a document. The briefing renders this alongside `means`, from here, so the agent doing the work and the evaluator checking it read one description."
 }

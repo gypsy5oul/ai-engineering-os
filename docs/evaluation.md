@@ -32,8 +32,8 @@ results come back via `--llm-results`, and `agent-evaluator` interprets them.
 
 One per department, named in each agent's registry entry, plus
 `organization-evaluation` and `simplicity-evaluation`, which belong to no agent
-because their subject is a cross-cutting principle rather than a role. 88
-evaluation cases: 60 deterministic and 28 llm-judged.
+because their subject is a cross-cutting principle rather than a role. 90
+evaluation cases: 62 deterministic and 28 llm-judged.
 
 | Suite | Subjects |
 | --- | --- |

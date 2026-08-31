@@ -18,6 +18,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
 import workitem as W  # noqa: E402
+import briefing  # noqa: E402
 
 
 class Hooked(unittest.TestCase):
@@ -132,6 +133,169 @@ class TestContextInjection(Hooked):
         ctx = self.start("docs-writer")["hookSpecificOutput"]["additionalContext"]
         self.assertIn("SFTP-FEAT-001", ctx)
         self.assertNotIn("## Your task", ctx)
+
+
+class TestTheDefinitionOfDoneArrivesMeaningful(unittest.TestCase):
+    """A briefing used to hand over predicate identifiers and nothing else.
+
+    Watched live against 2.1.251, an agent given `every_skip_recorded();
+    config_valid()` spent six commands trying to read the plugin's own source to
+    find out what they meant, and every one was refused -- the meanings live in
+    the plugin and the plugin is outside an agent's read scope. It guessed
+    correctly. Guessing correctly is not being told, and the next agent guesses
+    something else.
+    """
+
+    def render(self, dod):
+        return briefing.render(
+            {"id": "X-001", "type": "feature", "risk": "MEDIUM", "stage": "intake",
+             "intent": "i", "objective": "o"},
+            {"id": "T-001", "title": "t", "role": "engineering-director",
+             "definition_of_done": dod})
+
+    def test_a_predicate_arrives_with_its_meaning(self):
+        out = self.render(["every_skip_recorded()"])
+        self.assertIn("every_skip_recorded()", out)
+        self.assertIn("Every stage this change skips carries a written reason", out)
+
+    def test_the_two_predicates_from_the_live_run_are_both_glossed(self):
+        out = self.render(["every_skip_recorded()", "config_valid()"])
+        self.assertIn("Every stage this change skips carries a written reason", out)
+        self.assertIn("validates against schemas/project-config.schema.json", out)
+
+    def test_a_predicate_with_arguments_is_glossed_on_its_name(self):
+        out = self.render(["complexity_justified(ARTIFACT_CODE)"])
+        self.assertIn("complexity_justified(ARTIFACT_CODE)", out)
+        self.assertIn("complexity ledger", out)
+
+    def test_an_unknown_predicate_still_appears(self):
+        """Degrading to the old behaviour for one predicate beats dropping it."""
+        out = self.render(["not_a_real_predicate()"])
+        self.assertIn("not_a_real_predicate()", out)
+
+    def test_the_gloss_is_read_from_the_artifact_model_not_restated(self):
+        source = open(os.path.join(ROOT, "scripts", "lib", "briefing.py"),
+                      encoding="utf-8").read()
+        self.assertIn("artifact-model.json", source)
+        self.assertNotIn("Every stage this change skips carries", source,
+                         "the gloss is copied into the briefing; the copy will go stale")
+
+    def test_every_predicate_the_model_defines_can_be_glossed(self):
+        gloss = briefing._glossary()
+        self.assertGreaterEqual(len(gloss), 25)
+        for name, (meaning, _evidence) in gloss.items():
+            with self.subTest(predicate=name):
+                self.assertTrue(meaning.endswith("."), name)
+
+    def test_only_the_first_sentence_travels(self):
+        """`means` carries the definition and then the history of why the
+        predicate is shaped that way. The agent doing the work needs the first."""
+        meaning, _evidence = briefing._glossary()["every_skip_recorded"]
+        self.assertEqual(meaning,
+                         "Every stage this change skips carries a written reason.")
+
+    def test_every_predicate_says_where_its_evidence_lives(self):
+        """The half that was missing. Told what `cycle_rollup_reported` means, a
+        real product-manager was called in three times and produced no rollup,
+        because nothing said a rollup is a frontmatter mapping rather than a
+        document. A predicate an agent cannot locate is one no agent can satisfy."""
+        gloss = briefing._glossary()
+        for name, (_meaning, evidence) in gloss.items():
+            with self.subTest(predicate=name):
+                self.assertTrue(evidence, "%s says what it means and not where to put it"
+                                % name)
+
+    def test_the_rollup_predicate_names_the_field_and_not_a_document(self):
+        _meaning, evidence = briefing._glossary()["cycle_rollup_reported"]
+        self.assertIn("rollup:", evidence)
+        self.assertIn("produced_by", evidence)
+
+    def test_the_briefing_renders_the_evidence(self):
+        out = self.render(["cycle_rollup_reported(CYCLE-PROD)"])
+        self.assertIn("Satisfied by:", out)
+        self.assertIn("produced_by", out)
+
+    def test_a_human_only_predicate_says_no_agent_may_satisfy_it(self):
+        _meaning, evidence = briefing._glossary()["human_approval_recorded"]
+        self.assertIn("No agent may create one", evidence)
+
+
+class TestARetryIsNotAFreshStart(unittest.TestCase):
+    """A REQ task refused and re-run produced GOLD-REQ-002 beside the
+    GOLD-REQ-001 it had written the first time -- a second artifact with a
+    different owner and fewer fields, which then failed the predicates the first
+    one had passed and dragged the department rollup down with it.
+
+    The agent had no way to know one existed. It was given a task and a
+    definition of done, and both read identically on attempt one and attempt
+    three."""
+
+    def project(self, artifacts):
+        tmp = tempfile.mkdtemp(prefix="aieos-retry-")
+        self.addCleanup(shutil.rmtree, tmp, True)
+        for aid, owner in artifacts:
+            d = os.path.join(tmp, "docs", "requirements")
+            os.makedirs(d, exist_ok=True)
+            with open(os.path.join(d, "%s.md" % aid), "w", encoding="utf-8") as fh:
+                fh.write("---\nid: %s\ntype: requirement\nchange: G-1\nowner: %s\n---\n\nbody\n"
+                         % (aid, owner))
+        return tmp
+
+    def render(self, project):
+        return briefing.render(
+            {"id": "G-1", "type": "feature", "risk": "MEDIUM", "stage": "req",
+             "intent": "i", "objective": "o"},
+            {"id": "T-002", "title": "REQ", "role": "product-manager",
+             "produces": ["REQ"], "definition_of_done": ["artifact_exists(REQ)"]},
+            None, project)
+
+    def test_an_existing_artifact_is_named(self):
+        out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
+        self.assertIn("GOLD-REQ-001", out)
+        self.assertIn("amend it", out)
+
+    def test_its_owner_is_named_too(self):
+        """The duplicate had a different owner, which is what failed
+        artifact_owned_by."""
+        out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
+        self.assertIn("requirements-analyst", out)
+
+    def test_the_briefing_says_a_rewrite_does_not_supersede(self):
+        out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
+        self.assertIn("does not supersede the old one", out)
+
+    def test_it_does_not_forbid_a_genuinely_new_artifact(self):
+        """A REQ stage producing three distinct requirements is decomposition, not
+        duplication -- observed in the same run that produced the duplicate. The
+        briefing must not turn one finding into a rule against the other."""
+        out = self.render(self.project([("GOLD-REQ-001", "requirements-analyst")]))
+        self.assertIn("separate artifact", out)
+
+    def test_nothing_is_claimed_when_no_artifact_exists_yet(self):
+        out = self.render(self.project([]))
+        self.assertNotIn("Already produced", out)
+
+    def test_an_artifact_of_another_type_is_not_offered(self):
+        tmp = self.project([])
+        d = os.path.join(tmp, "docs", "decisions")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "GOLD-DEC-001.md"), "w", encoding="utf-8") as fh:
+            fh.write("---\nid: GOLD-DEC-001\ntype: decision\nchange: G-1\n---\n\nx\n")
+        self.assertNotIn("GOLD-DEC-001", self.render(tmp))
+
+    def test_another_change_s_artifact_is_not_offered(self):
+        tmp = self.project([])
+        d = os.path.join(tmp, "docs", "requirements")
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, "OTHER-REQ-001.md"), "w", encoding="utf-8") as fh:
+            fh.write("---\nid: OTHER-REQ-001\ntype: requirement\nchange: G-9\n---\n\nx\n")
+        self.assertNotIn("OTHER-REQ-001", self.render(tmp))
+
+    def test_the_hook_passes_the_project_so_this_reaches_a_real_session(self):
+        source = open(os.path.join(ROOT, "hooks", "scripts", "inject_context.py"),
+                      encoding="utf-8").read()
+        self.assertEqual(source.count("briefing.render(item, None, graph, project)"), 1)
+        self.assertEqual(source.count("briefing.render(item, claimed, graph, project)"), 1)
 
 
 class TestSubagentObservation(Hooked):

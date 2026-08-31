@@ -538,7 +538,7 @@ def cmd_brief(args):
         return 2
     sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
     import briefing
-    print(briefing.render(item, task, graph))
+    print(briefing.render(item, task, graph, args.project))
     return 0
 
 

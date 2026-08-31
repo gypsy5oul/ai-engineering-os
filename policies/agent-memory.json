@@ -5,10 +5,10 @@
     "statement": "Memory is never organizational authority.",
     "means": "It can make a role faster at finding something, and it can never make a role right about something. Where memory and durable state disagree, durable state wins and the memory is wrong.",
     "authority_remains": [
-      "policies/ — what the organization requires",
-      "approved artifacts — what was decided and reviewed",
-      "the work item and the task graph — what is being done and by whom",
-      "decision records — why, and who decided"
+      "policies/ \u2014 what the organization requires",
+      "approved artifacts \u2014 what was decided and reviewed",
+      "the work item and the task graph \u2014 what is being done and by whom",
+      "decision records \u2014 why, and who decided"
     ],
     "consequence": "A finding whose only support is a memory is not a finding. It is a reason to go and look at the artifact, and the artifact is what the finding cites."
   },
@@ -45,11 +45,26 @@
   },
   "who_holds_it": {
     "roles": [
-      {"role": "architecture-reviewer", "why": "Reviews the same structure repeatedly. What the real boundaries are, as opposed to the declared ones, is expensive to re-derive and cheap to remember."},
-      {"role": "code-reviewer", "why": "Sees every diff. The mistake this codebase keeps making is the highest-value thing a reviewer can know before it starts reading."},
-      {"role": "performance-reviewer", "why": "A baseline is only meaningful against history, and the hot paths of a system are learned rather than declared."},
-      {"role": "reliability-reviewer", "why": "What has actually failed here, and how, is the input to every review it does."},
-      {"role": "agent-evaluator", "why": "Evaluates this organization's own agents across releases, and the pattern in what agents get wrong is the substance of that job."}
+      {
+        "role": "architecture-reviewer",
+        "why": "Reviews the same structure repeatedly. What the real boundaries are, as opposed to the declared ones, is expensive to re-derive and cheap to remember."
+      },
+      {
+        "role": "code-reviewer",
+        "why": "Sees every diff. The mistake this codebase keeps making is the highest-value thing a reviewer can know before it starts reading."
+      },
+      {
+        "role": "performance-reviewer",
+        "why": "A baseline is only meaningful against history, and the hot paths of a system are learned rather than declared."
+      },
+      {
+        "role": "reliability-reviewer",
+        "why": "What has actually failed here, and how, is the input to every review it does."
+      },
+      {
+        "role": "agent-evaluator",
+        "why": "Evaluates this organization's own agents across releases, and the pattern in what agents get wrong is the substance of that job."
+      }
     ],
     "why_only_reviewers": "These five read the same repository repeatedly and produce findings rather than artifacts. A role that authors gets no memory: an author with recollections of what it decided last time will reproduce them, which is how a codebase acquires a convention nobody chose.",
     "adding_one": "A governance decision under AP-10, recorded here with the reason. The list is not a default that grew."
@@ -70,5 +85,71 @@
       "An entry old enough that the thing it describes has probably changed."
     ],
     "deleting_one": "Deleting a memory needs no approval. It is a cache, and the cost of dropping a true one is that it gets re-derived."
+  },
+  "lint": {
+    "description": "Deterministic checks over committed project-scope memory. A repository check, never a runtime one: the platform writes memory, not the Write tool, so no hook can intercept an entry as it is created. What can be done is read what landed in the repository, which is the whole reason project scope is the only permitted scope.",
+    "what_it_can_decide": "Shape. Whether an entry names where it came from and when, and whether it is written as an observation rather than as a rule. It cannot decide whether an observation is true, or useful, or worth keeping -- those are read by a person during the role's review.",
+    "rules": [
+      {
+        "id": "ML-01",
+        "rule": "has_a_source_pointer",
+        "means": "The entry names the artifact, file, path or run it was observed in.",
+        "why": "`the transfer path is synchronous` is a claim with no owner. `ACME-ARCH-004 says the transfer path is synchronous` can be checked, and can be found to have gone stale."
+      },
+      {
+        "id": "ML-02",
+        "rule": "has_a_date_or_version",
+        "means": "The entry carries a date, or the version of the artifact it describes.",
+        "why": "A memory with no age cannot be recognised as stale, and staleness is the failure mode this kind of store has."
+      },
+      {
+        "id": "ML-03",
+        "rule": "no_invented_justification",
+        "means": "No speculative `why` -- likely, probably, presumably, this suggests, driven by.",
+        "why": "The behaviour that was observed live: told the retention window is 30 days, the agent wrote back 'likely driven by compliance standards, regulatory frameworks, or internal data governance policies'. Nobody said that."
+      },
+      {
+        "id": "ML-04",
+        "rule": "not_written_as_a_rule",
+        "means": "No imperative or policy language -- must, shall, always, never, ensure that, flag any, do not.",
+        "why": "The other half of the same observation: it promoted the fact to 'Flag any architectural decisions or cleanup operations that might violate this window.' A role that writes rules for itself has replaced the policy with its own recollection."
+      },
+      {
+        "id": "ML-05",
+        "rule": "no_requirement_or_target",
+        "means": "No stored requirement, NFR, SLO, threshold or quantified target.",
+        "why": "A remembered target is a number with no owner. Targets live in approved artifacts, which change without telling the memory."
+      },
+      {
+        "id": "ML-06",
+        "rule": "no_verdict_or_approval",
+        "means": "No stored review verdict, approval, sign-off or AP- reference.",
+        "why": "A remembered approval is a decision nobody can audit, and an agent verdict was never an approval to begin with. Remembering that something passed is how a reviewer stops reviewing."
+      },
+      {
+        "id": "ML-07",
+        "rule": "no_person",
+        "means": "No named individual, handle or email.",
+        "why": "Not who writes bad code, not who is slow to review. An agent accumulating observations about people is a different product with a different set of obligations."
+      },
+      {
+        "id": "ML-08",
+        "rule": "artifact_reference_resolves",
+        "means": "Every artifact id the entry names exists in the project.",
+        "why": "A pointer to something that has been superseded or deleted is worse than no pointer: it reads as provenance and leads nowhere."
+      },
+      {
+        "id": "ML-09",
+        "rule": "indexed",
+        "means": "Every entry file is listed in MEMORY.md, and every MEMORY.md line resolves.",
+        "why": "The index is what a reviewer reads. An entry outside it is a memory nobody reviewed."
+      }
+    ],
+    "severity": "ML-03, ML-04, ML-05, ML-06 and ML-07 are errors: each is the memory becoming something it is not permitted to be. ML-01, ML-02, ML-08 and ML-09 are warnings, because an entry that is merely under-sourced is repairable and a lint that blocks a build over provenance teaches people to delete memories rather than fix them.",
+    "not_enforceable": [
+      "Whether an observation is true. The lint reads shape, and a well-formed entry can be entirely wrong.",
+      "Whether an entry duplicates what an artifact already says. It can see that an artifact is named; it cannot compare the claim against the artifact's current content.",
+      "Anything about memory that was never committed. Local-scope memory is invisible to this by construction, which is one of the reasons local scope is forbidden here."
+    ]
   }
 }
