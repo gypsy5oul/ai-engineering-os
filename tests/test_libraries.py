@@ -5,6 +5,7 @@ and every hook is wrong, so they are tested directly rather than only through
 their callers.
 """
 import os
+import shutil
 import sys
 import unittest
 
@@ -12,7 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts", "lib"))
 sys.path.insert(0, os.path.join(ROOT, "hooks", "lib"))
 
-from minyaml import parse, MinYamlError  # noqa: E402
+from minyaml import parse, parse_file, MinYamlError  # noqa: E402
 from jsonschema_mini import validate, unsupported_keywords  # noqa: E402
 from frontmatter import split  # noqa: E402
 from hooklib import path_matches  # noqa: E402
@@ -50,6 +51,75 @@ class TestMinYaml(unittest.TestCase):
     def test_missing_colon_rejected(self):
         with self.assertRaises(MinYamlError):
             parse("just a line\n")
+
+
+class TestParseFileIsCachedWithoutSharingItsResult(unittest.TestCase):
+    """The pipeline parsed eighteen files 1021 times in one command.
+
+    `simulate_sdlc.py --all` spent 94% of its runtime in `parse_file`, and the
+    same pattern dominated validate_plugin, inject_faults and run_evaluations --
+    nothing had changed between the calls. Caching is the obvious fix and the
+    dangerous one: forty-six call sites take the result and some edit it, so
+    handing every caller the same object would let one caller's edit reach the
+    next, silently, in a different script.
+
+    So the cache returns a copy, and these tests hold that.
+    """
+
+    def write(self, text):
+        import tempfile
+        d = tempfile.mkdtemp(prefix="aieos-yaml-")
+        self.addCleanup(shutil.rmtree, d, True)
+        path = os.path.join(d, "doc.yaml")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        return path
+
+    def test_it_parses_correctly(self):
+        path = self.write("name: alpha\nitems:\n  - one\n  - two\n")
+        self.assertEqual(parse_file(path), {"name": "alpha", "items": ["one", "two"]})
+
+    def test_a_caller_editing_the_result_does_not_reach_the_next_caller(self):
+        path = self.write("name: alpha\nitems:\n  - one\n")
+        first = parse_file(path)
+        first["name"] = "mutated"
+        first["items"].append("injected")
+        second = parse_file(path)
+        self.assertEqual(second["name"], "alpha")
+        self.assertEqual(second["items"], ["one"])
+
+    def test_nested_structures_are_copied_too(self):
+        """A shallow copy would pass the test above and still share this."""
+        path = self.write("stages:\n  - id: REQ\n    dod:\n      - artifact_exists(REQ)\n")
+        first = parse_file(path)
+        first["stages"][0]["dod"].append("invented()")
+        self.assertEqual(parse_file(path)["stages"][0]["dod"], ["artifact_exists(REQ)"])
+
+    def test_a_rewritten_file_is_re_read(self):
+        """The mutation tests rewrite files on a copied tree mid-process. A cache
+        that remembered the old contents would make them test nothing."""
+        path = self.write("name: before\n")
+        self.assertEqual(parse_file(path)["name"], "before")
+        # Force a distinct mtime even on a coarse clock.
+        st = os.stat(path)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("name: after\nextra: true\n")
+        os.utime(path, ns=(st.st_mtime_ns + 10 ** 9, st.st_mtime_ns + 10 ** 9))
+        self.assertEqual(parse_file(path)["name"], "after")
+
+    def test_a_missing_file_still_raises(self):
+        with self.assertRaises(OSError):
+            parse_file(os.path.join(ROOT, "no", "such", "file.yaml"))
+
+    def test_the_real_workflows_still_parse(self):
+        base = os.path.join(ROOT, "sdlc", "workflows")
+        for name in sorted(os.listdir(base)):
+            if not name.endswith((".yaml", ".yml")):
+                continue
+            with self.subTest(workflow=name):
+                doc = parse_file(os.path.join(base, name))
+                self.assertTrue(doc.get("id"))
+                self.assertTrue(doc.get("stages"))
 
 
 class TestJsonSchemaMini(unittest.TestCase):
