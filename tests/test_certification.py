@@ -156,6 +156,56 @@ class TestTheVerdictRefusesToOverclaim(unittest.TestCase):
         self.assertEqual(v["synthetic"], "fail")
 
 
+class TestAProbeReportsWhatHappenedAndNotWhatItAssumed(unittest.TestCase):
+    """Two probes overclaimed in opposite directions, and both were caught by a
+    real run rather than by reading the code.
+
+    The background probe called `state: working` "the platform never ran it"
+    while the same record said the artifact had been produced -- the poll had
+    simply caught the job before it finished, and a state cannot turn work that
+    demonstrably happened into work that did not.
+
+    The worktree probe accepted a modified file in the main checkout as evidence
+    of integration. That is exactly the trace an agent leaves when it ignores the
+    worktree and edits the main checkout directly, which is the opposite of the
+    behaviour being certified. It would have passed on that evidence had a
+    removal also been recorded.
+    """
+
+    def background(self, state, produced):
+        fn = next(p["fn"] for p in certify.PROBES
+                  if p["id"] == "background-execution-was-actually-dispatched")
+        return fn({"mechanisms": [{"mechanism": "background", "id": "j1",
+                                   "produced": produced,
+                                   "listing": {"kind": "background", "state": state}}]})
+
+    def test_a_finished_job_that_wrote_its_artifact_passes(self):
+        self.assertIs(self.background("done", True)[0], True)
+
+    def test_a_finished_job_that_produced_nothing_fails(self):
+        """It ran and did not do the work. That is a real failure."""
+        self.assertIs(self.background("done", False)[0], False)
+
+    def test_a_running_job_that_already_wrote_its_artifact_passes(self):
+        ok, why = self.background("working", True)
+        self.assertIs(ok, True)
+        self.assertIn("poll being early", why)
+
+    def test_a_running_job_with_nothing_produced_is_undetermined(self):
+        self.assertIsNone(self.background("working", False)[0])
+
+    def test_a_blocked_job_is_unexercised_rather_than_broken(self):
+        """A dispatch the platform never started leaves the mechanism unmeasured.
+        Both refuse certification; only one of them is a defect here."""
+        self.assertIsNone(self.background("blocked", False)[0])
+
+    def test_a_dirty_working_tree_is_not_integration_evidence(self):
+        source = open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8").read()
+        self.assertIn("editing the main checkout directly looks like", source)
+        self.assertIn("commits touch", source,
+                      "integration must be evidenced by a commit, not by a modified file")
+
+
 class TestASyntheticUnitCannotLookReal(unittest.TestCase):
     def test_a_synthetic_unit_names_no_model(self):
         """Naming a model on a unit nothing ran is the conflation in miniature."""

@@ -965,14 +965,23 @@ def _p_background(ctx):
                 return False, ("job %s ran to completion and produced no artifact, so "
                                "background execution ran and did not do the work"
                                % m.get("id"))
-            # Anything else means the platform never ran it -- `blocked` on a
-            # detached session that cannot be answered, or a job stopped before it
-            # started. That is the mechanism going unexercised, not the mechanism
-            # being broken, and the two are different findings. Both refuse
-            # certification; only one of them is a defect in this organization.
-            return None, ("job %s was dispatched and the platform never ran it: state %s. "
-                          "A detached session has nobody to answer a prompt, and this run "
-                          "also hit the account's session limit." % (m.get("id"), state))
+            # A job still going that has already written its artifact has run. The
+            # first version of this branch called `state: working` "the platform
+            # never ran it" while `produced` was true in the same record -- the
+            # poll simply caught it before it finished. What the state cannot do is
+            # turn work that demonstrably happened into work that did not.
+            if m.get("produced"):
+                return True, ("job %s ran in the background and wrote its artifact; the "
+                              "platform still listed it as %s when polled, which is the "
+                              "poll being early rather than the work being absent"
+                              % (m.get("id"), state))
+            # Nothing produced and not finished: either it never started -- `blocked`
+            # on a detached session that has nobody to answer a prompt -- or it is
+            # still going and undetermined. Unexercised, not broken. Both refuse
+            # certification; only one of them would be a defect in this organization.
+            return None, ("job %s was dispatched and has produced nothing: state %s. "
+                          "Either the platform never started it, or it had not finished "
+                          "when this run polled." % (m.get("id"), state))
         if m.get("id"):
             return False, ("job %s was dispatched and the run listing does not describe "
                            "it: %r" % (m.get("id"), listing))
@@ -1038,26 +1047,45 @@ def _p_worktree_integration(ctx):
     # Integration can arrive two ways and both count: a commit that landed on the
     # main checkout, or an uncommitted edit sitting in its working tree. What does
     # not count is the change existing only inside the worktree.
+    # What counts as integration, and what does not.
+    #
+    # A modified file in the main checkout was accepted as evidence in the first
+    # version of this probe, and it is not evidence: an agent that ignored the
+    # worktree and edited the main checkout directly leaves exactly that trace.
+    # It is the *opposite* of the behaviour being certified, and it would have
+    # passed this probe had a removal also been recorded.
+    #
+    # Integration means the work came out of the worktree. The trace that shows
+    # that is a commit beyond the baseline -- a merge, or the branch's commits
+    # reachable from the main checkout. A dirty working tree is recorded as what
+    # it is: inconclusive, leaning towards the change never having been isolated.
     marker = os.path.join("src", "retention", "policy.py")
-    integrated, how = False, "no commit and no working-tree change"
+    integrated, how = False, "nothing reached the main checkout"
     try:
-        log = subprocess.run(["git", "log", "--oneline", "-15", "--", marker],
+        log = subprocess.run(["git", "log", "--oneline", "-25", "--", marker],
                              cwd=project, capture_output=True, text=True, timeout=60)
-        if len((log.stdout or "").strip().splitlines()) > 1:
-            integrated, how = True, "a new commit touches %s" % marker
+        commits = len((log.stdout or "").strip().splitlines())
+        if commits > 1:
+            integrated, how = True, ("%d commits touch %s, so work came out of the "
+                                     "worktree" % (commits, marker))
         else:
             diff = subprocess.run(["git", "status", "--porcelain", "--", marker],
                                   cwd=project, capture_output=True, text=True, timeout=60)
             if (diff.stdout or "").strip():
-                integrated, how = True, "%s is modified in the main checkout" % marker
+                how = ("%s is modified in the working tree and no commit carries it, "
+                       "which is what editing the main checkout directly looks like -- "
+                       "not what integrating from a worktree looks like" % marker)
     except Exception as exc:
         return None, "the main checkout could not be inspected: %r" % exc
 
     if integrated and removed:
         return True, "%s, and %d worktree(s) were removed" % (how, len(removed))
-    return False, ("worktree created but %s%s"
-                   % (how if not integrated else how,
-                      "; no worktree_removed was recorded" if not removed else ""))
+    missing = []
+    if not integrated:
+        missing.append("integration: %s" % how)
+    if not removed:
+        missing.append("cleanup: no worktree_removed was recorded")
+    return False, "worktree created; %s" % "; ".join(missing)
 
 
 @probe("a-team-stage-carried-its-skills",
