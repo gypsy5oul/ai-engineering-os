@@ -527,3 +527,47 @@ class TestWriteScopeReachesTheShell(unittest.TestCase):
                 spaced = "ai-engineering-os:" + agent
                 self.assertEqual(write(path, "x", agent=spaced)[0], "deny")
                 self.assertEqual(bash("echo x >> " + path, agent=spaced)[0], ESCALATE)
+
+
+class TestOS04DoesNotReadAHeredocAsAControlPlaneWrite(unittest.TestCase):
+    """A real agent wrote a verification script to its own scratchpad and was
+    refused as "writing to the control plane through the shell".
+
+    OS-04's gap between the redirect and the control-plane path was `[^|;&]*`,
+    which crosses newlines, so it swallowed the whole heredoc body: any script
+    that merely *mentioned* `sdlc/` or `policies/` after a `>` was denied. A
+    genuine shell write to the control plane is one line, so the gap stops at a
+    newline now.
+    """
+
+    def rule(self):
+        import json as _json
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "policies", "hook-policy.json"), encoding="utf-8") as fh:
+            rules = _json.load(fh)["rules"]
+        return next(r for r in rules if r["id"] == "OS-04")
+
+    def matches(self, command):
+        import re as _re
+        return bool(_re.compile(self.rule()["pattern"]).search(command))
+
+    def test_a_scratchpad_script_that_mentions_the_control_plane_is_allowed(self):
+        self.assertFalse(self.matches(
+            "cat > /tmp/scratch/v.py <<'EOF'\nparse('/opt/plugin/sdlc/workflows/f.yaml')\nEOF"))
+        self.assertFalse(self.matches(
+            "cat > /tmp/s/v.sh <<'EOF'\ncat /opt/plugin/policies/x.json\nEOF"))
+
+    def test_a_real_shell_write_to_the_control_plane_is_still_denied(self):
+        for command in ("echo x > policies/hook-policy.json",
+                        "cp evil.json /opt/plugin/policies/x.json",
+                        "echo x | tee agents/foo.md",
+                        "sed -i 's/a/b/' sdlc/workflows/f.yaml"):
+            with self.subTest(command=command):
+                self.assertTrue(self.matches(command))
+
+    def test_reading_the_control_plane_is_not_a_write(self):
+        self.assertFalse(self.matches("cat /opt/plugin/policies/hook-policy.json"))
+
+    def test_the_rule_records_why_the_gap_stops_at_a_newline(self):
+        self.assertIn("heredoc", self.rule()["why_the_gap_stops_at_a_newline"])
+

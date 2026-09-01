@@ -34,3 +34,4 @@ distinction could have changed.
 | --- | --- | --- | --- | --- |
 | `v0.44.0.json` | 0.44.0 | 2.1.251 | no | The first multi-role walk: the organization convened a reviewer, an artifact owner, a department lead and a human for one stage. Straddles the v0.45.0 bump and hit the account's session limit, so it is history rather than a certification. |
 | `v0.45.0.json` | 0.45.0 | 2.1.251 | no | The first clean single-version run. Worktree creation genuinely exercised (three created). Found two defects in the harness's own probes -- a running job reported as never started, and a dirty working tree accepted as integration evidence -- both corrected after it. |
+| `v0.45.1.json` | 0.45.0 | 2.1.252 | no | First run with the native task tools enabled. The task probes still report not-run: the session limit was reached before the mechanisms ran, because the open-ended lifecycle walk went first. Mechanisms now run first. |

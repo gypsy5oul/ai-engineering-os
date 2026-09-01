@@ -215,7 +215,16 @@ def synthetic_units(project):
 # ---------------------------------------------------------------- live probes
 
 def _run_session(project, prompt, model, timeout=600):
-    env = dict(os.environ, CLAUDE_PLUGIN_ROOT=ROOT, CLAUDE_PROJECT_DIR=project)
+    # CLAUDE_CODE_ENABLE_TODO_TOOLS is what makes TaskCreated and TaskCompleted
+    # reachable at all. 2.1.252 turned the task tools off for current models --
+    # not for headless sessions, which is what this harness first concluded from a
+    # tool list and recorded as a platform boundary. The boundary was real and the
+    # cause was wrong: an interactive session on the same model has no more access.
+    # With the variable set, a `-p` session creates a native task, the hook binds
+    # it to the graph task, and the completion gate evaluates the definition of
+    # done.
+    env = dict(os.environ, CLAUDE_PLUGIN_ROOT=ROOT, CLAUDE_PROJECT_DIR=project,
+               CLAUDE_CODE_ENABLE_TODO_TOOLS="1")
     cmd = ["claude", "-p", prompt, "--permission-mode", "acceptEdits"]
     if model:
         cmd += ["--model", model]
@@ -785,11 +794,13 @@ def drive_lifecycle(project, wid, model, budget=14, timeout=1800, granted=()):
 
 MECHANISM_PROMPTS = [
     ("native-task", 900,
-     "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
-     "Create a native Claude Code task for the work still outstanding on %(item)s, "
-     "using the task tools rather than doing the work inline. Give the task a subject "
-     "that names the work item identifier %(item)s. Then complete it. Report the task "
-     "identifier you created."),
+     "This project runs on the AI Engineering OS. Work item %(item)s is open and task "
+     "T-001 is planned.\n\n"
+     "Use the TaskCreate tool to create exactly one native task whose subject is "
+     "'T-001 Idea intake'. The subject must contain the graph task id, because that is "
+     "the marker the organization binds on. Then use TaskUpdate to mark that task "
+     "completed. Report the task id and what each tool returned. Do not do any other "
+     "work."),
     ("worktree", 1500,
      "This project runs on the AI Engineering OS and work item %(item)s is open.\n\n"
      "Exercise the whole isolation lifecycle, using the EnterWorktree and ExitWorktree "
@@ -1267,7 +1278,8 @@ def build_verdict(units, probes, mode):
 
 # ---------------------------------------------------------------- main
 
-def run(mode, model, keep, stages=14, timeout=1800, granted=()):
+def run(mode, model, keep, stages=14, timeout=1800, granted=(),
+        mechanisms_only=False):
     tmp = tempfile.mkdtemp(prefix="aieos-golden-")
     project = os.path.join(tmp, "retention-window-service")
     data_dir = os.path.join(tmp, "plugin-data")
@@ -1324,11 +1336,22 @@ def run(mode, model, keep, stages=14, timeout=1800, granted=()):
                         record["notes"] = "no task was runnable, so delegation was not attempted"
                     else:
                         try:
-                            record["lifecycle"] = drive_lifecycle(
-                                project, wid, model, budget=stages, timeout=timeout,
-                                granted=granted)
+                            # Mechanisms first, deliberately. Each is one bounded
+                            # session answering one decisive question -- does a
+                            # native task bind, does a worktree integrate, does a
+                            # team spawn -- and the lifecycle walk is open-ended:
+                            # it retries and convenes until the organization
+                            # escalates, which on REQ is a dozen sessions. Run last,
+                            # the mechanisms were starved by it. Two consecutive
+                            # runs reported the task probes `not-run` with the
+                            # account's session limit as the reason, which reads
+                            # like a platform boundary and was a scheduling choice.
                             record["mechanisms"] = drive_mechanisms(project, wid, model)
                             ctx["mechanisms"] = record["mechanisms"]
+                            if not mechanisms_only:
+                                record["lifecycle"] = drive_lifecycle(
+                                    project, wid, model, budget=stages, timeout=timeout,
+                                    granted=granted)
                         except Exception as exc:
                             record["notes"] = ("the delegation session did not complete: %r"
                                                % exc)
@@ -1500,12 +1523,17 @@ def main():
                          "human gate and reports awaiting-human, which is the true state.")
     ap.add_argument("--operator", default="certification-operator",
                     help="the human granting --approve; recorded as the approver")
+    ap.add_argument("--mechanisms-only", action="store_true",
+                    help="exercise the execution and isolation mechanisms and skip the "
+                         "lifecycle walk. Each mechanism is one bounded session answering "
+                         "one question; the walk is open-ended and will spend a session "
+                         "budget before they run.")
     args = ap.parse_args()
 
     OPERATOR[0] = args.operator
     granted = tuple(a.strip() for a in args.approve.split(",") if a.strip())
     record = run("live" if args.live else "synthetic", args.model, args.keep,
-                 args.stages, args.session_timeout, granted)
+                 args.stages, args.session_timeout, granted, args.mechanisms_only)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as fh:
             json.dump(record, fh, indent=2)

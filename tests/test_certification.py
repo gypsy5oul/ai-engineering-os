@@ -206,6 +206,56 @@ class TestAProbeReportsWhatHappenedAndNotWhatItAssumed(unittest.TestCase):
                       "integration must be evidenced by a commit, not by a modified file")
 
 
+class TestTheHarnessCanReachTheTaskLifecycle(unittest.TestCase):
+    """TaskCreated and TaskCompleted were recorded as unreachable for two releases.
+
+    The harness listed a headless session's tools, found nothing that creates a
+    task, and concluded that `-p` was the limit. The list was right and the
+    inference was wrong: 2.1.252 turned the task tools off for current models
+    regardless of execution mode, and CLAUDE_CODE_ENABLE_TODO_TOOLS=1 restores
+    them -- headless included. An interactive session on the same model had no
+    more access, which is why driving one by hand produced no native task either.
+
+    Verified end to end against live hooks: TaskCreate produced `task_created`
+    with the native task bound to T-001 by its subject marker, and TaskUpdate
+    produced `task_completion_allowed` with the completion gate evaluating the
+    definition of done.
+    """
+
+    def test_the_harness_enables_the_task_tools(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            source = fh.read()
+        self.assertIn("CLAUDE_CODE_ENABLE_TODO_TOOLS", source,
+                      "without this the two task probes can never run")
+        fn = next(n for n in ast.parse(source).body
+                  if isinstance(n, ast.FunctionDef) and n.name == "_run_session")
+        # It is passed as a keyword to dict(os.environ, ...), so it is an argument
+        # name rather than a string constant.
+        names = {kw.arg for n in ast.walk(fn) if isinstance(n, ast.Call)
+                 for kw in n.keywords if kw.arg}
+        self.assertIn("CLAUDE_CODE_ENABLE_TODO_TOOLS", names,
+                      "the variable must be set on the session's environment, not "
+                      "merely mentioned in a comment")
+
+    def test_the_mechanism_prompt_names_the_binding_marker(self):
+        """bind_task.py binds on a graph task id in the subject. A prompt that asks
+        for a task without one produces a native task the organization cannot
+        attribute -- which is `unknown`, not a failure, so it would fail silently."""
+        source = open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8").read()
+        prompts = source.split("MECHANISM_PROMPTS")[1].split("def ")[0]
+        self.assertIn("TaskCreate", prompts)
+        self.assertIn("T-001", prompts)
+
+    def test_the_capability_model_records_the_corrected_cause(self):
+        caps = load("policies/platform-capabilities.json")["capabilities"]
+        entry = caps["headless.native_task_tools"]
+        self.assertTrue(entry["available"],
+                        "the tools are reachable; the earlier entry blamed headless mode")
+        self.assertIn("CLAUDE_CODE_ENABLE_TODO_TOOLS", entry["note"])
+        self.assertIn("model that gates them, not the execution mode", entry["note"])
+
+
 class TestASyntheticUnitCannotLookReal(unittest.TestCase):
     def test_a_synthetic_unit_names_no_model(self):
         """Naming a model on a unit nothing ran is the conflation in miniature."""
