@@ -1,0 +1,1008 @@
+{
+  "run_id": "694e3400c835",
+  "started_at": "2026-09-01T11:30:00",
+  "finished_at": "2026-09-01T12:24:26",
+  "claude_code_version": "2.1.252",
+  "plugin_version": "0.45.0",
+  "golden_project": "GOLD",
+  "mode": "live",
+  "units": [
+    {
+      "stage": "IDEA",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-001",
+      "role": "engineering-director",
+      "model": null,
+      "execution": {
+        "declared": "inline",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [],
+      "dod": {
+        "pass": 1,
+        "fail": 0,
+        "unsupported": 0,
+        "requires_evidence": 1,
+        "result": "incomplete",
+        "failing": []
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "REQ",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-002",
+      "role": "product-manager",
+      "model": null,
+      "execution": {
+        "declared": "subagent",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "REQ",
+        "NFR"
+      ],
+      "dod": {
+        "pass": 1,
+        "fail": 9,
+        "unsupported": 0,
+        "requires_evidence": 1,
+        "result": "incomplete",
+        "failing": [
+          "artifact_exists(REQ) -- 0 artifact(s) of type REQ",
+          "artifact_status(REQ, approved) -- no REQ artifact exists",
+          "field_quantified(NFR, target) -- no NFR artifact exists",
+          "agent_verdict(qa-lead, pass) -- no recorded pass verdict from qa-lead",
+          "required_fields_present(REQ) -- no REQ artifact exists",
+          "artifact_owned_by(REQ, requirements-analyst) -- no REQ artifact exists",
+          "cycle_accepted(CYCLE-PROD) -- no work item carries a CYCLE-PROD rollup",
+          "cycle_rollup_reported(CYCLE-PROD) -- no rollup for CYCLE-PROD. A department that completed without reporting has not finished."
+        ]
+      },
+      "review": {
+        "reviewer": "qa-lead",
+        "verdict": "not-run",
+        "findings": 0
+      },
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "ARCH",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-003",
+      "role": "solution-architect",
+      "model": null,
+      "execution": {
+        "declared": "team",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "ARCH",
+        "ADR",
+        "SEC"
+      ],
+      "dod": {
+        "pass": 1,
+        "fail": 11,
+        "unsupported": 0,
+        "requires_evidence": 2,
+        "result": "incomplete",
+        "failing": [
+          "artifact_exists(ARCH) -- 0 artifact(s) of type ARCH",
+          "complexity_justified(ARCH) -- no ARCH artifact exists",
+          "every_linked(REQ, ARCH) -- no REQ artifact exists to link from",
+          "artifact_status(ADR, accepted) -- no ADR artifact exists",
+          "agent_verdict(architecture-reviewer, pass) -- no recorded pass verdict from architecture-reviewer",
+          "required_fields_present(ARCH) -- no ARCH artifact exists",
+          "artifact_owned_by(ARCH, solution-architect) -- no ARCH artifact exists",
+          "artifact_status(ARCH, approved) -- no ARCH artifact exists"
+        ]
+      },
+      "review": {
+        "reviewer": "architecture-reviewer",
+        "verdict": "not-run",
+        "findings": 0
+      },
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "STORY",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-004",
+      "role": "development-lead",
+      "model": null,
+      "execution": {
+        "declared": "inline",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "EPIC",
+        "STORY"
+      ],
+      "dod": {
+        "pass": 0,
+        "fail": 4,
+        "unsupported": 0,
+        "requires_evidence": 0,
+        "result": "incomplete",
+        "failing": [
+          "artifact_exists(STORY) -- 0 artifact(s) of type STORY",
+          "every_linked(STORY, REQ) -- no STORY artifact exists to link from",
+          "agent_verdict(qa-lead, pass) -- no recorded pass verdict from qa-lead",
+          "required_fields_present(STORY) -- no STORY artifact exists"
+        ]
+      },
+      "review": {
+        "reviewer": "qa-lead",
+        "verdict": "not-run",
+        "findings": 0
+      },
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "QADESIGN",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-005",
+      "role": "qa-lead",
+      "model": null,
+      "execution": {
+        "declared": "subagent",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "TP",
+        "TEST"
+      ],
+      "dod": {
+        "pass": 0,
+        "fail": 4,
+        "unsupported": 0,
+        "requires_evidence": 0,
+        "result": "incomplete",
+        "failing": [
+          "artifact_exists(TP) -- 0 artifact(s) of type TP",
+          "every_linked(REQ, TP) -- no REQ artifact exists to link from",
+          "agent_verdict(test-reviewer, pass) -- no recorded pass verdict from test-reviewer",
+          "required_fields_present(TP) -- no TP artifact exists"
+        ]
+      },
+      "review": {
+        "reviewer": "test-reviewer",
+        "verdict": "not-run",
+        "findings": 0
+      },
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "DEV",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-006",
+      "role": "development-lead",
+      "model": null,
+      "execution": {
+        "declared": "team",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [],
+      "dod": {
+        "pass": 0,
+        "fail": 5,
+        "unsupported": 0,
+        "requires_evidence": 2,
+        "result": "incomplete",
+        "failing": [
+          "every_linked(STORY, TEST) -- no STORY artifact exists to link from",
+          "artifact_status(STORY, done) -- no STORY artifact exists",
+          "cycle_accepted(CYCLE-DEV) -- no work item carries a CYCLE-DEV rollup",
+          "cycle_rollup_reported(CYCLE-DEV) -- no rollup for CYCLE-DEV. A department that completed without reporting has not finished.",
+          "no_open_rework(CYCLE-DEV) -- no work item carries a CYCLE-DEV rollup"
+        ]
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "REVIEW",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-007",
+      "role": "code-reviewer",
+      "model": null,
+      "execution": {
+        "declared": "subagent",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "REVIEW"
+      ],
+      "dod": {
+        "pass": 0,
+        "fail": 5,
+        "unsupported": 0,
+        "requires_evidence": 2,
+        "result": "incomplete",
+        "failing": [
+          "agent_verdict(code-reviewer, pass) -- no recorded pass verdict from code-reviewer",
+          "artifact_exists(SEC) -- 0 artifact(s) of type SEC",
+          "cycle_accepted(CYCLE-SEC) -- no work item carries a CYCLE-SEC rollup",
+          "cycle_rollup_reported(CYCLE-SEC) -- no rollup for CYCLE-SEC. A department that completed without reporting has not finished.",
+          "no_open_rework(CYCLE-SEC) -- no work item carries a CYCLE-SEC rollup"
+        ]
+      },
+      "review": {
+        "reviewer": "routed reviewers per policies/review-routing.json",
+        "verdict": "not-run",
+        "findings": 0
+      },
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "CI",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-008",
+      "role": "devops-engineer",
+      "model": null,
+      "execution": {
+        "declared": "inline",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [],
+      "dod": {
+        "pass": 0,
+        "fail": 0,
+        "unsupported": 0,
+        "requires_evidence": 1,
+        "result": "incomplete",
+        "failing": []
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "QA",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-009",
+      "role": "qa-lead",
+      "model": null,
+      "execution": {
+        "declared": "subagent",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "TESTREPORT"
+      ],
+      "dod": {
+        "pass": 0,
+        "fail": 6,
+        "unsupported": 0,
+        "requires_evidence": 2,
+        "result": "incomplete",
+        "failing": [
+          "artifact_exists(TESTREPORT) -- 0 artifact(s) of type TESTREPORT",
+          "agent_verdict(test-reviewer, pass) -- no recorded pass verdict from test-reviewer",
+          "every_linked(REQ, TEST) -- no REQ artifact exists to link from",
+          "cycle_accepted(CYCLE-QA) -- no work item carries a CYCLE-QA rollup",
+          "cycle_rollup_reported(CYCLE-QA) -- no rollup for CYCLE-QA. A department that completed without reporting has not finished.",
+          "no_open_rework(CYCLE-QA) -- no work item carries a CYCLE-QA rollup"
+        ]
+      },
+      "review": {
+        "reviewer": "test-reviewer",
+        "verdict": "not-run",
+        "findings": 0
+      },
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "READINESS",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-010",
+      "role": "sre",
+      "model": null,
+      "execution": {
+        "declared": "subagent",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "PRR",
+        "RUN"
+      ],
+      "dod": {
+        "pass": 0,
+        "fail": 7,
+        "unsupported": 0,
+        "requires_evidence": 0,
+        "result": "incomplete",
+        "failing": [
+          "artifact_exists(PRR) -- 0 artifact(s) of type PRR",
+          "artifact_exists(RUN) -- 0 artifact(s) of type RUN",
+          "required_fields_present(PRR) -- no PRR artifact exists",
+          "required_fields_present(RUN) -- no RUN artifact exists",
+          "agent_verdict(reliability-reviewer, pass) -- no recorded pass verdict from reliability-reviewer",
+          "every_linked(PRR, RUN) -- no PRR artifact exists to link from",
+          "every_linked(SLO, OBS) -- no SLO artifact exists to link from"
+        ]
+      },
+      "review": {
+        "reviewer": "reliability-reviewer",
+        "verdict": "not-run",
+        "findings": 0
+      },
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "RELEASE",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-011",
+      "role": "release-manager",
+      "model": null,
+      "execution": {
+        "declared": "subagent",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "REL"
+      ],
+      "dod": {
+        "pass": 0,
+        "fail": 4,
+        "unsupported": 0,
+        "requires_evidence": 2,
+        "result": "incomplete",
+        "failing": [
+          "artifact_exists(REL) -- 0 artifact(s) of type REL",
+          "artifact_status(PRR, ready) -- no PRR artifact exists",
+          "every_linked(REL, PRR) -- no REL artifact exists to link from",
+          "required_fields_present(REL) -- no REL artifact exists"
+        ]
+      },
+      "review": {
+        "reviewer": "sre",
+        "verdict": "not-run",
+        "findings": 0
+      },
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "AUTHORIZE",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-012",
+      "role": "release-manager",
+      "model": null,
+      "execution": {
+        "declared": "inline",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [],
+      "dod": {
+        "pass": 0,
+        "fail": 1,
+        "unsupported": 0,
+        "requires_evidence": 2,
+        "result": "incomplete",
+        "failing": [
+          "release_authorized() -- no release artifact"
+        ]
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "DEPLOY",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-013",
+      "role": "devops-engineer",
+      "model": null,
+      "execution": {
+        "declared": "inline",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [],
+      "dod": {
+        "pass": 0,
+        "fail": 4,
+        "unsupported": 0,
+        "requires_evidence": 3,
+        "result": "incomplete",
+        "failing": [
+          "release_authorized() -- no release artifact",
+          "cycle_accepted(CYCLE-DEVOPS) -- no work item carries a CYCLE-DEVOPS rollup",
+          "cycle_rollup_reported(CYCLE-DEVOPS) -- no rollup for CYCLE-DEVOPS. A department that completed without reporting has not finished",
+          "no_open_rework(CYCLE-DEVOPS) -- no work item carries a CYCLE-DEVOPS rollup"
+        ]
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "VERIFY",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-014",
+      "role": "release-manager",
+      "model": null,
+      "execution": {
+        "declared": "inline",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [],
+      "dod": {
+        "pass": 0,
+        "fail": 2,
+        "unsupported": 0,
+        "requires_evidence": 1,
+        "result": "incomplete",
+        "failing": [
+          "artifact_exists(REL) -- 0 artifact(s) of type REL",
+          "required_fields_present(REL) -- no REL artifact exists"
+        ]
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "OPS",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-015",
+      "role": "sre",
+      "model": null,
+      "execution": {
+        "declared": "inline",
+        "resolved": null,
+        "actual": null
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "DEBT"
+      ],
+      "dod": {
+        "pass": 0,
+        "fail": 3,
+        "unsupported": 0,
+        "requires_evidence": 1,
+        "result": "incomplete",
+        "failing": [
+          "cycle_accepted(CYCLE-SRE) -- no work item carries a CYCLE-SRE rollup",
+          "cycle_rollup_reported(CYCLE-SRE) -- no rollup for CYCLE-SRE. A department that completed without reporting has not finished.",
+          "no_open_rework(CYCLE-SRE) -- no work item carries a CYCLE-SRE rollup"
+        ]
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 0,
+      "attempts": 0,
+      "outcome": "not-run",
+      "evidence": "synthetic",
+      "evidence_note": "planned from WF-FEATURE and checked for evaluability; no session ran, so the definition of done is unmet rather than failed"
+    },
+    {
+      "stage": "IDEA",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-001",
+      "role": "engineering-director",
+      "model": null,
+      "execution": {
+        "declared": "inline",
+        "resolved": "inline",
+        "actual": "subagent"
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [],
+      "dod": {
+        "pass": 1,
+        "fail": 0,
+        "unsupported": 0,
+        "requires_evidence": 1,
+        "result": "pass",
+        "failing": []
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 1,
+      "attempts": 0,
+      "outcome": "accepted",
+      "evidence": "real-agent",
+      "evidence_note": "claimed and run by a real session; SubagentStart fired for a3fae52dc30ff6adb"
+    },
+    {
+      "stage": "REQ",
+      "workflow": "WF-FEATURE",
+      "work_item": "GOLD-FEAT-001",
+      "task": "T-002",
+      "role": "product-manager",
+      "model": null,
+      "execution": {
+        "declared": "subagent",
+        "resolved": "subagent",
+        "actual": "subagent"
+      },
+      "isolation": "shared-checkout",
+      "artifacts": [
+        "REQ",
+        "NFR"
+      ],
+      "dod": {
+        "pass": 8,
+        "fail": 3,
+        "unsupported": 0,
+        "requires_evidence": 0,
+        "result": "fail",
+        "failing": [
+          "artifact_status(REQ, approved) -- not approved: GOLD-REQ-001",
+          "agent_verdict(qa-lead, pass) -- no recorded pass verdict from qa-lead",
+          "cycle_accepted(CYCLE-PROD) -- not accepted: GOLD-CR-001=ESCALATED, agent_verdict(qa-lead, pass) (no recorded pass verdic"
+        ]
+      },
+      "review": null,
+      "rework": 0,
+      "replan": 0,
+      "escalation": 1,
+      "attempts": 3,
+      "outcome": "failed",
+      "evidence": "real-agent",
+      "evidence_note": "claimed and run by a real session; SubagentStart fired for a423f7c161160af74"
+    }
+  ],
+  "probes": [
+    {
+      "id": "session-start-self-test",
+      "asks": "Does SessionStart fire in a real session, and does the guard self-test run?",
+      "result": "pass",
+      "evidence_source": "the plugin's own audit log, written by the hook",
+      "observed": "115 audit record(s), 55 deny",
+      "why_not_run": null
+    },
+    {
+      "id": "context-injection-reaches-the-model",
+      "asks": "Does the injected organization context actually enter the session's context?",
+      "result": "pass",
+      "evidence_source": "a file the session was asked to write, containing a value only the hook supplies",
+      "observed": "session wrote injected.txt",
+      "why_not_run": null
+    },
+    {
+      "id": "write-guard-refuses-out-of-scope",
+      "asks": "Does the write guard refuse a path outside the role's write scope, in a live session?",
+      "result": "pass",
+      "evidence_source": "the plugin's own audit log",
+      "observed": "18 write-guard refusal(s) recorded",
+      "why_not_run": null
+    },
+    {
+      "id": "subagent-is-briefed-on-its-own-task",
+      "asks": "Does SubagentStart hand a spawned role its work item and its own task?",
+      "result": "pass",
+      "evidence_source": "the task's own record in the graph, written by the hook at claim time",
+      "observed": "T-001 claimed by engineering-director; evidence: SubagentStart fired for a3fae52dc30ff6adb",
+      "why_not_run": null
+    },
+    {
+      "id": "subagent-result-is-attributed",
+      "asks": "Is a spawned role's result recorded against the task it held, rather than trusted?",
+      "result": "pass",
+      "evidence_source": "the work item's own history.jsonl, written by the hook",
+      "observed": "10 subagent stop(s), 6 attributed to a task",
+      "why_not_run": null
+    },
+    {
+      "id": "execution-actual-is-observed-not-assumed",
+      "asks": "Is what actually ran recorded from platform evidence, rather than from the policy?",
+      "result": "pass",
+      "evidence_source": "the task's execution triple in the graph",
+      "observed": "T-001 declared inline, resolved inline, actual subagent (SubagentStart fired for a3fae52dc30ff6adb)",
+      "why_not_run": null
+    },
+    {
+      "id": "the-agent-knew-what-was-not-in-its-prompt",
+      "asks": "Did the injected briefing actually reach the agent, or did it work from the prompt alone?",
+      "result": "pass",
+      "evidence_source": "the agent's own returned result, stored on the task by SubagentStop",
+      "observed": "the agent reported GOLD-FEAT-001 and its intent, neither of which was in the prompt beyond the id",
+      "why_not_run": null
+    },
+    {
+      "id": "task-binding-recorded",
+      "asks": "Does a native task get bound to a graph task, and is the binding durable?",
+      "result": "not-run",
+      "evidence_source": "the work item's own history.jsonl",
+      "observed": null,
+      "why_not_run": "no native task was created, so TaskCreated never fired. A `claude -p` session is given no tool that creates one -- recorded as headless.native_task_tools in platform-capabilities.json and verified against 2.1.251 -- so an unattended run cannot close this probe however many sessions it spends. History: acceptance_checked, acceptance_refused, decided, escalated, execution_diverged, human_approval_recorded, observed, opened, planned, subagent_stopped, subagent_stopped_unattributed"
+    },
+    {
+      "id": "task-completion-is-gated",
+      "asks": "When a native task completes, does the completion gate actually run?",
+      "result": "not-run",
+      "evidence_source": "the work item's own history.jsonl",
+      "observed": null,
+      "why_not_run": "no native task completed, so TaskCompleted never fired. Nothing created one either: a headless session has no tool that does, per headless.native_task_tools in platform-capabilities.json. History: acceptance_checked, acceptance_refused, decided, escalated, execution_diverged, human_approval_recorded, observed, opened, planned, subagent_stopped, subagent_stopped_unattributed"
+    },
+    {
+      "id": "background-execution-was-actually-dispatched",
+      "asks": "Does a real background session run, outlive its caller, and appear in the platform's own run listing?",
+      "result": "not-run",
+      "evidence_source": "`claude agents --json`, which lists the job the harness dispatched",
+      "observed": null,
+      "why_not_run": "job 19530f38 was dispatched and has produced nothing: state blocked. Either the platform never started it, or it had not finished when this run polled."
+    },
+    {
+      "id": "execution-modes-were-exercised-not-just-named",
+      "asks": "Which execution modes did a real agent actually run in?",
+      "result": "pass",
+      "evidence_source": "the graph's `execution.actual`, written by the hook from the event it received",
+      "observed": "subagent (T-001, T-002)",
+      "why_not_run": null
+    },
+    {
+      "id": "worktree-isolation-was-actually-used",
+      "asks": "Did an isolated execution create a worktree, and is the isolation recorded?",
+      "result": "not-run",
+      "evidence_source": "worktree_created / worktree_removed in the work item history",
+      "observed": null,
+      "why_not_run": "no worktree was created, so isolation stayed at shared-checkout and the WorktreeCreate hook never fired"
+    },
+    {
+      "id": "worktree-work-was-integrated-not-just-isolated",
+      "asks": "Did work done inside a worktree reach the main checkout, and was the worktree then removed?",
+      "result": "not-run",
+      "evidence_source": "the main checkout's own contents, and worktree_removed in the history",
+      "observed": null,
+      "why_not_run": "no worktree was created, so there is nothing to integrate"
+    },
+    {
+      "id": "a-team-stage-carried-its-skills",
+      "asks": "When a stage runs as a team, do the teammates get the skills the stage declares?",
+      "result": "not-run",
+      "evidence_source": "teammate events in the work item history and the stage's declared skills",
+      "observed": null,
+      "why_not_run": "no stage ran as a team, so teammate skill propagation is unmeasured"
+    }
+  ],
+  "verdict": {
+    "synthetic": "pass",
+    "real_agent": "partial",
+    "certified": false,
+    "why": "Every probe that ran passed, but real agents did not drive every required stage (missing: ARCH, QADESIGN, DEV, REVIEW, CI); and 6 probe(s) never ran, so the mechanism each asks about is unmeasured: task-binding-recorded, task-completion-is-gated, background-execution-was-actually-dispatched, worktree-isolation-was-actually-used, worktree-work-was-integrated-not-just-isolated, a-team-stage-carried-its-skills. Partial evidence is not certification.",
+    "coverage": {
+      "required": [
+        "REQ",
+        "ARCH",
+        "QADESIGN",
+        "DEV",
+        "REVIEW",
+        "CI"
+      ],
+      "real_agent": [
+        "IDEA",
+        "REQ"
+      ],
+      "synthetic_only": [
+        "ARCH",
+        "QADESIGN",
+        "DEV",
+        "REVIEW",
+        "CI"
+      ]
+    },
+    "probes": {
+      "total": 14,
+      "passed": 8,
+      "failed": 0,
+      "not_run": 6,
+      "unmeasured": [
+        "task-binding-recorded",
+        "task-completion-is-gated",
+        "background-execution-was-actually-dispatched",
+        "worktree-isolation-was-actually-used",
+        "worktree-work-was-integrated-not-just-isolated",
+        "a-team-stage-carried-its-skills"
+      ]
+    }
+  },
+  "lifecycle": [
+    {
+      "task": "T-001",
+      "stage": "IDEA",
+      "role": "engineering-director",
+      "session": "completed",
+      "accepted": true,
+      "decision": null
+    },
+    {
+      "task": "T-002",
+      "stage": "REQ",
+      "role": "product-manager",
+      "session": "completed",
+      "accepted": false,
+      "decision": "GOLD-FEAT-001 T-002: REWORK\n  A rejection is information the implementer has not seen yet.",
+      "convened": [
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "product-manager",
+          "owed": [
+            "cycle_accepted(CYCLE-PROD)",
+            "cycle_rollup_reported(CYCLE-PROD)",
+            "no_open_rework(CYCLE-PROD)"
+          ],
+          "session": "completed"
+        },
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "qa-lead",
+          "owed": [
+            "agent_verdict(qa-lead, pass)"
+          ],
+          "session": "completed"
+        },
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "requirements-analyst",
+          "owed": [
+            "artifact_status(REQ, approved)",
+            "required_fields_present(REQ)"
+          ],
+          "session": "completed"
+        },
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "release-authority (human)",
+          "owed": [
+            "AP-12"
+          ],
+          "session": "recorded on GOLD-REVIEW-001"
+        }
+      ],
+      "awaiting_human": [],
+      "why_refused": "not approved: GOLD-REQ-001\n  fails      agent_verdict(qa-lead, pass) -- no recorded pass verdict from qa-lead\n  fails      cycle_accepted(CYCLE-PROD) -- not accepted: GOLD-CR-001=ESCALATED, agent_verdict(qa-lead, pass) (no recorded pass verdic\n\nRecord what actually happened instead -- `--outcome failed`, `rejected` or `blocked` -- and let `decide` choose between retry, rework, replan and escalate."
+    },
+    {
+      "task": "T-002",
+      "stage": "REQ",
+      "role": "product-manager",
+      "session": "completed",
+      "accepted": false,
+      "decision": "GOLD-FEAT-001 T-002: REWORK\n  A rejection is information the implementer has not seen yet.",
+      "convened": [
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "product-manager",
+          "owed": [
+            "cycle_accepted(CYCLE-PROD)"
+          ],
+          "session": "completed"
+        },
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "qa-lead",
+          "owed": [
+            "agent_verdict(qa-lead, pass)"
+          ],
+          "session": "completed"
+        },
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "requirements-analyst",
+          "owed": [
+            "artifact_status(REQ, approved)"
+          ],
+          "session": "exited 1: You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)"
+        },
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "release-authority (human)",
+          "owed": [
+            "AP-12"
+          ],
+          "session": "recorded on GOLD-REVIEW-001"
+        }
+      ],
+      "awaiting_human": [],
+      "why_refused": "not approved: GOLD-REQ-001\n  fails      agent_verdict(qa-lead, pass) -- no recorded pass verdict from qa-lead\n  fails      cycle_accepted(CYCLE-PROD) -- not accepted: GOLD-CR-001=ESCALATED, agent_verdict(qa-lead, pass) (no recorded pass verdic\n\nRecord what actually happened instead -- `--outcome failed`, `rejected` or `blocked` -- and let `decide` choose between retry, rework, replan and escalate."
+    },
+    {
+      "task": "T-002",
+      "stage": "REQ",
+      "role": "product-manager",
+      "session": "exited 1: You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)",
+      "accepted": false,
+      "decision": "GOLD-FEAT-001 T-002: ESCALATE\n  The bound exists to be honoured. Checked before retry so an exhausted task cannot loop once more. (3 of 3)\n  ladder: lead -> head -> human_owner",
+      "convened": [
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "product-manager",
+          "owed": [
+            "cycle_accepted(CYCLE-PROD)"
+          ],
+          "session": "exited 1: You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)"
+        },
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "qa-lead",
+          "owed": [
+            "agent_verdict(qa-lead, pass)"
+          ],
+          "session": "exited 1: You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)"
+        },
+        {
+          "task": "T-002",
+          "stage": "REQ",
+          "role": "requirements-analyst",
+          "owed": [
+            "artifact_status(REQ, approved)"
+          ],
+          "session": "exited 1: You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)"
+        }
+      ],
+      "awaiting_human": [],
+      "why_refused": "not approved: GOLD-REQ-001\n  fails      agent_verdict(qa-lead, pass) -- no recorded pass verdict from qa-lead\n  fails      cycle_accepted(CYCLE-PROD) -- not accepted: GOLD-CR-001=ESCALATED, agent_verdict(qa-lead, pass) (no recorded pass verdic\n\nRecord what actually happened instead -- `--outcome failed`, `rejected` or `blocked` -- and let `decide` choose between retry, rework, replan and escalate."
+    }
+  ],
+  "mechanisms": [
+    {
+      "mechanism": "native-task",
+      "session": "exited 1: You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)",
+      "said": "You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)"
+    },
+    {
+      "mechanism": "worktree",
+      "session": "exited 1: You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)",
+      "said": "You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)"
+    },
+    {
+      "mechanism": "team",
+      "session": "exited 1: You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)",
+      "said": "You've hit your session limit \u00b7 resets 1:30pm (Asia/Kolkata)"
+    },
+    {
+      "mechanism": "background",
+      "dispatched": "exit 0",
+      "id": "19530f38",
+      "listing": {
+        "kind": "background",
+        "state": "blocked",
+        "status": "idle",
+        "session_id": "19530f38-6a18-4754-8c36-55b4296c31d0"
+      },
+      "produced": false
+    }
+  ],
+  "notes": "Ran with CLAUDE_CODE_ENABLE_TODO_TOOLS=1 so the native task lifecycle was reachable for the first time, and the two task probes still report `not-run` -- for a different reason, which the record makes legible.\n\nThe account's session limit was reached before the mechanism attempts ran. All three prompt-driven mechanisms report \"You've hit your session limit\". That is a scheduling defect in the harness rather than a platform boundary: the lifecycle walk ran first and is open-ended -- it retries and convenes until the organization escalates, which on REQ is a dozen sessions -- and the mechanisms are one bounded session each answering one decisive question. Run last, they were starved. Mechanisms now run first, and --mechanisms-only exercises them without the walk.\n\nThe task lifecycle itself is proven, separately and with hook evidence: driving TaskCreate and TaskUpdate against live hooks produced `task_created` (native task 1 bound to T-001, resolved_by marker) and `task_completion_allowed` (the completion gate evaluated the definition of done and permitted it). What this run failed to do is reproduce that inside a full certification, which is what the ordering fix is for.\n\nLeft as produced."
+}

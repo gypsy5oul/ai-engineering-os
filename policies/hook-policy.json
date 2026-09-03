@@ -399,9 +399,10 @@
       "category": "control-tampering",
       "action": "deny",
       "flags": "",
-      "pattern": "(?:>>?|\\btee\\b(?:\\s+-a)?|\\bsed\\b\\s+[^|;&]*-i|\\bcp\\b|\\bmv\\b|\\binstall\\b|\\btruncate\\b|\\bdd\\b[^|;&]*\\bof=)\\s*[^|;&]*(?:^|[\\s=\\\"'/])(?:agents|policies|hooks|schemas|evaluations|sdlc|\\.ai-engineering|notification)/",
+      "pattern": "(?:>>?|\\btee\\b(?:\\s+-a)?|\\bsed\\b\\s+[^|;&\\n]*-i|\\bcp\\b|\\bmv\\b|\\binstall\\b|\\btruncate\\b|\\bdd\\b[^|;&\\n]*\\bof=)\\s*[^|;&\\n]*(?:^|[\\s=\\\"'/])(?:agents|policies|hooks|schemas|evaluations|sdlc|\\.ai-engineering|notification)/",
       "message": "Writing to the control plane through the shell. The write guard covers the Write and Edit tools; a shell redirection would bypass the role's write scope entirely.",
-      "remediation": "Change these files through the Write or Edit tool so the write scope applies, and through a merge request with governance review (AP-10)."
+      "remediation": "Change these files through the Write or Edit tool so the write scope applies, and through a merge request with governance review (AP-10).",
+      "why_the_gap_stops_at_a_newline": "The gap used to be [^|;&]*, which crosses newlines, so it swallowed a heredoc body. `cat > /tmp/scratch/v.py <<EOF ... parse('/opt/plugin/sdlc/workflows/f.yaml') ... EOF` was denied as writing to the control plane, because a redirect appeared before a control-plane path somewhere later in the same command. Observed live: a real agent writing a verification script to its own scratchpad was refused. A genuine shell write to the control plane is one line, so stopping the gap at a newline keeps every real case and drops the false one."
     },
     {
       "id": "OS-05",
