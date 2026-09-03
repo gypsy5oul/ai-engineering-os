@@ -85,7 +85,7 @@ And one principle runs through all of them:
 | | |
 | --- | --- |
 | **30 agents** | An optimized organization: product, architecture, UX, engineering, data, QA, security, platform, release, SRE, incident, documentation, AI governance, and five independent specialist reviewers. |
-| **42 skills** | Reusable capabilities from requirements engineering to root cause analysis, including **engineering simplicity** and seven **AI product engineering** capabilities. Technology-neutral: they name no provider. |
+| **43 skills** | Reusable capabilities from requirements engineering to root cause analysis, including **engineering simplicity** and seven **AI product engineering** capabilities. Technology-neutral: they name no provider. |
 | **11 hook events** | Command, write and spawn guards, context injection, result observation, a **task-creation gate** that binds native tasks to the graph and refuses ones the graph forbids, a completion gate, a teammate-idle gate, worktree lifecycle recording and a session self-test. 45 command rules, **risk-tiered failure** so a broken policy file cannot open the guard, and a self-test at session start. |
 | **7 department cycles** | Level 2: human owner → agent head → lead → worker → peer review → rework → accept → rollup. A macro stage cannot advance until its department's internal loop reaches ACCEPTED. |
 | **10 SDLC workflows** | Machine-readable stages with entry criteria, artifact contracts, a **checkable definition of done**, separate agent and human gates, risk-driven model routing and execution mode. |
@@ -184,7 +184,7 @@ python3 scripts/resolve_model.py --all   # model routing for every stage
 .claude-plugin/plugin.json       Plugin manifest
 .claude-plugin/marketplace.json  Private marketplace catalogue
 agents/                          30 role definitions
-skills/                          42 skills
+skills/                          43 skills
 hooks/hooks.json                 Hook registration
 hooks/scripts/                   Guard implementations
 hooks/lib/                       Shared hook library
@@ -226,7 +226,7 @@ Read in this order and each one builds on the last.
 | --- | --- |
 | [organization.md](docs/organization.md) | The 30 agents, and what each one owns |
 | [agent-model.md](docs/agent-model.md) | Role contracts: authority, tools, risk, lifecycle |
-| [skills.md](docs/skills.md) | The 42 skills and who loads them |
+| [skills.md](docs/skills.md) | The 43 skills and who loads them |
 | [organization-freeze.md](docs/organization-freeze.md) | Why the agent set does not grow |
 
 **The rules, and what actually enforces them**
