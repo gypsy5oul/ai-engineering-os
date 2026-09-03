@@ -1,6 +1,6 @@
 # Skill catalogue
 
-42 skills. A skill is a capability many roles share; it is not an organizational
+43 skills. A skill is a capability many roles share; it is not an organizational
 role and does not have authority of its own. The rule for choosing between them
 is in `docs/agent-model.md`.
 
@@ -33,6 +33,7 @@ guides work that can damage production, data or the security boundary.
 | [`database-design`](../skills/database-design/SKILL.md) | Design schemas, indexes, migrations and data lifecycle within the project's approved data platform. | `solution-architect`, `data-engineer`, `performance-reviewer` | HIGH |
 | [`frontend-development`](../skills/frontend-development/SKILL.md) | Implement client-side code, state, accessibility and tests against an approved story and UX contract. | `frontend-developer` | MEDIUM |
 | [`engineering-notifications`](../skills/engineering-notifications/SKILL.md) | Turn an SDLC event into a notification a person will read, and build the daily and weekly engineering digests. | `notification-agent` | MEDIUM |
+| [`delegated-execution`](../skills/delegated-execution/SKILL.md) | Decide which model does a piece of work and delegate the rest, rather than doing everything at the top tier. Human-invoked; it governs the session driving the repository, not an organizational role. | human-invoked | LOW |
 | [`engineering-simplicity`](../skills/engineering-simplicity/SKILL.md) | Choose the simplest solution that satisfies every stated requirement, and justify complexity when it is genuinely needed. | `solution-architect`, `architecture-reviewer`, `requirements-analyst`, `product-manager`, `development-lead`, `backend-developer`, `frontend-developer`, `data-engineer`, `devops-engineer`, `sre`, `qa-lead`, `release-manager`, `performance-reviewer`, `code-reviewer`, `dependency-reviewer` | MEDIUM |
 | [`git-workflow`](../skills/git-workflow/SKILL.md) | Branch, commit and manage history according to the organization's branching policy and the project's overrides. | `backend-developer`, `frontend-developer`, `data-engineer`, `qa-engineer`, `devops-engineer`, `agent-developer` | MEDIUM |
 | [`gitlab-workflow`](../skills/gitlab-workflow/SKILL.md) | Work with GitLab merge requests, issues, pipelines and releases using features available in GitLab CE. | `backend-developer`, `frontend-developer`, `data-engineer` | MEDIUM |
