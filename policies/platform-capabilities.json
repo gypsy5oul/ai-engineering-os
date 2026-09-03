@@ -6,7 +6,7 @@
     "Both mistakes were cheap to make because each belief lived in prose, in a different file, established at a different time, with no record of how it was checked. A capability the code depends on should say how it was verified and when.",
     "It also recorded PermissionRequest as unavailable on the strength of a probe that only covered the two modes which short-circuit before the hook runs. An absence has to be checked the way a presence is, or it becomes the most confident kind of wrong entry."
   ],
-  "tested_against": "2.1.251",
+  "tested_against": "2.1.259",
   "evidence_levels": {
     "contract": "Declared in the CLI's own schema. The strongest evidence short of running it.",
     "empirical": "Observed on the wire in this environment.",
@@ -226,7 +226,8 @@
         "consequence": "Nothing here depends on it; recorded so a future version adding it is noticed rather than assumed.",
         "this_plugin": "reads agent_id and agent_type only."
       }
-    ]
+    ],
+    "rechecked": "2026-09-03 against https://code.claude.com/docs/en/hooks and the Agent SDK's own hooks page, versus 2.1.259. The first disagreement below is RESOLVED: `escalate` no longer appears as a permissionDecision value in either page, and the SDK page now states the set the binary has always accepted -- \"this is where you set permissionDecision (\\\"allow\\\", \\\"deny\\\", \\\"ask\\\", or \\\"defer\\\")\". The documentation caught up with the runtime.\n\nThe row stays. It is kept as history, not as a live warning: it records that this repository shipped a bug for ten versions by following documentation that was wrong, and that the bug was found by reading the binary. Deleting it once the docs agreed would remove the only evidence for why the binary is read at all -- and the next disagreement will not announce itself either."
   },
   "first_live_run": {
     "when": "2026-08-24 against 2.1.241; re-run and extended 2026-08-28 against 2.1.250",
@@ -252,5 +253,6 @@
       "The 28 LLM-judged evaluation cases.",
       "Any complete work item. Real agents have now driven one stage of one work item (GOLD-FEAT-001, T-001) under certification; no change has been driven from intake to acceptance by real agents, and certify.py reports certified: false because of it."
     ]
-  }
+  },
+  "version_history": "2.1.241 -> 2.1.250 -> 2.1.251 -> 2.1.252 -> 2.1.259. The last two moves both happened inside a single working session, which is the point of check_platform_drift raising the gap itself: a capability model maintained by hand would have been describing a binary that was no longer installed, and nothing would have said so. All seven load-bearing beliefs were re-run against 2.1.259 and all seven hold, including the three that carry the task lifecycle -- the TaskCreated and TaskCompleted payloads and exit code 2 preventing a task rather than warning about it."
 }

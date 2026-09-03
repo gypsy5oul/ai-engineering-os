@@ -3,6 +3,79 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.45.2] — Five credential files Anthropic names and this guard did not
+
+Audited the whole Claude Agent SDK documentation set — all 31 pages —
+against what this plugin asserts. Most of it was confirmation: no
+contradiction was found anywhere in the capability model, and
+`todo-tracking.md` states the model-gated task-tools finding word for word.
+
+Four things earned a change.
+
+**SEC-01 missed five credential files** that the secure-deployment guidance
+names in its own table of *"common files to exclude or sanitize before
+mounting"*: `~/.git-credentials`, gcloud's
+`application_default_credentials.json`, `~/.azure/`, `.npmrc` and
+`.pypirc`. Each holds a live credential — a registry token in `.npmrc`
+publishes packages, gcloud ADC is a whole cloud identity — and the doc's
+point is that read access to a code directory is enough to expose them.
+`secret-patterns.json`'s `path_denylist` missed the same five: a path the
+guard refuses to read and the scanner happily walks is a hole with a second
+opinion.
+
+**The audit log did not record writes that failed.** Successful writes were
+recorded and hook denials were recorded; a tool-level failure left nothing,
+so an incident reconstructed from the log would read a gap as an absence of
+intent. `PostToolUseFailure` is a real event and was not registered. It is
+now, on the same matcher and the same script, with the two distinguished by
+`outcome` so anything already reading `file_change` keeps working.
+
+**A live certification run loaded the operator's own settings.** The harness
+writes this plugin's hooks into a throwaway project and then asks whether
+they behave correctly, so a personal permission rule or a remembered
+preference could change the answer and nothing would say that it had.
+`--setting-sources project` now, and `--max-turns` with it: the agent loop
+runs until the model stops calling tools, while the organization's retry
+bound applies only between attempts.
+
+**`mcp-extension.json` gains the connection-status invariant.** Claude Code
+can fall back to built-in tools when a server is unavailable, which for a
+source-control or database category is an unaudited path doing the work an
+audited one was chosen for — the record would show the step succeeded and
+not that it succeeded differently.
+
+### Recorded and deliberately not implemented
+
+**A retry starts a new agent and nothing decides whether it should.** The
+platform supports resuming and forking. `RETRY` and `REWORK` plausibly want
+an agent that remembers the attempt; `REPLAN` almost certainly does not; and
+a reviewer must never be resumed onto its own prior reasoning. What blocks it
+is the lease model, which says an expired lease may be reclaimed by *any*
+agent — resuming a specific session is a claim about identity the lease does
+not make. A resume added without deciding the reviewer case would quietly
+weaken review independence.
+
+**`SessionEnd` is not registered** because `lease_expired` already reclaims
+the task. Adding a hook to make a working recovery faster is complexity
+bought without evidence that the slowness has cost anything.
+
+### Where the docs confirmed the design
+
+Structured outputs are the agent's own self-report, typed; the harness reads
+what hooks wrote independently of what the agent claims, which is strictly
+stronger. The agent loop's "no more tool calls" and this organization's
+"definition of done satisfied" are different questions, and the second is
+answered externally on purpose. `canUseTool` is a one-shot per-call decision,
+which `approval-authority.json` already refuses to treat as an approval.
+
+### Also
+
+`tested_against` moves 2.1.251 → 2.1.259, two upgrades that both landed
+inside one working session, with all seven load-bearing beliefs re-verified.
+The recorded docs-versus-binary disagreement over `escalate` is marked
+resolved — the documentation caught up with the runtime — and the row stays
+as history, because it is the only evidence for why the binary is read at all.
+
 ## [0.45.1] — The task tools were gated by the model, not by headless mode
 
 `TaskCreated` and `TaskCompleted` were recorded as unreachable for two

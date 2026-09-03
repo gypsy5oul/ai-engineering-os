@@ -217,6 +217,49 @@ itself.
 one. Some boundaries will turn out wrong, and `docs/organization.md` records
 which roles were deliberately not created so the argument can be reopened.
 
+### A retry starts a new agent, and nothing decides whether it should
+
+`RETRY`, `REWORK`, `REPLAN` and `ESCALATE` are organizational decisions about the
+*work*. None of them says anything about the *agent*, and today they all resolve
+the same way: a fresh session, built from the current graph state.
+
+The platform supports the distinction. A session can be resumed with its prior
+context intact, or forked so the original survives untouched. Mapped onto this
+organization's own vocabulary it is not obvious which is right, and that is the
+point:
+
+- `RETRY` after a transient failure and `REWORK` after a review rejection both
+  want an agent that remembers what it just tried — a rejection is information
+  the implementer has not seen yet, and re-deriving it costs a session.
+- `REPLAN` should almost certainly *not* resume. The graph is no longer a
+  description of the work, and an agent carrying the old plan's reasoning into
+  the new one is the failure the replan exists to correct.
+- A reviewer must never be resumed onto its own prior reasoning. Independence
+  that survives only because nobody thought to resume it is not independence.
+
+What blocks it is not the mechanism. `owner_session` is already recorded when a
+task is claimed, and read only to validate the lease. It is that the lease model
+says an expired lease may be reclaimed by *any* agent, and resuming a specific
+prior session is a claim about identity that the lease deliberately does not
+make. Reconciling those two is a design decision, and it has not been taken.
+
+Recorded here rather than implemented, because a resume added without deciding
+the reviewer case would quietly weaken review independence.
+
+### `SessionEnd` is not registered, and the lease TTL is why
+
+A session that ends abruptly — killed, crashed, closed — leaves its task leased
+to an agent that is no longer running. `SessionEnd` exists and would let the
+lease be released deterministically.
+
+It is not registered. `lease_expired` already reclaims the task after its TTL, so
+the failure this hook would fix is one the organization already recovers from,
+slower. Adding a hook to make a working recovery faster is complexity bought
+without evidence that the slowness has cost anything.
+
+If a real run shows a dangling lease blocking work for long enough to matter,
+that is the evidence, and the hook is three lines.
+
 ## What would justify a control plane
 
 Not "it would be nice". Specifically:

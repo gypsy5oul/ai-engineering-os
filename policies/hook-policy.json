@@ -146,10 +146,11 @@
       "id": "SEC-01",
       "category": "secret-access",
       "action": "deny",
-      "pattern": "\\b(?:cat|less|more|head|tail|bat|xxd|base64|strings|grep|egrep|fgrep|rg|ag|awk|sed|od|nl|cut|tr|tac|rev|cp|dd|install|perl|python3?|ruby|node|jq|vi|vim|nano|emacs|open|xdg-open)\\b[^|;&]*(?:(?:(?:~|\\$HOME|/home/[^/\\s]+|/root|/Users/[^/\\s]+)/)?\\.(?:ssh/(?:id_[^\\s]*|[^\\s]*key[^\\s]*)|aws/credentials|gnupg/|netrc|docker/config\\.json|kube/config)|[^\\s]*\\.(?:pem|p12|pfx)(?![A-Za-z0-9])|[^\\s]*id_(?:rsa|ed25519|ecdsa|dsa)[^\\s]*)",
+      "pattern": "\\b(?:cat|less|more|head|tail|bat|xxd|base64|strings|grep|egrep|fgrep|rg|ag|awk|sed|od|nl|cut|tr|tac|rev|cp|dd|install|perl|python3?|ruby|node|jq|vi|vim|nano|emacs|open|xdg-open)\\b[^|;&]*(?:(?:(?:~|\\$HOME|/home/[^/\\s]+|/root|/Users/[^/\\s]+)/)?\\.(?:ssh/(?:id_[^\\s]*|[^\\s]*key[^\\s]*)|aws/credentials|gnupg/|netrc|docker/config\\.json|kube/config|git-credentials|config/gcloud/application_default_credentials\\.json|azure/|npmrc|pypirc)|[^\\s]*\\.(?:pem|p12|pfx)(?![A-Za-z0-9])|[^\\s]*id_(?:rsa|ed25519|ecdsa|dsa)[^\\s]*)",
       "flags": "i",
       "message": "Reading or copying private key material or stored credentials. The tool used and the way the path is written do not change what is exposed.",
-      "remediation": "Agents never read credential stores. Reference the secret by name and let the runtime inject it."
+      "remediation": "Agents never read credential stores. Reference the secret by name and let the runtime inject it.",
+      "why_these_paths": "The list is Anthropic's own, from the secure-deployment guidance: \"Common files to exclude or sanitize before mounting\". Five of the files it names were missing here -- ~/.git-credentials, gcloud's application_default_credentials.json, ~/.azure/, .npmrc and .pypirc -- and each holds a live credential. A registry token in .npmrc publishes packages; gcloud ADC is a full cloud identity. Read access to a code directory is enough to expose all of them, which is the doc's point."
     },
     {
       "id": "SEC-02",
