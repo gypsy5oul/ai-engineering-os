@@ -256,6 +256,43 @@ class TestTheHarnessCanReachTheTaskLifecycle(unittest.TestCase):
         self.assertIn("model that gates them, not the execution mode", entry["note"])
 
 
+class TestALiveRunMeasuresTheOrganizationAndNotTheMachine(unittest.TestCase):
+    """A certification that inherits the operator's settings measures the operator.
+
+    The harness writes this plugin's hooks into a throwaway project and then asks
+    whether they behave correctly. Without --setting-sources it also loaded the
+    operator's own ~/.claude settings and auto-memory, so a personal permission
+    rule or a remembered preference could change the result and nothing would say
+    that it had.
+
+    --max-turns is the other half. The agent loop runs until the model stops
+    calling tools, and the organization's retry bound applies only between
+    attempts -- a session that never returns is invisible to it until the process
+    exits.
+    """
+
+    def session_flags(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        fn = next(n for n in tree.body
+                  if isinstance(n, ast.FunctionDef) and n.name == "_run_session")
+        return {n.value for n in ast.walk(fn)
+                if isinstance(n, ast.Constant) and isinstance(n.value, str)}
+
+    def test_the_session_loads_only_the_project_s_settings(self):
+        flags = self.session_flags()
+        self.assertIn("--setting-sources", flags)
+        self.assertIn("project", flags)
+
+    def test_the_session_is_bounded(self):
+        self.assertIn("--max-turns", self.session_flags())
+
+    def test_the_reason_is_written_down(self):
+        source = open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8").read()
+        self.assertIn("measuring the machine", source)
+
+
 class TestASyntheticUnitCannotLookReal(unittest.TestCase):
     def test_a_synthetic_unit_names_no_model(self):
         """Naming a model on a unit nothing ran is the conflation in miniature."""

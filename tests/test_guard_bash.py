@@ -571,3 +571,55 @@ class TestOS04DoesNotReadAHeredocAsAControlPlaneWrite(unittest.TestCase):
     def test_the_rule_records_why_the_gap_stops_at_a_newline(self):
         self.assertIn("heredoc", self.rule()["why_the_gap_stops_at_a_newline"])
 
+
+class TestSEC01CoversTheCredentialFilesAnthropicNames(unittest.TestCase):
+    """The list is Anthropic's own, from the secure-deployment guidance's table of
+    "Common files to exclude or sanitize before mounting".
+
+    Five of the files it names were missing from SEC-01, and each holds a live
+    credential: a registry token in .npmrc publishes packages, gcloud's
+    application_default_credentials.json is a full cloud identity. The doc's point
+    is that read access to a code directory is enough to expose them.
+    """
+
+    def pattern(self):
+        import json as _json
+        import re as _re
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "policies", "hook-policy.json"), encoding="utf-8") as fh:
+            rules = _json.load(fh)["rules"]
+        rule = next(r for r in rules if r["id"] == "SEC-01")
+        return _re.compile(rule["pattern"])
+
+    def test_the_newly_named_credential_files_are_refused(self):
+        for command in ("cat ~/.git-credentials",
+                        "cat ~/.config/gcloud/application_default_credentials.json",
+                        "cat ~/.azure/accessTokens.json",
+                        "cat ~/.npmrc",
+                        "cat ~/.pypirc"):
+            with self.subTest(command=command):
+                self.assertTrue(self.pattern().search(command))
+
+    def test_the_ones_it_always_covered_still_are(self):
+        for command in ("cat ~/.aws/credentials", "cat ~/.ssh/id_rsa",
+                        "cat ~/.kube/config", "cat secrets.pem"):
+            with self.subTest(command=command):
+                self.assertTrue(self.pattern().search(command))
+
+    def test_ordinary_reads_are_untouched(self):
+        for command in ("cat README.md", "cat src/retention/policy.py",
+                        "grep -r TODO docs/"):
+            with self.subTest(command=command):
+                self.assertFalse(self.pattern().search(command))
+
+    def test_the_scanner_denylist_agrees_with_the_guard(self):
+        """Two lists, one intent. A path the guard refuses to read and the scanner
+        happily walks is a hole with a second opinion."""
+        import json as _json
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "policies", "secret-patterns.json"), encoding="utf-8") as fh:
+            denylist = " ".join(_json.load(fh)["path_denylist"])
+        for fragment in (".git-credentials", "application_default_credentials.json",
+                         ".azure", ".npmrc", ".pypirc"):
+            with self.subTest(fragment=fragment):
+                self.assertIn(fragment, denylist)

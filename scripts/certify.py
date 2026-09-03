@@ -214,7 +214,7 @@ def synthetic_units(project):
 
 # ---------------------------------------------------------------- live probes
 
-def _run_session(project, prompt, model, timeout=600):
+def _run_session(project, prompt, model, timeout=600, max_turns=120):
     # CLAUDE_CODE_ENABLE_TODO_TOOLS is what makes TaskCreated and TaskCompleted
     # reachable at all. 2.1.252 turned the task tools off for current models --
     # not for headless sessions, which is what this harness first concluded from a
@@ -225,7 +225,20 @@ def _run_session(project, prompt, model, timeout=600):
     # done.
     env = dict(os.environ, CLAUDE_PLUGIN_ROOT=ROOT, CLAUDE_PROJECT_DIR=project,
                CLAUDE_CODE_ENABLE_TODO_TOOLS="1")
-    cmd = ["claude", "-p", prompt, "--permission-mode", "acceptEdits"]
+    # --setting-sources project: load the project's own settings and nothing else.
+    # The harness writes this plugin's hooks into the throwaway project's
+    # .claude/settings.json and then measures whether they behave correctly, and
+    # without this the operator's own ~/.claude settings and auto-memory load too.
+    # A certification that quietly inherits the machine it ran on is
+    # measuring the machine, not the organization.
+    #
+    # --max-turns: the agent loop runs until the model stops calling tools, and the
+    # organization's own retry bound (control-loop-policy's max_iterations) only
+    # applies between attempts. A session that never returns is invisible to it
+    # until the process exits, so the loop's own budget is the right place to cap
+    # one attempt.
+    cmd = ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
+           "--setting-sources", "project", "--max-turns", str(max_turns)]
     if model:
         cmd += ["--model", model]
     with open(os.devnull) as devnull:

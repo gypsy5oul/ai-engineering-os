@@ -3,6 +3,15 @@
 
 Records which files an agent actually changed, so that a review or an incident
 can reconstruct what an agent did without replaying a transcript.
+
+Registered on `PostToolUseFailure` as well, because the audit log's premise is
+that every decision is written down and a write that was *attempted and failed*
+was missing from it. The hook denials were recorded and the successes were
+recorded; a tool-level failure -- the disk full, the file gone, the edit not
+applying -- left nothing, so the record showed an agent that never tried. An
+incident reconstructed from it would have been reading a gap as an absence of
+intent. The two are distinguished by `outcome` rather than by two record types,
+so anything already reading `file_change` keeps working.
 """
 import os
 import sys
@@ -17,14 +26,22 @@ def main():
     path = ti.get("file_path") or ti.get("notebook_path") or ""
     if not path:
         sys.exit(0)
-    H.audit({
+    failed = (data.get("hook_event_name") == "PostToolUseFailure")
+    record = {
         "type": "file_change",
+        "outcome": "failed" if failed else "applied",
         "tool": data.get("tool_name"),
         "path": path,
         "agent": data.get("agent_type"),
         "session": data.get("session_id"),
         "cwd": data.get("cwd"),
-    })
+    }
+    if failed:
+        # Whatever the platform said went wrong, trimmed. A failure with no
+        # reason is the same gap one level along.
+        detail = data.get("error") or data.get("tool_response") or ""
+        record["error"] = " ".join(str(detail).split())[:300]
+    H.audit(record)
     sys.exit(0)
 
 
