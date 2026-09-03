@@ -3,6 +3,65 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.45.1] — The task tools were gated by the model, not by headless mode
+
+`TaskCreated` and `TaskCompleted` were recorded as unreachable for two
+releases. The harness listed a headless session's tools, found nothing that
+creates a task, and wrote that into the capability model as a property of
+`-p`. The list was right and the inference was wrong.
+
+2.1.252's own changelog, read out of the binary during an interactive
+session: *"Todo/task-tracking tools (TaskCreate/Get/Update/List, TodoWrite)
+are no longer available on Opus 4.8, Sonnet 5, Fable 5, Mythos 5, and newer
+models; set CLAUDE_CODE_ENABLE_TODO_TOOLS=1 to bring them back"*. The model
+gates them, not the execution mode — which is why driving an interactive
+session by hand produced no native task either, and why the boundary looked
+like a wall from both sides.
+
+**The lifecycle is now proven**, end to end, from the hooks' own records:
+
+    TaskCreate  -> TaskCreated   -> bind_task binds native task 1 to T-001
+                                    (resolved_by: marker, with role, state,
+                                    risk and execution)
+    TaskUpdate  -> TaskCompleted -> gate_task_completion evaluates the
+                                    definition of done and permits it
+
+The harness sets the variable, and the mechanism prompt names the marker: a
+native task whose subject carries no graph task id binds to nothing, and
+`unknown` is not an error, so it would have failed silently.
+
+### Mechanisms run before the lifecycle walk
+
+Two consecutive runs reported the task probes `not-run` with the account's
+session limit as the reason, which reads like a platform boundary and was a
+scheduling choice. The walk is open-ended — it retries and convenes until the
+organization escalates, which on REQ is a dozen sessions — and each mechanism
+is one bounded session answering one decisive question. Run last, they were
+starved. `--mechanisms-only` exercises them without the walk.
+
+### OS-04 read a heredoc as a control-plane write
+
+Found by a real agent during the same interactive session. The gap between
+the redirect and the control-plane path was `[^|;&]*`, which crosses
+newlines, so it swallowed the whole heredoc body: a verification script
+written to a scratchpad was refused as *"writing to the control plane through
+the shell"* for mentioning `sdlc/`. A genuine shell write to the control
+plane is one line. Every real case still denies.
+
+### Also
+
+Both probes corrected after the first clean single-version run found them
+overclaiming in opposite directions — a background job reported as never
+started while the same record said it had produced its artifact, and a dirty
+working tree accepted as evidence that work had been integrated out of a
+worktree, which is exactly the trace an agent leaves when it ignores the
+worktree entirely.
+
+`golden/runs/` holds the run history with provenance. Nothing is promoted to
+canonical.
+
+`CERTIFIED` remains **no**.
+
 ## [0.45.0] — Two contradictions the runtime could not resolve
 
 Both P0s were cases where the organization said one thing and the platform
