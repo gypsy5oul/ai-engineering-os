@@ -3,6 +3,55 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.45.3] — This plugin disabled worktree isolation in every project using it
+
+Rewriting one prompt found something much larger than the prompt.
+
+**`WorktreeCreate` is a provider hook, not an observer.** The binary decides a
+directory is eligible for worktree mode with `hasWorktreeCreateHook() ||
+findGitRoot(dir) !== null`, and says so in its own error: *"Worktree mode
+requires a git repository or WorktreeCreate hooks."* Registering one tells
+Claude Code that **this hook will produce the worktree**. Ours recorded an
+event and produced nothing.
+
+So `EnterWorktree` returned a path, the history recorded `worktree_created`
+with `path: null`, and `git worktree list` showed only the main checkout. No
+worktree, no `.claude/worktrees` directory — for four releases, in every
+project that installed this plugin. `worktree_removed` could never fire
+either: removal is only reachable through a create that had been prevented.
+
+Proven by controlled experiment on 2.1.259, one variable changed. Hook
+registered: no worktree. Hook removed, nothing else touched: a real worktree
+at `.claude/worktrees/<name>` on branch `worktree-<name>`.
+
+**The probe that existed to catch this counted the events**, and the events
+fired either way — so it certified isolation on runs that had none. Two run
+records carried a false pass and now carry the correction; their verdicts
+stand as produced, and certification was refused in both regardless.
+
+The registration is gone and `record_worktree.py` with it. Observing a feature
+by replacing it is not observation, and reimplementing git worktree creation
+inside a hook to watch it would be the second runtime this repository refuses
+to build. Isolation is read from `git worktree list`, which is the worktree or
+is not; removal from a `worktree-*` branch outliving its checkout.
+
+Ten hook events now, not twelve.
+
+### The prompt fix that started it
+
+The worktree mechanism prompt asked the agent to integrate *"so the edit is
+present there"*, which a file copy satisfies, while the probe required a commit
+and explicitly refused a dirty working tree. The agent did what it was told and
+failed a check nobody had told it about — the fourth instance of one shape: the
+organization knew what it wanted and the agent was not told. It now states the
+evidence that will be read, in the order it is read, and bounds the exercise to
+one worktree.
+
+### Found by an agent that declined to fix it
+
+> "That is a change to organizational hook configuration — your call, not mine
+> to make unilaterally so my own exercise passes."
+
 ## [0.45.2] — Five credential files Anthropic names and this guard did not
 
 Audited the whole Claude Agent SDK documentation set — all 31 pages —

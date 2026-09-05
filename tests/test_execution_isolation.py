@@ -325,3 +325,67 @@ class TestLanguageIntelligenceDeclaration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNothingIsRegisteredOnTheProviderHook(unittest.TestCase):
+    """This plugin disabled worktree isolation in every project that installed it.
+
+    `WorktreeCreate` is a provider hook, not an observer. The binary decides a
+    directory is eligible for worktree mode with `hasWorktreeCreateHook() ||
+    findGitRoot(dir) !== null` and says so itself: "Worktree mode requires a git
+    repository or WorktreeCreate hooks." Registering one tells Claude Code that
+    the hook will produce the worktree. Ours recorded an event and produced
+    nothing, so `EnterWorktree` returned, `worktree_created` was written with
+    `path: null`, and no worktree existed.
+
+    Proven by removing the registration and changing nothing else: a real worktree
+    appeared. The probe that was supposed to catch this counted the events, and
+    the events fired either way -- so it certified isolation on runs that had
+    none.
+
+    Observing a feature by replacing it is not observation, and reimplementing git
+    worktree creation inside a hook would be the second runtime this repository
+    refuses to build.
+    """
+
+    def hooks(self):
+        with open(os.path.join(ROOT, "hooks", "hooks.json"), encoding="utf-8") as fh:
+            return json.load(fh)["hooks"]
+
+    def test_the_worktree_hooks_are_not_registered(self):
+        registered = self.hooks()
+        for event in ("WorktreeCreate", "WorktreeRemove"):
+            with self.subTest(event=event):
+                self.assertNotIn(event, registered)
+
+    def test_the_recorder_is_gone(self):
+        self.assertFalse(
+            os.path.exists(os.path.join(ROOT, "hooks", "scripts", "record_worktree.py")),
+            "a script that can only run by replacing the feature it observes")
+
+    def test_the_capability_model_records_why(self):
+        with open(os.path.join(ROOT, "policies", "platform-capabilities.json"),
+                  encoding="utf-8") as fh:
+            entry = json.load(fh)["capabilities"]["hook.Worktree.lifecycle"]
+        self.assertIn("PROVIDER hook", entry["note"])
+        self.assertIn("Worktree mode requires a git repository or WorktreeCreate hooks",
+                      entry["note"])
+
+    def test_isolation_evidence_comes_from_git_and_not_from_the_history(self):
+        """The events fired whether or not a worktree existed, so they were never
+        evidence. `git worktree list` is the worktree or is not."""
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "_p_worktree")
+        body = list(fn.body)
+        if (body and isinstance(body[0], ast.Expr)
+                and isinstance(getattr(body[0], "value", None), ast.Constant)):
+            body = body[1:]          # the docstring explains the old evidence source
+        literals = " ".join(str(n.value) for stmt in body for n in ast.walk(stmt)
+                            if isinstance(n, ast.Constant) and isinstance(n.value, str))
+        self.assertNotIn("worktree_created", literals,
+                         "the probe is reading the events again")
+        source = open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8").read()
+        self.assertIn('"git", "worktree", "list"', source)

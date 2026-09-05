@@ -108,10 +108,11 @@
     },
     "hook.Worktree.lifecycle": {
       "available": true,
-      "evidence": "contract",
-      "note": "WorktreeCreate carries `name`; WorktreeRemove carries `worktree_path`. Neither carries a task or an agent, so the events are recorded as evidence that isolation happened during a change and deliberately not bound to a task -- correlating by timing would look like knowledge and be a guess.",
-      "used_by": "hooks/scripts/record_worktree.py",
-      "load_bearing": false
+      "evidence": "empirical",
+      "note": "WorktreeCreate is a PROVIDER hook, not an observer, and this plugin registered a recorder on it for four releases. The binary decides a directory is eligible for worktree mode with `hasWorktreeCreateHook() || findGitRoot(dir) !== null` and says so in its own error: \"Worktree mode requires a git repository or WorktreeCreate hooks.\" The hook is an ALTERNATIVE to git, so registering one tells Claude Code that this hook will produce the worktree. Ours recorded an event and produced nothing.\n\nProven by controlled experiment on 2.1.259, one variable changed. With the hook registered: EnterWorktree returns, the history records `worktree_created` with `path: null`, and `git worktree list` shows only the main checkout -- no worktree, no `.claude/worktrees` directory. With the hook removed and nothing else changed: a real worktree appears at `.claude/worktrees/<name>` on branch `worktree-<name>`.\n\nSo the plugin was disabling worktree isolation in every project that installed it, while its own probe certified that isolation worked -- the probe counted the events, and the events fired whether or not a worktree existed. `worktree_removed` could never fire either: removal is only reachable through a create that had been prevented.\n\nThe registration is gone and record_worktree.py with it. Observing a feature by replacing it is not observation, and reimplementing git worktree creation inside a hook to watch it would be the second runtime this repository refuses to build. Isolation is read from `git worktree list`, which is the worktree or is not.",
+      "used_by": "scripts/certify.py, which reads git rather than the history",
+      "re_verified": "2026-09-04 against 2.1.259, by registering the hook and not registering it and comparing `git worktree list`.",
+      "load_bearing": true
     },
     "hook.SubagentStart.identifies_the_spawn_kind": {
       "available": false,
