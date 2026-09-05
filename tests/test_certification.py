@@ -293,6 +293,68 @@ class TestALiveRunMeasuresTheOrganizationAndNotTheMachine(unittest.TestCase):
         self.assertIn("measuring the machine", source)
 
 
+class TestAMechanismPromptAsksForWhatItsProbeMeasures(unittest.TestCase):
+    """The worktree prompt asked for one thing and the probe measured another.
+
+    It said "integrate the change back into the main checkout, so the edit is
+    present there", which a plain file copy satisfies. The probe requires a commit
+    carrying the work out of the worktree and explicitly refuses a dirty working
+    tree, because a modified file with no commit behind it is exactly what an
+    agent that ignored the worktree produces. The agent did what it was told and
+    failed a check nobody had told it about -- the same shape as the three
+    briefing defects before it.
+
+    These tests hold the prompt and the probe to the same definition. They compare
+    text rather than behaviour, which is weak on its own; what makes them worth
+    having is that the two drift apart silently and a live run costs an hour to
+    find out.
+    """
+
+    def prompt(self):
+        for name, _timeout, text in certify.MECHANISM_PROMPTS:
+            if name == "worktree":
+                return text
+        self.fail("the worktree mechanism is gone")
+
+    def probe_source(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "_p_worktree_integration")
+        return " ".join(str(n.value) for n in ast.walk(fn)
+                        if isinstance(n, ast.Constant) and isinstance(n.value, str))
+
+    def test_the_prompt_asks_for_a_commit(self):
+        """The probe counts commits. A prompt that does not say `commit` is asking
+        for a copy."""
+        self.assertIn("Commit", self.prompt())
+        self.assertIn("commits touch", self.probe_source())
+
+    def test_the_prompt_says_a_modified_file_is_not_enough(self):
+        """The failure mode named explicitly, because it is the one the agent
+        walked into: a modified file reads as the main checkout being edited
+        directly, which is the opposite of using a worktree."""
+        prompt = self.prompt()
+        self.assertIn("does not count", prompt)
+        self.assertIn("edited", prompt)
+        self.assertIn("opposite of what this exercises", prompt)
+
+    def test_the_prompt_asks_for_removal_and_the_probe_reads_it(self):
+        self.assertIn("worktree_removed", self.prompt())
+        self.assertIn("worktree_removed", self.probe_source())
+
+    def test_the_prompt_bounds_it_to_one_worktree(self):
+        """Three were created in one run and none removed. A retry that enters
+        another worktree leaves the first behind."""
+        self.assertIn("Exactly one worktree", self.prompt())
+
+    def test_the_prompt_names_the_check_that_will_be_run(self):
+        """Telling an agent where the evidence is read is the fix that worked for
+        the definition of done; the same applies here."""
+        self.assertIn("git log --oneline -- src/retention/policy.py", self.prompt())
+
+
 class TestASyntheticUnitCannotLookReal(unittest.TestCase):
     def test_a_synthetic_unit_names_no_model(self):
         """Naming a model on a unit nothing ran is the conflation in miniature."""

@@ -814,20 +814,41 @@ MECHANISM_PROMPTS = [
      "the marker the organization binds on. Then use TaskUpdate to mark that task "
      "completed. Report the task id and what each tool returned. Do not do any other "
      "work."),
+    # The previous version of this prompt said "integrate the change back into the
+    # main checkout, so the edit is present there", and the probe requires a commit
+    # carrying the work out of the worktree -- a dirty working tree is explicitly
+    # refused, because copying a file across is what an agent that ignored the
+    # worktree also produces. So the agent was asked for one thing and measured on
+    # another, did what it was told, and failed. Same shape as the three briefing
+    # defects: the organization knew what it wanted and the agent was not told.
+    #
+    # This version states the evidence that will be read, in the order it is read.
     ("worktree", 1500,
      "This project runs on the AI Engineering OS and work item %(item)s is open.\n\n"
-     "Exercise the whole isolation lifecycle, using the EnterWorktree and ExitWorktree "
-     "tools rather than raw `git worktree` commands, because the organization's hooks "
-     "observe those:\n"
-     "1. Enter a new worktree for %(item)s.\n"
-     "2. Inside it, make one small real change to `src/retention/policy.py` -- a comment "
-     "or a docstring is enough, but it must be a genuine edit.\n"
+     "Exercise the isolation lifecycle end to end. Use the EnterWorktree and "
+     "ExitWorktree tools rather than raw `git worktree` commands: the organization's "
+     "hooks observe those, and work done outside them is invisible to it.\n\n"
+     "Exactly one worktree. If a step fails, fix it in the worktree you already have "
+     "rather than entering another.\n\n"
+     "1. Enter one new worktree for %(item)s.\n"
+     "2. Inside it, make one small real change to `src/retention/policy.py` -- a "
+     "comment or a docstring is enough, but it must be a genuine edit.\n"
      "3. Run the project's tests inside the worktree and report the result.\n"
-     "4. Integrate the change back into the main checkout, so the edit is present there.\n"
-     "5. Leave the worktree and remove it.\n\n"
-     "Report the worktree path, the test result, whether the change reached the main "
-     "checkout, and whether the worktree was removed. A worktree that was created and "
-     "never integrated is a failure of this exercise, not a success."),
+     "4. **Commit** that change on the worktree's own branch. An uncommitted edit "
+     "cannot be integrated; it can only be copied.\n"
+     "5. Integrate by merging that branch into the main checkout, so a commit "
+     "carrying the change is reachable from the main checkout's HEAD.\n"
+     "6. Leave the worktree and remove it.\n\n"
+     "What will be checked afterwards, so you can check it yourself:\n"
+     "- `git log --oneline -- src/retention/policy.py` run in the main checkout shows "
+     "more than the single baseline commit. A modified file with no commit behind it "
+     "does not count and will be read as the main checkout having been edited "
+     "directly, which is the opposite of what this exercises.\n"
+     "- The work item history records a `worktree_removed` event.\n\n"
+     "Report the worktree path, the branch name, the test result, the merge commit, "
+     "and whether the worktree was removed. A worktree created and never merged is a "
+     "branch nobody integrated; a worktree never removed is state left behind. Both "
+     "are failures of this exercise, not partial successes."),
     ("team", 1200,
      "This project runs on the AI Engineering OS and work item %(item)s is open.\n"
      "Start a team to work on %(item)s and give at least one teammate a task. Tell each "
@@ -1033,19 +1054,48 @@ def _p_modes(ctx):
                            for mode, tasks in sorted(seen.items()))
 
 
+def _worktrees(project):
+    """The worktrees git actually has, beyond the main checkout."""
+    try:
+        proc = subprocess.run(["git", "worktree", "list", "--porcelain"],
+                              cwd=project, capture_output=True, text=True, timeout=60)
+    except Exception:
+        return None
+    paths = [l.split(" ", 1)[1].strip() for l in (proc.stdout or "").splitlines()
+             if l.startswith("worktree ")]
+    return [p for p in paths if os.path.abspath(p) != os.path.abspath(project)]
+
+
 @probe("worktree-isolation-was-actually-used",
-       "Did an isolated execution create a worktree, and is the isolation recorded?",
-       "worktree_created / worktree_removed in the work item history")
+       "Did an isolated execution create a worktree that actually exists?",
+       "`git worktree list` in the project, which is the worktree or is not")
 def _p_worktree(ctx):
-    if not ctx.get("work_item"):
-        return None, "no work item to read"
-    entries = _history(ctx["project"], ctx["work_item"])
-    created = [h for h in entries if h.get("kind") == "worktree_created"]
-    removed = [h for h in entries if h.get("kind") == "worktree_removed"]
-    if not created:
-        return None, ("no worktree was created, so isolation stayed at shared-checkout "
-                      "and the WorktreeCreate hook never fired")
-    return True, "%d worktree(s) created, %d removed" % (len(created), len(removed))
+    """Read from git, not from a hook.
+
+    This probe used to count `worktree_created` events in the work item history
+    and it passed on runs where no worktree was ever created. The events were
+    real and meant nothing: `WorktreeCreate` is a *provider* hook, an alternative
+    to git rather than an observer of it -- the binary's own message is "Worktree
+    mode requires a git repository or WorktreeCreate hooks" -- so registering a
+    recorder there replaced the platform's creation with a script that recorded an
+    event and made nothing. Every one of those events carried `path: null`.
+
+    Proven by removing the hook and changing nothing else: a real worktree
+    appeared. So the plugin had been disabling worktree isolation in every project
+    that installed it, and this probe had been certifying that it worked.
+
+    git is the authority now. A worktree either is in `git worktree list` or is
+    not, and no hook can make that say yes.
+    """
+    project = ctx.get("project")
+    found = _worktrees(project)
+    if found is None:
+        return None, "the project's worktrees could not be listed"
+    if not found:
+        return None, ("no worktree exists beyond the main checkout, so isolation "
+                      "stayed at shared-checkout")
+    return True, "%d worktree(s) exist: %s" % (len(found),
+                                               ", ".join(os.path.basename(p) for p in found))
 
 
 @probe("worktree-work-was-integrated-not-just-isolated",
@@ -1055,36 +1105,38 @@ def _p_worktree(ctx):
 def _p_worktree_integration(ctx):
     """Creation is not the exercise.
 
-    Two runs recorded `worktree_created` and were read as isolation working. An
-    isolated branch nobody merged is a change that did not happen, and a worktree
-    nobody removed is state left behind -- so this asks for the two events that
-    make the lifecycle a lifecycle rather than a beginning.
+    An isolated branch nobody merged is a change that did not happen, and a
+    worktree nobody removed is state left behind. This asks for both, and reads
+    both from git rather than from a hook -- the earlier version counted
+    `worktree_created` and `worktree_removed` events, and neither meant what it
+    said. `WorktreeCreate` is a provider hook, so our recorder was replacing the
+    platform's creation with a no-op; `worktree_removed` could never fire at all,
+    because removal is only reachable through a create that had been prevented.
     """
-    project, wid = ctx.get("project"), ctx.get("work_item")
-    if not wid:
-        return None, "no work item to read"
-    entries = _history(project, wid)
-    if not [h for h in entries if h.get("kind") == "worktree_created"]:
-        return None, "no worktree was created, so there is nothing to integrate"
+    project = ctx.get("project")
+    remaining = _worktrees(project)
+    if remaining is None:
+        return None, "the project's worktrees could not be listed"
 
-    removed = [h for h in entries if h.get("kind") == "worktree_removed"]
-    # Integration can arrive two ways and both count: a commit that landed on the
-    # main checkout, or an uncommitted edit sitting in its working tree. What does
-    # not count is the change existing only inside the worktree.
-    # What counts as integration, and what does not.
-    #
-    # A modified file in the main checkout was accepted as evidence in the first
-    # version of this probe, and it is not evidence: an agent that ignored the
-    # worktree and edited the main checkout directly leaves exactly that trace.
-    # It is the *opposite* of the behaviour being certified, and it would have
-    # passed this probe had a removal also been recorded.
-    #
-    # Integration means the work came out of the worktree. The trace that shows
-    # that is a commit beyond the baseline -- a merge, or the branch's commits
-    # reachable from the main checkout. A dirty working tree is recorded as what
-    # it is: inconclusive, leaning towards the change never having been isolated.
+    # A worktree branch is the durable trace that one existed. Claude Code names
+    # them `worktree-*`, and the branch outlives the checkout, so branch-present
+    # plus checkout-absent is a worktree that was created and then removed.
+    try:
+        proc = subprocess.run(["git", "branch", "--list", "worktree-*"],
+                              cwd=project, capture_output=True, text=True, timeout=60)
+        branches = [b.strip(" *") for b in (proc.stdout or "").splitlines() if b.strip()]
+    except Exception as exc:
+        return None, "the project's branches could not be listed: %r" % exc
+
+    if not remaining and not branches:
+        return None, "no worktree was ever created, so there is nothing to integrate"
+
+    # Integration means the work came out of the worktree. The trace is a commit
+    # beyond the baseline. A modified file in the main checkout is not evidence:
+    # it is exactly what an agent that ignored the worktree and edited the main
+    # checkout directly leaves behind, which is the opposite of what is certified.
     marker = os.path.join("src", "retention", "policy.py")
-    integrated, how = False, "nothing reached the main checkout"
+    integrated, how = False, "no commit carries the change into the main checkout"
     try:
         log = subprocess.run(["git", "log", "--oneline", "-25", "--", marker],
                              cwd=project, capture_output=True, text=True, timeout=60)
@@ -1102,15 +1154,18 @@ def _p_worktree_integration(ctx):
     except Exception as exc:
         return None, "the main checkout could not be inspected: %r" % exc
 
-    if integrated and removed:
-        return True, "%s, and %d worktree(s) were removed" % (how, len(removed))
+    cleaned_up = not remaining
+    if integrated and cleaned_up:
+        return True, "%s, and no worktree was left behind" % how
+
     missing = []
     if not integrated:
         missing.append("integration: %s" % how)
-    if not removed:
-        missing.append("cleanup: no worktree_removed was recorded")
+    if not cleaned_up:
+        missing.append("cleanup: %d worktree(s) still present (%s)"
+                       % (len(remaining),
+                          ", ".join(os.path.basename(w) for w in remaining)))
     return False, "worktree created; %s" % "; ".join(missing)
-
 
 @probe("a-team-stage-carried-its-skills",
        "When a stage runs as a team, do the teammates get the skills the stage declares?",

@@ -138,30 +138,6 @@
         ]
       }
     ],
-    "WorktreeCreate": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/record_worktree.py\"",
-            "timeout": 10,
-            "statusMessage": "Recording the worktree"
-          }
-        ]
-      }
-    ],
-    "WorktreeRemove": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/scripts/record_worktree.py\"",
-            "timeout": 10,
-            "statusMessage": "Recording the worktree"
-          }
-        ]
-      }
-    ],
     "PostToolUseFailure": [
       {
         "matcher": "Write|Edit|NotebookEdit",
