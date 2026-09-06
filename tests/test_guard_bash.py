@@ -623,3 +623,80 @@ class TestSEC01CoversTheCredentialFilesAnthropicNames(unittest.TestCase):
                          ".azure", ".npmrc", ".pypirc"):
             with self.subTest(fragment=fragment):
                 self.assertIn(fragment, denylist)
+
+
+class TestTheBranchGuardReadsTheDirectoryTheWorkIsIn(unittest.TestCase):
+    """Worktree work was uncompletable, and the guard was the reason.
+
+    `current_branch()` ran git in the project directory unconditionally. A git
+    worktree is a separate directory checked out on its own branch, so an agent
+    working inside one -- on `worktree-<name>`, which is not protected -- had
+    every `git commit` escalated as though it were sitting on whatever protected
+    branch the main checkout happened to be on.
+
+    That inverts the point of isolation. A worktree exists so work can happen off
+    the protected branch, and the guard refused the commit because it was reading
+    the wrong branch. Found by an agent that had made its edit inside the worktree
+    and could not commit it: "makes any worktree-based work in this repo
+    uncompletable until the hook is fixed."
+
+    Reading the session's own cwd does not weaken the rule, and the second test
+    here is what says so.
+    """
+
+    def setUp(self):
+        import subprocess, tempfile, shutil
+        self.repo = tempfile.mkdtemp(prefix="aieos-branchguard-")
+        self.addCleanup(shutil.rmtree, self.repo, True)
+        def git(*args, **kw):
+            subprocess.run(["git"] + list(args), cwd=kw.get("cwd", self.repo),
+                           capture_output=True, text=True, check=False)
+        git("init", "-q", "-b", "main")
+        git("config", "user.email", "t@example.com")
+        git("config", "user.name", "t")
+        with open(os.path.join(self.repo, "a.txt"), "w", encoding="utf-8") as fh:
+            fh.write("x\n")
+        git("add", "a.txt")
+        git("commit", "-qm", "base")
+        self.worktree = os.path.join(self.repo, "wt")
+        git("worktree", "add", "-q", "-b", "worktree-thing", self.worktree)
+
+    def branch(self, cwd):
+        import importlib
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        sys.path.insert(0, os.path.join(root, "hooks", "lib"))
+        os.environ["CLAUDE_PROJECT_DIR"] = self.repo
+        import hooklib
+        importlib.reload(hooklib)
+        return hooklib, hooklib.current_branch(cwd)
+
+    def test_inside_a_worktree_the_worktree_branch_is_read(self):
+        hooklib, branch = self.branch(self.worktree)
+        self.assertEqual(branch, "worktree-thing")
+        self.assertFalse(hooklib.is_protected(branch))
+
+    def test_in_the_main_checkout_the_protected_branch_is_still_read(self):
+        """The rule is intact. An agent genuinely on a protected branch still
+        escalates, because the branch it is on is the one that gets read."""
+        hooklib, branch = self.branch(self.repo)
+        self.assertEqual(branch, "main")
+        self.assertTrue(hooklib.is_protected(branch))
+
+    def test_with_no_cwd_it_falls_back_to_the_project(self):
+        hooklib, branch = self.branch(None)
+        self.assertEqual(branch, "main")
+
+    def test_the_guard_passes_the_sessions_cwd_through(self):
+        """The helper being right is useless if the caller does not use it."""
+        import ast
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "hooks", "scripts", "guard_bash.py"),
+                  encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                 and isinstance(n.func, ast.Name) and n.func.id == "git_branch_check"]
+        self.assertTrue(calls, "nothing calls git_branch_check")
+        for call in calls:
+            with self.subTest(call=ast.dump(call)[:60]):
+                self.assertEqual(len(call.args), 2,
+                                 "git_branch_check must be given the session's cwd")

@@ -136,6 +136,28 @@ def register_hooks(project, data_dir):
     agents_dst = os.path.join(project, ".claude", "agents")
     if not os.path.exists(agents_dst):
         shutil.copytree(os.path.join(ROOT, "agents"), agents_dst)
+
+    # Commit `.claude/`, because a git worktree is a checkout and an untracked
+    # file is not in it.
+    #
+    # Left untracked, a worktree created from this project had no
+    # .claude/settings.json at all: no hooks, no write scopes, no permission
+    # allowlist. Isolated work ran completely ungoverned, and the symptom was a
+    # `git commit` inside the worktree stalling on a permission prompt that the
+    # allowlist in the main checkout could not answer -- because it was not there.
+    #
+    # This is not only the harness's problem. Any project whose .claude/settings.json
+    # is gitignored or simply uncommitted loses this plugin entirely inside every
+    # worktree it creates, which is the one place isolation is supposed to make
+    # work safer rather than less observed.
+    try:
+        subprocess.run(["git", "add", "-f", ".claude"], cwd=project,
+                       capture_output=True, text=True, timeout=60)
+        subprocess.run(["git", "commit", "-q", "-m",
+                        "the organization's hooks and roles, so a worktree inherits them"],
+                       cwd=project, capture_output=True, text=True, timeout=60)
+    except Exception:
+        pass
     return path
 
 
@@ -237,8 +259,27 @@ def _run_session(project, prompt, model, timeout=600, max_turns=120):
     # applies between attempts. A session that never returns is invisible to it
     # until the process exits, so the loop's own budget is the right place to cap
     # one attempt.
+    # --allowed-tools rather than a `permissions.allow` block in the project's
+    # settings. The settings route is inert here: a headless run reports
+    # "Ignoring 12 permissions.allow entries from .claude/settings.json: this
+    # workspace has not been trusted", and trusting a workspace needs an
+    # interactive session, which is the thing a certification run does not have.
+    # The flag is not gated on trust.
+    #
+    # These are the ordinary commands a lifecycle needs. Allowing them does not
+    # weaken the organization: this plugin's PreToolUse guards run first and still
+    # deny and escalate, so what is removed is the platform's prompt -- which in
+    # `-p` has nobody to answer it -- and not the organization's judgement. GIT-00b
+    # still refuses a commit on a protected branch, SEC-06 still refuses committing
+    # a credential, and the write guard still holds every role to its scope.
+    allowed = ("Bash(git add:*) Bash(git commit:*) Bash(git merge:*) "
+               "Bash(git switch:*) Bash(git checkout:*) Bash(git status:*) "
+               "Bash(git diff:*) Bash(git log:*) Bash(git branch:*) "
+               "Bash(git worktree:*) Bash(python3 -m pytest:*) "
+               "Bash(python3 -m unittest:*)")
     cmd = ["claude", "-p", prompt, "--permission-mode", "acceptEdits",
-           "--setting-sources", "project", "--max-turns", str(max_turns)]
+           "--setting-sources", "project", "--max-turns", str(max_turns),
+           "--allowed-tools", allowed]
     if model:
         cmd += ["--model", model]
     with open(os.devnull) as devnull:
@@ -844,7 +885,12 @@ MECHANISM_PROMPTS = [
      "more than the single baseline commit. A modified file with no commit behind it "
      "does not count and will be read as the main checkout having been edited "
      "directly, which is the opposite of what this exercises.\n"
-     "- The work item history records a `worktree_removed` event.\n\n"
+     "- `git worktree list` in the main checkout no longer shows the worktree. "
+     "Removing it with ExitWorktree deletes its branch too, which is fine: the "
+     "merge commit is the durable record that the work came out of isolation, not "
+     "the branch. Nothing records a `worktree_removed` event either -- that hook is "
+     "deliberately unregistered, because WorktreeCreate is a provider hook and a "
+     "recorder on it prevents the worktree it means to observe.\n\n"
      "Report the worktree path, the branch name, the test result, the merge commit, "
      "and whether the worktree was removed. A worktree created and never merged is a "
      "branch nobody integrated; a worktree never removed is state left behind. Both "
@@ -1118,18 +1164,23 @@ def _p_worktree_integration(ctx):
     if remaining is None:
         return None, "the project's worktrees could not be listed"
 
-    # A worktree branch is the durable trace that one existed. Claude Code names
-    # them `worktree-*`, and the branch outlives the checkout, so branch-present
-    # plus checkout-absent is a worktree that was created and then removed.
+    # The branch is not the trace. An earlier version of this probe wanted the
+    # worktree gone from `git worktree list` and its `worktree-*` branch still
+    # present, and those two cannot both be true: ExitWorktree(action: "remove")
+    # deletes the worktree AND its branch. The probe was demanding a state the
+    # platform's own removal does not produce -- found by the agent being asked
+    # to produce it.
+    #
+    # The merge commit is the durable trace. Work that came out of a worktree is
+    # in the history whether or not the worktree survives, and that is exactly
+    # what integration means. So the branch is read only to tell "nothing ever
+    # happened" from "it happened and was cleaned up".
     try:
         proc = subprocess.run(["git", "branch", "--list", "worktree-*"],
                               cwd=project, capture_output=True, text=True, timeout=60)
-        branches = [b.strip(" *") for b in (proc.stdout or "").splitlines() if b.strip()]
+        branches = [b.strip(" *+") for b in (proc.stdout or "").splitlines() if b.strip()]
     except Exception as exc:
         return None, "the project's branches could not be listed: %r" % exc
-
-    if not remaining and not branches:
-        return None, "no worktree was ever created, so there is nothing to integrate"
 
     # Integration means the work came out of the worktree. The trace is a commit
     # beyond the baseline. A modified file in the main checkout is not evidence:
@@ -1153,6 +1204,9 @@ def _p_worktree_integration(ctx):
                        "not what integrating from a worktree looks like" % marker)
     except Exception as exc:
         return None, "the main checkout could not be inspected: %r" % exc
+
+    if not integrated and not remaining and not branches:
+        return None, "no worktree was ever created, so there is nothing to integrate"
 
     cleaned_up = not remaining
     if integrated and cleaned_up:

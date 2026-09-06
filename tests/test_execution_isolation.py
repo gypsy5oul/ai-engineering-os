@@ -389,3 +389,77 @@ class TestNothingIsRegisteredOnTheProviderHook(unittest.TestCase):
                          "the probe is reading the events again")
         source = open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8").read()
         self.assertIn('"git", "worktree", "list"', source)
+
+
+class TestAWorktreeInheritsTheOrganization(unittest.TestCase):
+    """A worktree is a checkout, and an untracked file is not in it.
+
+    A project whose `.claude/` is untracked produces worktrees with no
+    settings.json: no hooks, no write scopes, no permission rules. The plugin
+    does not apply inside them at all -- which is the wrong way round, because a
+    worktree is where isolated work happens and therefore where the guards most
+    need to hold.
+
+    Found by an agent that could not commit inside a worktree. The reason was
+    that none of the organization was in there with it.
+    """
+
+    def test_the_harness_commits_the_settings_it_installs(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "register_hooks")
+        literals = [n.value for n in ast.walk(fn)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        self.assertIn(".claude", literals)
+        self.assertIn("add", literals, "the settings must be tracked, not merely written")
+        self.assertIn("commit", literals)
+
+    def test_the_capability_model_records_it(self):
+        with open(os.path.join(ROOT, "policies", "platform-capabilities.json"),
+                  encoding="utf-8") as fh:
+            entry = json.load(fh)["capabilities"]["worktree.inherits_only_tracked_files"]
+        self.assertIn("tracked files and nothing else", entry["note"])
+        self.assertTrue(entry.get("load_bearing"))
+
+    def test_a_real_project_is_told_it_has_the_same_requirement(self):
+        """The harness fixing its own copy would leave every adopter with the
+        hole."""
+        with open(os.path.join(ROOT, "docs", "limitations.md"), encoding="utf-8") as fh:
+            body = fh.read()
+        self.assertIn("governance hole that opens only under isolation", body)
+        self.assertIn("Commit\n`.claude/settings.json`", body)
+
+
+class TestTheHarnessDoesNotRelyOnUntrustedProjectPermissions(unittest.TestCase):
+    """`permissions.allow` in project settings is ignored until a workspace is
+    trusted, and trusting one needs an interactive session -- which a headless
+    certification run does not have. The CLI flag is not gated on trust.
+
+    Hooks are not affected, which is the safe direction: an untrusted workspace
+    still gets the organization's guards and does not get its conveniences.
+    """
+
+    def test_the_allowlist_is_passed_on_the_command_line(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            source = fh.read()
+        tree = ast.parse(source)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "_run_session")
+        literals = [n.value for n in ast.walk(fn)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        self.assertIn("--allowed-tools", literals)
+
+    def test_the_project_settings_carry_no_permissions_block(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "register_hooks")
+        literals = [n.value for n in ast.walk(fn)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        self.assertNotIn("permissions", literals,
+                         "a permissions block there is ignored until the workspace is "
+                         "trusted, which a headless run cannot do")
