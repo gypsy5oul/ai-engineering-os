@@ -37,6 +37,7 @@ distinction could have changed.
 | `v0.45.1.json` | 0.45.0 | 2.1.252 | no | First run with the native task tools enabled. The task probes still report not-run: the session limit was reached before the mechanisms ran, because the open-ended lifecycle walk went first. Mechanisms now run first. |
 | `v0.45.1-mechanisms.json` | 0.45.1 | 2.1.252 | no | A `--mechanisms-only` run, not a certification. Four probes pass here that never had: the native task bound and its completion gated, background execution ran and wrote its artifact, and two worktrees were created. Worktree integration fails — the agent edited the main checkout directly, which the tightened evidence rule now refuses to read as integration. |
 | `v0.45.3.json` | 0.45.3 | 2.1.261 | no | **12 of 14 probes pass.** The native task lifecycle, background execution and — for the first time on evidence that means what it says — worktree isolation, verified by `git worktree list` rather than by hook events. One failure: work in the worktree was never merged out. One not-run: teams have no CLI surface. |
+| `v0.45.4.json` | 0.45.3 | 2.1.263 | no | **13 of 14 probes pass, none fail.** The worktree lifecycle completes inside a certification for the first time — created, committed, merged, removed. Every mechanism the harness can reach is now exercised on real evidence. The one not-run is teams, which have no CLI surface. |
 
 ## A correction that applies to more than one run
 

@@ -1137,11 +1137,32 @@ def _p_worktree(ctx):
     found = _worktrees(project)
     if found is None:
         return None, "the project's worktrees could not be listed"
-    if not found:
-        return None, ("no worktree exists beyond the main checkout, so isolation "
-                      "stayed at shared-checkout")
-    return True, "%d worktree(s) exist: %s" % (len(found),
-                                               ", ".join(os.path.basename(p) for p in found))
+    if found:
+        return True, "%d worktree(s) exist: %s" % (
+            len(found), ", ".join(os.path.basename(p) for p in found))
+
+    # A worktree that was used properly is gone by the end. Asking only "does one
+    # exist now" made completing the lifecycle correctly report `not-run`, while
+    # abandoning it half-done reported `pass` -- this probe and the integration
+    # one wanted opposite states, which is the same contradiction an agent caught
+    # in the integration probe a run earlier.
+    #
+    # A merge commit is what survives removal. Two lines of development existed
+    # and were brought together, which is weaker evidence than seeing the checkout
+    # -- it does not prove the branch was a worktree rather than an ordinary one --
+    # and it is recorded as the weaker thing it is rather than dressed up.
+    try:
+        merges = subprocess.run(["git", "log", "--merges", "--oneline", "-10"],
+                                cwd=project, capture_output=True, text=True, timeout=60)
+        lines = [l for l in (merges.stdout or "").strip().splitlines() if l.strip()]
+    except Exception:
+        lines = []
+    if lines:
+        return True, ("no worktree remains, and %d merge commit(s) show work was brought "
+                      "together from a separate line of development -- the worktree was "
+                      "used and then removed (%s)" % (len(lines), lines[0][:60]))
+    return None, ("no worktree exists beyond the main checkout and nothing was merged, "
+                  "so isolation stayed at shared-checkout")
 
 
 @probe("worktree-work-was-integrated-not-just-isolated",

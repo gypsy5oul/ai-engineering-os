@@ -6,7 +6,7 @@
     "Both mistakes were cheap to make because each belief lived in prose, in a different file, established at a different time, with no record of how it was checked. A capability the code depends on should say how it was verified and when.",
     "It also recorded PermissionRequest as unavailable on the strength of a probe that only covered the two modes which short-circuit before the hook runs. An absence has to be checked the way a presence is, or it becomes the most confident kind of wrong entry."
   ],
-  "tested_against": "2.1.261",
+  "tested_against": "2.1.263",
   "evidence_levels": {
     "contract": "Declared in the CLI's own schema. The strongest evidence short of running it.",
     "empirical": "Observed on the wire in this environment.",
@@ -269,5 +269,5 @@
       "Any complete work item. Real agents have now driven one stage of one work item (GOLD-FEAT-001, T-001) under certification; no change has been driven from intake to acceptance by real agents, and certify.py reports certified: false because of it."
     ]
   },
-  "version_history": "2.1.241 -> 2.1.250 -> 2.1.251 -> 2.1.252 -> 2.1.259 -> 2.1.261. The last two moves both happened inside a single working session, which is the point of check_platform_drift raising the gap itself: a capability model maintained by hand would have been describing a binary that was no longer installed, and nothing would have said so. All seven load-bearing beliefs were re-run against 2.1.259 and all seven hold, including the three that carry the task lifecycle -- the TaskCreated and TaskCompleted payloads and exit code 2 preventing a task rather than warning about it."
+  "version_history": "2.1.241 -> 2.1.250 -> 2.1.251 -> 2.1.252 -> 2.1.259 -> 2.1.261 -> 2.1.263. The last two moves both happened inside a single working session, which is the point of check_platform_drift raising the gap itself: a capability model maintained by hand would have been describing a binary that was no longer installed, and nothing would have said so. All seven load-bearing beliefs were re-run against 2.1.259 and all seven hold, including the three that carry the task lifecycle -- the TaskCreated and TaskCompleted payloads and exit code 2 preventing a task rather than warning about it."
 }

@@ -662,9 +662,29 @@ class TestTheBranchGuardReadsTheDirectoryTheWorkIsIn(unittest.TestCase):
         git("worktree", "add", "-q", "-b", "worktree-thing", self.worktree)
 
     def branch(self, cwd):
+        """Resolve a branch with hooklib, and put the environment back.
+
+        CLAUDE_PROJECT_DIR is read at import, so this has to set it and reload --
+        and it has to restore it, because `unittest discover` runs every test in
+        one process and `run_hook` copies os.environ into each hook subprocess. An
+        earlier version of this test leaked the variable and took four unrelated
+        tests down with it, in two other files, which is a more expensive way to
+        learn it than this comment.
+        """
         import importlib
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         sys.path.insert(0, os.path.join(root, "hooks", "lib"))
+        previous = os.environ.get("CLAUDE_PROJECT_DIR")
+
+        def restore():
+            if previous is None:
+                os.environ.pop("CLAUDE_PROJECT_DIR", None)
+            else:
+                os.environ["CLAUDE_PROJECT_DIR"] = previous
+            import hooklib as _h
+            importlib.reload(_h)
+
+        self.addCleanup(restore)
         os.environ["CLAUDE_PROJECT_DIR"] = self.repo
         import hooklib
         importlib.reload(hooklib)
