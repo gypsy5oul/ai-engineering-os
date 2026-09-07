@@ -3,6 +3,74 @@
 Semantic versioning. A change to organizational behaviour carries a migration
 note; see [`docs/release.md`](docs/release.md).
 
+## [0.45.4] — The guard read the wrong branch, so worktree work could not be committed
+
+Three defects sat between an agent and a merged change, each one hiding the
+next. All three were found by running the thing rather than reading it.
+
+**The branch guard read the wrong directory.** `current_branch()` ran git in
+the project directory unconditionally, and a worktree is a separate directory
+on its own branch — so an agent working inside one, on `worktree-<name>`, had
+every `git commit` escalated as if it were sitting on whatever protected branch
+the main checkout was on. That inverts the point of isolation: a worktree
+exists so work can happen off the protected branch, and the guard refused the
+commit because it was looking at the wrong one. It now reads the session's own
+`cwd`. An agent genuinely on a protected branch still escalates, and a test
+says so.
+
+**An uncommitted `.claude/` is a governance hole that opens only under
+isolation.** A worktree is a checkout: it contains tracked files and nothing
+else. This project's `.claude/` was untracked, so its worktrees had no
+`settings.json` — no hooks, no write scopes, no permission rules. The plugin
+did not apply inside them at all, which is the wrong way round, because a
+worktree is where isolated work happens and therefore where the guards most
+need to hold. `docs/limitations.md` now tells a real project it has the same
+requirement: commit the settings, or accept that worktrees and this plugin are
+mutually exclusive.
+
+**`permissions.allow` in project settings is ignored until the workspace is
+trusted**, and trusting one needs an interactive session — which a
+certification run does not have. The harness passes `--allowed-tools` instead,
+which is not gated on trust. Hooks are unaffected by the trust rule, so an
+untrusted workspace still gets the organization's guards and not its
+conveniences, which is the safe direction for those two to fail in.
+
+### Two contradictions in this harness's own probes
+
+Both found by the agents asked to satisfy them.
+
+The integration probe wanted the worktree gone from `git worktree list` **and**
+its branch retained. `ExitWorktree(action: "remove")` deletes both — the probe
+was demanding a state the platform's own removal does not produce.
+
+Then completing the lifecycle correctly made the *creation* probe report
+`not-run`: it asked whether a worktree exists now, and a worktree used properly
+is removed at the end. Finishing the job looked like nothing happened while
+abandoning it half-done looked like success. A merge commit is what survives
+removal, so that is the fallback evidence — recorded as the weaker thing it is,
+since a merge shows two lines of development converged and not specifically
+that the branch was a worktree.
+
+### The run
+
+13 of 14 probes pass, **none fail**, and `real_agent` reads `partial` rather
+than `fail` for the first time. The worktree lifecycle completed inside a
+certification: created, worked in, committed, merged, removed. Every execution
+and isolation mechanism the harness can reach is now exercised on evidence that
+means what it says.
+
+`CERTIFIED` remains **no**, for two reasons of different kinds. Teams have no
+CLI surface in 2.1.263, so that probe cannot run and certification is refused
+for it rather than waived. And the walk still ends at REQ after three attempts,
+two REWORK decisions and an ESCALATE — 7 of 11 predicates, two of seven stages.
+
+### Also
+
+A test of mine set `CLAUDE_PROJECT_DIR` and never restored it. `unittest
+discover` runs everything in one process and `run_hook` copies `os.environ`
+into each hook subprocess, so the leak took down four tests across two other
+files. Fixed with `addCleanup`, and the reason is written into the test.
+
 ## [0.45.3] — This plugin disabled worktree isolation in every project using it
 
 Rewriting one prompt found something much larger than the prompt.

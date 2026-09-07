@@ -389,3 +389,164 @@ class TestNothingIsRegisteredOnTheProviderHook(unittest.TestCase):
                          "the probe is reading the events again")
         source = open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8").read()
         self.assertIn('"git", "worktree", "list"', source)
+
+
+class TestAWorktreeInheritsTheOrganization(unittest.TestCase):
+    """A worktree is a checkout, and an untracked file is not in it.
+
+    A project whose `.claude/` is untracked produces worktrees with no
+    settings.json: no hooks, no write scopes, no permission rules. The plugin
+    does not apply inside them at all -- which is the wrong way round, because a
+    worktree is where isolated work happens and therefore where the guards most
+    need to hold.
+
+    Found by an agent that could not commit inside a worktree. The reason was
+    that none of the organization was in there with it.
+    """
+
+    def test_the_harness_commits_the_settings_it_installs(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "register_hooks")
+        literals = [n.value for n in ast.walk(fn)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        self.assertIn(".claude", literals)
+        self.assertIn("add", literals, "the settings must be tracked, not merely written")
+        self.assertIn("commit", literals)
+
+    def test_the_capability_model_records_it(self):
+        with open(os.path.join(ROOT, "policies", "platform-capabilities.json"),
+                  encoding="utf-8") as fh:
+            entry = json.load(fh)["capabilities"]["worktree.inherits_only_tracked_files"]
+        self.assertIn("tracked files and nothing else", entry["note"])
+        self.assertTrue(entry.get("load_bearing"))
+
+    def test_a_real_project_is_told_it_has_the_same_requirement(self):
+        """The harness fixing its own copy would leave every adopter with the
+        hole."""
+        with open(os.path.join(ROOT, "docs", "limitations.md"), encoding="utf-8") as fh:
+            body = fh.read()
+        self.assertIn("governance hole that opens only under isolation", body)
+        self.assertIn("Commit\n`.claude/settings.json`", body)
+
+
+class TestTheHarnessDoesNotRelyOnUntrustedProjectPermissions(unittest.TestCase):
+    """`permissions.allow` in project settings is ignored until a workspace is
+    trusted, and trusting one needs an interactive session -- which a headless
+    certification run does not have. The CLI flag is not gated on trust.
+
+    Hooks are not affected, which is the safe direction: an untrusted workspace
+    still gets the organization's guards and does not get its conveniences.
+    """
+
+    def test_the_allowlist_is_passed_on_the_command_line(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            source = fh.read()
+        tree = ast.parse(source)
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "_run_session")
+        literals = [n.value for n in ast.walk(fn)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        self.assertIn("--allowed-tools", literals)
+
+    def test_the_project_settings_carry_no_permissions_block(self):
+        import ast
+        with open(os.path.join(ROOT, "scripts", "certify.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+        fn = next(n for n in ast.walk(tree)
+                  if isinstance(n, ast.FunctionDef) and n.name == "register_hooks")
+        literals = [n.value for n in ast.walk(fn)
+                    if isinstance(n, ast.Constant) and isinstance(n.value, str)]
+        self.assertNotIn("permissions", literals,
+                         "a permissions block there is ignored until the workspace is "
+                         "trusted, which a headless run cannot do")
+
+
+class TestTheTwoWorktreeProbesDoNotWantOppositeStates(unittest.TestCase):
+    """Completing the lifecycle correctly used to report `not-run`.
+
+    `worktree-isolation-was-actually-used` asked whether a worktree exists now,
+    and a worktree used properly is removed at the end -- so finishing the job
+    made the creation probe report nothing happened, while abandoning it half
+    done made it pass. The two probes wanted opposite states, which is the same
+    contradiction an agent had already found in the integration probe: that one
+    wanted the worktree gone AND its branch retained, and ExitWorktree(remove)
+    deletes both.
+
+    A merge commit is what survives removal, so that is the fallback evidence --
+    recorded as the weaker thing it is, because it shows two lines of development
+    were brought together and not that the branch was specifically a worktree.
+    """
+
+    def probes(self):
+        sys.path.insert(0, os.path.join(ROOT, "scripts"))
+        import certify
+        return {p["id"]: p["fn"] for p in certify.PROBES if "worktree" in p["id"]}
+
+    def repo(self, complete):
+        """A project where the worktree lifecycle either finished or did not."""
+        import subprocess, tempfile, shutil
+        path = tempfile.mkdtemp(prefix="aieos-wtprobe-")
+        self.addCleanup(shutil.rmtree, path, True)
+
+        def git(*args, **kw):
+            subprocess.run(["git"] + list(args), cwd=kw.get("cwd", path),
+                           capture_output=True, text=True, check=False)
+
+        os.makedirs(os.path.join(path, "src", "retention"))
+        marker = os.path.join(path, "src", "retention", "policy.py")
+        with open(marker, "w", encoding="utf-8") as fh:
+            fh.write("x = 1\n")
+        git("init", "-q", "-b", "main")
+        git("config", "user.email", "t@example.com")
+        git("config", "user.name", "t")
+        git("add", "-A")
+        git("commit", "-qm", "baseline")
+
+        wt = os.path.join(path, ".claude", "worktrees", "w1")
+        git("worktree", "add", "-q", "-b", "worktree-w1", wt)
+        with open(os.path.join(wt, "src", "retention", "policy.py"), "a",
+                  encoding="utf-8") as fh:
+            fh.write("# edited in isolation\n")
+        git("add", "-A", cwd=wt)
+        git("commit", "-qm", "work in the worktree", cwd=wt)
+        if complete:
+            git("merge", "--no-ff", "-m", "Merge worktree-w1", "worktree-w1")
+            git("worktree", "remove", "--force", wt)
+        return path
+
+    def test_a_completed_lifecycle_passes_both(self):
+        ctx = {"project": self.repo(complete=True), "work_item": "X-1", "data_dir": "/tmp"}
+        for name, fn in self.probes().items():
+            with self.subTest(probe=name):
+                self.assertIs(fn(ctx)[0], True)
+
+    def test_an_abandoned_worktree_passes_isolation_and_fails_integration(self):
+        """The discrimination that matters: isolation happened, integration did
+        not. Reporting both the same way would hide which half failed."""
+        ctx = {"project": self.repo(complete=False), "work_item": "X-1", "data_dir": "/tmp"}
+        probes = self.probes()
+        self.assertIs(probes["worktree-isolation-was-actually-used"](ctx)[0], True)
+        self.assertIs(
+            probes["worktree-work-was-integrated-not-just-isolated"](ctx)[0], False)
+
+    def test_a_project_that_never_used_one_reports_not_run(self):
+        import subprocess, tempfile, shutil
+        path = tempfile.mkdtemp(prefix="aieos-wtnone-")
+        self.addCleanup(shutil.rmtree, path, True)
+        for args in (["init", "-q", "-b", "main"],
+                     ["config", "user.email", "t@example.com"],
+                     ["config", "user.name", "t"]):
+            subprocess.run(["git"] + args, cwd=path, capture_output=True, check=False)
+        with open(os.path.join(path, "a.txt"), "w", encoding="utf-8") as fh:
+            fh.write("x\n")
+        subprocess.run(["git", "add", "-A"], cwd=path, capture_output=True, check=False)
+        subprocess.run(["git", "commit", "-qm", "base"], cwd=path, capture_output=True,
+                       check=False)
+        ctx = {"project": path, "work_item": "X-1", "data_dir": "/tmp"}
+        for name, fn in self.probes().items():
+            with self.subTest(probe=name):
+                self.assertIsNone(fn(ctx)[0])

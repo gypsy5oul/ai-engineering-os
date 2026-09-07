@@ -217,6 +217,27 @@ itself.
 one. Some boundaries will turn out wrong, and `docs/organization.md` records
 which roles were deliberately not created so the argument can be reopened.
 
+### An uncommitted `.claude/` is a governance hole that opens only under isolation
+
+A git worktree is a checkout: it contains tracked files and nothing else. So a
+project whose `.claude/` is gitignored or simply not committed yet produces
+worktrees with no `settings.json` — **no hooks, no write scopes, no permission
+rules**. This plugin does not apply inside them at all.
+
+That is the wrong way round. A worktree is where isolated work happens, which is
+exactly where the guards should still hold, and instead it is the one place they
+silently do not. Nothing warns about it: the main checkout is governed, the
+worktree is not, and both look the same from outside.
+
+It was found the hard way — an agent working inside a worktree could not commit,
+and the reason turned out to be that none of the organization was in there with
+it. `scripts/certify.py` now commits `.claude/` so its own worktrees inherit it.
+
+**A project adopting this plugin has the same requirement.** Commit
+`.claude/settings.json`. If your organization would rather not track it, then
+worktree isolation and this plugin are mutually exclusive, and that is a decision
+to take deliberately rather than discover.
+
 ### A retry starts a new agent, and nothing decides whether it should
 
 `RETRY`, `REWORK`, `REPLAN` and `ESCALATE` are organizational decisions about the

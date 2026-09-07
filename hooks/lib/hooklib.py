@@ -314,17 +314,40 @@ def path_matches(path, patterns):
 # Git helpers
 # --------------------------------------------------------------------------
 
-def git(*args):
+def git(*args, **kwargs):
+    """Run git, by default in the project directory.
+
+    `cwd` overrides that. It matters because a worktree is a different directory
+    on a different branch, and asking the main checkout which branch it is on
+    answers a question nobody asked.
+    """
     try:
-        out = subprocess.run(["git"] + list(args), cwd=PROJECT_DIR,
+        out = subprocess.run(["git"] + list(args), cwd=kwargs.get("cwd") or PROJECT_DIR,
                              capture_output=True, text=True, timeout=5)
         return out.stdout.strip() if out.returncode == 0 else None
     except Exception:
         return None
 
 
-def current_branch():
-    return git("rev-parse", "--abbrev-ref", "HEAD")
+def current_branch(cwd=None):
+    """The branch of the directory the work is actually happening in.
+
+    This used to read the project directory unconditionally, and a git worktree is
+    a separate directory checked out on its own branch. So an agent working inside
+    a worktree -- on `worktree-<name>`, which is not protected -- had its commits
+    escalated as if it were sitting on the protected branch the main checkout
+    happened to be on.
+
+    That made worktree-based work uncompletable: isolation exists precisely so
+    work can happen off the protected branch, and the guard refused the commit
+    because it was looking at the wrong branch. Found by an agent that had done
+    the edit inside the worktree and could not commit it.
+
+    Reading the session's own cwd does not weaken the rule. An agent genuinely on
+    a protected branch still escalates, because the branch it is on is the one
+    that gets read.
+    """
+    return git("rev-parse", "--abbrev-ref", "HEAD", cwd=cwd)
 
 
 def protected_branches():

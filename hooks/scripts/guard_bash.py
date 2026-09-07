@@ -148,11 +148,15 @@ def push_targets(command):
     return targets
 
 
-def git_branch_check(command):
-    """Returns (decision, rule_id, message, remediation) or None."""
+def git_branch_check(command, cwd=None):
+    """Returns (decision, rule_id, message, remediation) or None.
+
+    `cwd` is the session's working directory. It is what makes this correct
+    inside a git worktree, which is a different directory on a different branch.
+    """
     if not re.search(r"\bgit\s+(push|commit)\b", command):
         return None
-    branch = H.current_branch()
+    branch = H.current_branch(cwd)
 
     if re.search(r"\bgit\s+push\b", command):
         for target in push_targets(command):
@@ -228,7 +232,7 @@ def main():
                                             "checked on a best-effort reading of the command."})
                 break
 
-    branch_hit = git_branch_check(command)
+    branch_hit = git_branch_check(command, data.get("cwd"))
     if branch_hit:
         decision, rid, msg, remedy = branch_hit
         hits.append({"id": rid, "category": "protected-branch", "action": decision,
